@@ -12,7 +12,7 @@ ARG THREE_VERSION=0.186.1
 ARG THREE_INTEGRITY=sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==
 
 # Base images pinned by digest (multi-arch index); the tags stay for Dependabot, which updates both.
-FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS vendor
+FROM node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS vendor
 ARG THREE_VERSION
 ARG THREE_INTEGRITY
 ARG DASHBOARD_THREE_SOURCE=vendored
@@ -60,7 +60,7 @@ RUN set -eu; \
 # alpine-slim: nginx without the optional dynamic modules and their libraries (curl, libexpat,
 # brotli...), none of which nginx.conf loads; it removes every fixable HIGH/CRITICAL finding
 # of the full alpine variant (Trivy gate in .github/workflows/security.yml).
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine-slim@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine-slim@sha256:a8cb0f33d51fa107c96fd2bd3a71aaf564ec131e9d2bdf8700944f0ed8b170d7
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --from=vendor --chown=root:root /build/site/ /usr/share/nginx/html/
 # Listens on port 80 as uid 101: docker-compose.yml sets
