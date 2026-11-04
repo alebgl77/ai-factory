@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MIT
+# Remote GPU hosts running nvidia/dcgm-exporter outside this compose project, e.g. the
+# local workstation reached from the VPS over a VPN (WireGuard, Tailscale...).
+# Example (uncomment and adapt; the address below is a documentation placeholder):
+# - targets: ["10.8.0.2:9400"]
+#   labels:
+#     site: atelier-local
+[]

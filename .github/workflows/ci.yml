@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: MIT
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: "Also run the full-stack smoke test (sim profile)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: API (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements*.txt
+      - run: pip install -r api/requirements-dev.txt
+      - run: python -m pytest
+        working-directory: api
+
+  config:
+    name: Configuration, snapshot and visual pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r api/requirements.txt -r scripts/requirements-assets.txt pytest
+      - name: Validate config/
+        run: python scripts/validate_config.py
+      - name: Embedded demo snapshot is up to date
+        run: python scripts/build_snapshot.py --check
+      - name: Visual pack pipeline
+        run: python -m pytest -q tests/assets
+
+  licenses:
+    name: Licenses (MIT compatibility)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r api/requirements.txt
+      - run: python scripts/check_licenses.py
+
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Working tree
+        run: scripts/scan_secrets.sh .
+      - name: Git history
+        run: scripts/scan_secrets.sh . --git
+
+  compose:
+    name: Stack (configuration validation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: cp .env.example .env
+      - name: docker compose config (every profile)
+        run: |
+          docker compose config -q
+          docker compose --profile sim --profile vps --profile local-gpu config -q
+      - name: Prometheus rules
+        run: >
+          docker run --rm -v "$PWD/compose/prometheus:/etc/prometheus:ro" --entrypoint promtool
+          prom/prometheus:v3.15.1 check config /etc/prometheus/prometheus.yml
+      - name: Caddyfile
+        run: >
+          docker run --rm -v "$PWD/compose/caddy:/etc/caddy:ro" caddy:2.11.7-alpine
+          caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Loki
+        run: >
+          docker run --rm -v "$PWD/compose/loki/loki.yml:/etc/loki/loki.yml:ro" grafana/loki:3.7.9
+          -config.file=/etc/loki/loki.yml -verify-config
+      - name: Alloy
+        run: >
+          docker run --rm -e FACTORY_COMPOSE_PROJECT=ai-factory
+          -v "$PWD/compose/alloy/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.21.3
+          validate /etc/alloy/config.alloy
+      - name: Grafana dashboards (JSON)
+        run: |
+          for f in compose/grafana/dashboards/*.json; do
+            python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['uid'] and d['title'], sys.argv[1]" "$f"
+          done
+      - name: Build images
+        run: docker compose --profile sim build
+
+  e2e:
+    name: 3D dashboard (e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Playwright and Three.js (test only, not committed)
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.64.1 three@0.186.1
+          npx playwright install --with-deps chromium
+      - name: file:// mode with the embedded demo snapshot
+        env:
+          THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three
+        run: node tests/e2e/run.mjs
+
+  smoke:
+    name: Full stack (smoke test, sim profile)
+    if: github.event_name == 'workflow_dispatch' && inputs.smoke
+    needs: [compose]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - run: cp .env.example .env
+      - run: scripts/smoke_stack.sh --down

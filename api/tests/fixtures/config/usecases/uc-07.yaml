@@ -1,0 +1,14 @@
+id: uc-07
+code: UC-07
+name: { en: "Meeting minutes summarization (fictional, retired)", fr: "Synthèse de comptes rendus (fictif, retiré)" }
+owner: p02
+cost_center: cc-ops
+stage: retired
+task_type: summarization
+sensitivity: C2
+color: "#999999"
+ai_act: { role: deployer, prohibited_practices: [], transparency: [], gpai_used: true }
+model: { alias: chat-small, name: "vps/small-8b", version: "1.0", history: [] }
+assessment: { reviewed_model_version: "1.0", last_reviewed: 2025-12-01, reviewer: p07, decision: approved }
+nist: { govern: { status: done }, map: { status: done }, measure: { status: done }, manage: { status: done } }
+rag: { index: kb-old, corpus_docs: 120, chunk_size: 800, chunk_overlap: 100, embedding: embed-default }

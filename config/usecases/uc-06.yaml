@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-06
+code: UC-06
+name: { en: "Marketing content generation (fictional)", fr: "Génération de contenus marketing (fictif)" }
+description:
+  en: >-
+    Produces draft marketing copy and visuals from the editorial guidelines. Synthetic content
+    is marked in a machine-readable format and disclosed to the public (Art. 50). Third-party
+    tool configured by the factory: the organization is the deployer. Public data (C1).
+    Fictional data.
+  fr: >-
+    Produit des brouillons de textes et de visuels marketing à partir de la charte éditoriale.
+    Contenus synthétiques marqués de façon lisible par machine et signalés au public (art. 50).
+    Outil tiers configuré par l'usine : l'organisation est déployeur. Données publiques (C1).
+    Données fictives.
+owner: p02
+cost_center: cc-relation
+stage: run
+task_type: generation
+sensitivity: C1
+color: "#56b4e9"
+ai_act:
+  role: deployer
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: [synthetic_content]
+  gpai_used: true
+model:
+  alias: chat-default
+  name: { en: "Premium cloud LLM (fictional)", fr: "LLM cloud premium (fictif)" }
+  version: "2026-09"
+  history:
+    - { version: "2026-03", from: 2026-03-09 }
+    - { version: "2026-09", from: 2026-09-29 }
+assessment:
+  reviewed_model_version: "2026-09"
+  last_reviewed: 2026-09-25
+  reviewer: p07
+  decision: approved
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "Generated content usage policy (fictional)", fr: "Charte d'usage des contenus générés (fictive)" }
+  map:
+    status: done
+    evidence:
+      - { en: "Context sheet", fr: "Fiche contexte" }
+      - { en: "Intellectual property analysis", fr: "Analyse propriété intellectuelle" }
+  measure:
+    status: partial
+    evidence:
+      - { en: "LLM judge of compliance with the guidelines", fr: "Juge LLM sur la conformité à la charte" }
+    gaps:
+      - { en: "Output marking check", fr: "Contrôle du marquage en sortie" }
+  manage:
+    status: done
+    evidence:
+      - { en: "Human review before publication", fr: "Relecture humaine avant publication" }
+iso42001: ["A.2.2", "A.6.2.4", "A.8.2", "A.8.5", "A.9.2", "A.9.4", "A.10.3"]
+rag: { index: kb-charte-editoriale, corpus_docs: 120, chunk_size: 400, chunk_overlap: 40, embedding: embed-default,
+       top_k: 5, hybrid_search: false, reranker: false }
+eval: { golden_set: "gs-marketing-v2", questions: 90, judge_alias: chat-small }
+kpis:
+  adoption_target: 0.6
+  adoption_actual: 0.66
+  value_metric: { en: "Time to produce one piece of content", fr: "Temps de production d'un contenu" }
+  value_eur_month: 3500

@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-07
+code: UC-07
+name: { en: "Confidential internal committee summaries (fictional)", fr: "Synthèse confidentielle de comités internes (fictif)" }
+description:
+  en: >-
+    Drafts minutes from the transcripts of internal committee meetings. Confidential data (C3)
+    processed only in the secure lab, on the local GPU. Proof of concept. Fictional data.
+  fr: >-
+    Rédige un projet de compte rendu à partir des transcriptions de comités internes. Données
+    confidentielles (C3) traitées uniquement au Lab sécurisé sur le GPU local. Preuve de concept.
+    Données fictives.
+owner: p04
+cost_center: cc-ops
+stage: poc
+task_type: summarization
+sensitivity: C3
+color: "#f0e442"
+ai_act:
+  role: both
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: true
+model:
+  alias: chat-sensitive
+  name: { en: "Open-weight 14B LLM on the local GPU (fictional)", fr: "LLM open-weight 14B sur GPU local (fictif)" }
+  version: "2026-10"
+  history:
+    - { version: "2026-10", from: 2026-10-20 }
+assessment:
+  reviewed_model_version: "2026-10"
+  last_reviewed: 2026-10-21
+  reviewer: p07
+  decision: approved
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "AI policy v2 (fictional)", fr: "Politique IA v2 (fictive)" }
+  map:
+    status: partial
+    evidence:
+      - { en: "Context sheet", fr: "Fiche contexte" }
+    gaps:
+      - { en: "List of excluded committees", fr: "Liste des comités exclus" }
+  measure:
+    status: partial
+    evidence:
+      - { en: "Local judge on 40 sets of minutes", fr: "Juge local sur 40 comptes rendus" }
+  manage:  { status: todo,    evidence: [] }
+iso42001: ["A.2.2", "A.5.2", "A.6.2.4", "A.7.4"]
+rag: { index: kb-comites, corpus_docs: 310, chunk_size: 1200, chunk_overlap: 200, embedding: embed-default,
+       top_k: 10, hybrid_search: false, reranker: false }
+eval: { golden_set: "gs-comites-v1", questions: 40, judge_alias: chat-sensitive }
+kpis:
+  adoption_target: 0.4
+  adoption_actual: 0.12
+  value_metric: { en: "Time to write the minutes", fr: "Temps de rédaction des comptes rendus" }
+  value_eur_month: 1600

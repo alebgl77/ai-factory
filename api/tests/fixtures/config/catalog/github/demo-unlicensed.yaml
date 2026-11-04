@@ -1,0 +1,10 @@
+id: gh-demo-eval
+name: demo-eval
+url: https://github.com/example/demo-eval
+pillar: evaluation
+license: NOASSERTION
+status: to_relicense
+submodule: null
+reason: { en: "No licence: to be relicensed under MIT", fr: "Pas de licence : à relicencier sous MIT" }
+secrets_scan: clean
+copyleft_deps: []

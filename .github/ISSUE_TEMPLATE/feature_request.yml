@@ -1,0 +1,19 @@
+name: Feature or improvement
+description: Propose a new capability for the factory
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Which problem of an AI factory does it solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Governance and risk, FinOps, LLMOps / RAG pipeline, Data loop, Hybrid placement, Agent Ops, Catalogue, Skills / R&D labs, 3D dashboard, Deployment, Other]

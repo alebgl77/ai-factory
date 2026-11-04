@@ -1,0 +1,36 @@
+# Fictional skills plan (test fixture).
+modules:
+  - { id: m-literacy-101, title: { en: "AI literacy foundations", fr: "Socle de maîtrise de l'IA" }, hours: 3, format: lab, art4: true }
+  - { id: m-governance, title: { en: "AI Act / ISO/IEC 42001 governance", fr: "Gouvernance AI Act / ISO/IEC 42001" }, hours: 4, format: workshop, art4: true }
+  - { id: m-redteam, title: { en: "LLM red teaming", fr: "Red teaming des LLM" }, hours: 3, format: lab, art4: false }
+  - { id: m-rag, title: { en: "RAG and evaluation", fr: "RAG et évaluation" }, hours: 4, format: lab, art4: false }
+  - { id: m-no-ai-kata, title: { en: "No-AI kata (deskilling prevention)", fr: "Kata sans IA (anti-déqualification)" }, hours: 2, format: kata, art4: true }
+requirements:
+  head: [m-literacy-101, m-governance]
+  po: [m-literacy-101, m-governance]
+  llm_engineer: [m-literacy-101, m-rag, m-redteam, m-no-ai-kata]
+  governance: [m-literacy-101, m-governance]
+  research: [m-literacy-101, m-redteam]
+  enablement: [m-literacy-101]
+completions:
+  - { person: p01, module: m-literacy-101, date: 2026-03-04 }
+  - { person: p01, module: m-governance, date: 2026-03-11 }
+  - { person: p02, module: m-literacy-101, date: 2026-03-04 }
+  - { person: p03, module: m-literacy-101, date: 2026-03-04 }
+  - { person: p03, module: m-rag, date: 2026-04-02 }
+  - { person: p04, module: m-rag, date: 2026-04-02 }
+  - { person: p07, module: m-literacy-101, date: 2026-02-01 }
+  - { person: p07, module: m-governance, date: 2026-02-08 }
+  - { person: p10, module: m-literacy-101, date: 2026-05-20 }
+  - { person: p11, module: m-literacy-101, date: 2026-01-15 }
+  - { person: p11, module: m-governance, date: 2099-01-01 }
+sessions:
+  - { id: s-2026-11-05, module: m-redteam, date: 2026-11-05, start: "14:00", end: "16:00", trainer: p11, attendees: [p03, p04] }
+  - { id: s-2026-10-01, module: m-literacy-101, date: 2026-10-01, start: "09:00", end: "12:00", trainer: p11, attendees: [p02] }
+rnd:
+  experiments:
+    - { id: x-01, title: { en: "Adaptive routing to small models", fr: "Routage adaptatif vers petits modèles" }, stage: prototype, owner: p10,
+        hypothesis: { en: "A router cuts cost by 30% at equal quality", fr: "Un routeur réduit le coût de 30 % à qualité égale" }, gpu_hours: 38, linked_usecase: uc-02,
+        transfer_criteria: { en: "Golden set ≥ limited-tier threshold", fr: "Golden set ≥ seuil du niveau limited" } }
+    - { id: x-02, title: { en: "RAG context compression", fr: "Compression de contexte RAG" }, stage: evaluate, owner: p03, gpu_hours: 12, linked_usecase: uc-01 }
+    - { id: x-03, title: { en: "Local LLM judge", fr: "Juge LLM local" }, stage: stopped, owner: p10, gpu_hours: 50 }

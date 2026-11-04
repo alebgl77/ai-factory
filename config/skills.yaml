@@ -1,0 +1,336 @@
+# SPDX-License-Identifier: MIT
+# Skills Lab and R&D Lab of the Virtual AI Factory (CONTRACT section 2.7). FICTIONAL.
+#
+# AI Act Art. 4 as rewritten by Regulation (EU) 2026/1744: providers and deployers take
+# measures to support the AI literacy of their staff and of other persons dealing with AI
+# systems on their behalf, adapted to their role, the risk and the context of use. The
+# rewritten text no longer requires guaranteeing a given level: this file records the
+# measures (modules required per role, sessions, completions) as evidence.
+# art4: true marks a module counted as an Art. 4 measure; the others are professional skills.
+# formats (enum values, not translated): lab (hands-on, fictional data only), atelier (workshop),
+# kata (exercise without AI), exercice (tabletop simulation).
+#
+# Languages (CONTRACT section 9): titles, audiences, outcomes, hypotheses, criteria and results
+# are either a plain string or a mapping {en: "...", fr: "..."}. Ids, dates and numbers are
+# never translated.
+
+modules:
+  - id: m-literacy-101
+    hours: 3
+    format: lab
+    art4: true
+    title: { en: "AI literacy foundations: how it works, limits, hallucinations",
+             fr: "Socle maîtrise de l'IA : fonctionnement, limites, hallucinations" }
+    audience: { en: "all roles", fr: "tous les rôles" }
+    outcome: { en: "Recognize an unsupported answer and know when not to use AI",
+               fr: "Reconnaître une réponse non étayée et savoir quand ne pas utiliser l'IA" }
+  - id: m-safe-use
+    hours: 1.5
+    format: lab
+    art4: true
+    title: { en: "Safe use: C1–C4 data classes and the local GPU", fr: "Usage sûr : classes de données C1–C4 et GPU local" }
+    audience: { en: "technical roles", fr: "rôles techniques" }
+    outcome: { en: "Choose the chat-sensitive alias for any C3/C4 data", fr: "Choisir l'alias chat-sensitive pour toute donnée C3/C4" }
+  - id: m-no-ai-kata
+    hours: 2
+    format: kata
+    art4: true
+    title: { en: "No-AI kata (anti-deskilling)", fr: "Kata sans IA (anti-déqualification)" }
+    audience: { en: "roles that produce work with AI", fr: "rôles qui produisent avec l'IA" }
+    outcome: { en: "Redo by hand a task delegated to AI and compare", fr: "Refaire à la main une tâche déléguée à l'IA et comparer" }
+  - id: m-ai-act-iso
+    hours: 2
+    format: atelier
+    art4: true
+    title: { en: "AI Act, ISO/IEC 42001 and NIST AI RMF awareness", fr: "Sensibilisation AI Act, ISO/IEC 42001 et NIST AI RMF" }
+    audience: { en: "management and architecture", fr: "pilotage et architecture" }
+    outcome: { en: "Classify a risk tier and its obligations", fr: "Qualifier un niveau de risque et ses obligations" }
+  - id: m-governance
+    hours: 4
+    format: atelier
+    art4: true
+    title: { en: "Governance: registry, risk review, reassessment per model version",
+             fr: "Gouvernance : registre, revue de risque, réévaluation par version de modèle" }
+    audience: { en: "management and governance", fr: "pilotage et gouvernance" }
+    outcome: { en: "Run a complete risk review", fr: "Conduire une revue de risque complète" }
+  - id: m-human-oversight
+    hours: 2
+    format: atelier
+    art4: true
+    title: { en: "Human oversight of high-risk AI systems (Art. 14 and 26)",
+             fr: "Contrôle humain des systèmes à haut risque (art. 14 et 26)" }
+    audience: { en: "supervisors and governance", fr: "superviseurs et gouvernance" }
+    outcome: { en: "Know how to interpret, challenge and suspend an output", fr: "Savoir interpréter, contester et suspendre une sortie" }
+  - id: m-agent-supervision
+    hours: 3
+    format: lab
+    art4: true
+    title: { en: "Agent supervision: escalations, kill switch, TTFT, tokens per task",
+             fr: "Supervision d'agents : escalades, coupe-circuit, TTFT, tokens par tâche" }
+    audience: "Agent Ops"
+    outcome: { en: "Detect an agent loop and stop it", fr: "Détecter une boucle d'agent et l'arrêter" }
+  - id: m-redteam
+    hours: 3
+    format: lab
+    art4: true
+    title: { en: "LLM red teaming: prompt injection, exfiltration, jailbreaks",
+             fr: "Red teaming LLM : injection de prompt, exfiltration, contournement" }
+    audience: { en: "technical roles", fr: "rôles techniques" }
+    outcome: { en: "Write and replay a red-team campaign", fr: "Écrire et rejouer une campagne red team" }
+  - id: m-bias
+    hours: 2
+    format: lab
+    art4: true
+    title: { en: "Fairness and bias: testing on fictional data", fr: "Équité et biais : tests sur données fictives" }
+    audience: { en: "high-risk systems", fr: "systèmes à haut risque" }
+    outcome: { en: "Measure a disparity in treatment between fictional groups", fr: "Mesurer un écart de traitement entre groupes fictifs" }
+  - id: m-incident
+    hours: 1.5
+    format: exercice
+    art4: true
+    title: { en: "AI incidents: rollback, reporting (Art. 73)", fr: "Incidents IA : retour arrière, signalement (art. 73)" }
+    audience: { en: "operations and management", fr: "exploitation et pilotage" }
+    outcome: { en: "Walk through the serious incident runbook", fr: "Dérouler le runbook d'incident grave" }
+  - id: m-rag
+    hours: 4
+    format: lab
+    art4: false
+    title: { en: "RAG: ingestion, chunking, indexing, citations", fr: "RAG : ingestion, découpage, indexation, citations" }
+    audience: { en: "technical roles", fr: "rôles techniques" }
+  - id: m-eval
+    hours: 4
+    format: lab
+    art4: false
+    title: { en: "Evaluation engineering: RAGAS, LLM-as-a-judge, golden sets",
+             fr: "Ingénierie de l'évaluation : RAGAS, LLM-as-judge, golden sets" }
+    audience: { en: "technical roles", fr: "rôles techniques" }
+  - id: m-llmops
+    hours: 4
+    format: lab
+    art4: false
+    title: { en: "LLMOps: versioning, evaluation gates, automatic rollback",
+             fr: "LLMOps : versionnage, portes d'évaluation, retour arrière automatique" }
+    audience: { en: "platform", fr: "plateforme" }
+  - id: m-finops
+    hours: 2
+    format: atelier
+    art4: false
+    title: { en: "AI FinOps: tokens, GPUs, showback and chargeback", fr: "FinOps IA : tokens, GPU, showback et chargeback" }
+    audience: { en: "management and platform", fr: "pilotage et plateforme" }
+
+# Art. 4 measures adapted to role, risk and context: every role has at least one art4 module.
+requirements:
+  head:           [m-literacy-101, m-ai-act-iso, m-governance, m-finops, m-incident]
+  po:             [m-literacy-101, m-ai-act-iso, m-governance, m-no-ai-kata, m-finops]
+  architect:      [m-literacy-101, m-ai-act-iso, m-safe-use, m-rag, m-llmops, m-redteam]
+  llm_engineer:   [m-literacy-101, m-safe-use, m-no-ai-kata, m-rag, m-eval, m-redteam, m-bias]
+  data_engineer:  [m-literacy-101, m-safe-use, m-rag, m-no-ai-kata]
+  eval_scientist: [m-literacy-101, m-eval, m-redteam, m-bias, m-no-ai-kata]
+  llmops:         [m-literacy-101, m-safe-use, m-llmops, m-finops, m-incident]
+  governance:     [m-literacy-101, m-ai-act-iso, m-governance, m-human-oversight, m-incident, m-bias]
+  agent_ops:      [m-literacy-101, m-agent-supervision, m-human-oversight, m-incident, m-no-ai-kata]
+  research:       [m-literacy-101, m-eval, m-redteam, m-no-ai-kata]
+  enablement:     [m-literacy-101, m-ai-act-iso, m-no-ai-kata, m-human-oversight]
+
+completions:                      # fictional; ~73% of the required modules
+  # p01 head
+  - { person: p01, module: m-literacy-101, date: 2026-01-20 }
+  - { person: p01, module: m-ai-act-iso,   date: 2026-02-05 }
+  - { person: p01, module: m-governance,   date: 2026-03-12 }
+  - { person: p01, module: m-finops,       date: 2026-06-18 }
+  # p02 po
+  - { person: p02, module: m-literacy-101, date: 2026-01-20 }
+  - { person: p02, module: m-ai-act-iso,   date: 2026-02-05 }
+  - { person: p02, module: m-governance,   date: 2026-03-12 }
+  # p03 llm_engineer
+  - { person: p03, module: m-literacy-101, date: 2026-01-22 }
+  - { person: p03, module: m-safe-use,     date: 2026-02-12 }
+  - { person: p03, module: m-no-ai-kata,   date: 2026-04-16 }
+  - { person: p03, module: m-rag,          date: 2026-03-05 }
+  - { person: p03, module: m-eval,         date: 2026-05-07 }
+  # p04 llm_engineer
+  - { person: p04, module: m-literacy-101, date: 2026-01-22 }
+  - { person: p04, module: m-safe-use,     date: 2026-02-12 }
+  - { person: p04, module: m-rag,          date: 2026-03-05 }
+  - { person: p04, module: m-eval,         date: 2026-05-07 }
+  - { person: p04, module: m-bias,         date: 2026-06-04 }
+  # p05 architect
+  - { person: p05, module: m-literacy-101, date: 2026-01-22 }
+  - { person: p05, module: m-safe-use,     date: 2026-02-12 }
+  - { person: p05, module: m-rag,          date: 2026-03-05 }
+  - { person: p05, module: m-llmops,       date: 2026-04-09 }
+  # p06 data_engineer
+  - { person: p06, module: m-literacy-101, date: 2026-01-29 }
+  - { person: p06, module: m-safe-use,     date: 2026-02-12 }
+  - { person: p06, module: m-rag,          date: 2026-03-05 }
+  # p07 governance
+  - { person: p07, module: m-literacy-101, date: 2026-01-20 }
+  - { person: p07, module: m-ai-act-iso,   date: 2026-02-05 }
+  - { person: p07, module: m-governance,   date: 2026-03-12 }
+  - { person: p07, module: m-human-oversight, date: 2026-06-11 }
+  - { person: p07, module: m-incident,     date: 2026-09-17 }
+  # p08 llmops
+  - { person: p08, module: m-literacy-101, date: 2026-01-29 }
+  - { person: p08, module: m-safe-use,     date: 2026-02-12 }
+  - { person: p08, module: m-llmops,       date: 2026-04-09 }
+  - { person: p08, module: m-finops,       date: 2026-06-18 }
+  # p09 eval_scientist
+  - { person: p09, module: m-literacy-101, date: 2026-01-29 }
+  - { person: p09, module: m-eval,         date: 2026-05-07 }
+  - { person: p09, module: m-redteam,      date: 2026-05-21 }
+  - { person: p09, module: m-bias,         date: 2026-06-04 }
+  - { person: p09, module: m-no-ai-kata,   date: 2026-04-16 }
+  # p10 research
+  - { person: p10, module: m-literacy-101, date: 2026-01-29 }
+  - { person: p10, module: m-eval,         date: 2026-05-07 }
+  - { person: p10, module: m-redteam,      date: 2026-05-21 }
+  # p11 enablement
+  - { person: p11, module: m-literacy-101, date: 2026-01-15 }
+  - { person: p11, module: m-ai-act-iso,   date: 2026-02-05 }
+  - { person: p11, module: m-no-ai-kata,   date: 2026-04-16 }
+  # p12 agent_ops (arrived in October)
+  - { person: p12, module: m-literacy-101, date: 2026-10-22 }
+  - { person: p12, module: m-agent-supervision, date: 2026-10-29 }
+
+sessions:                         # Skills Lab room S1 (8 seats); Thursday = team day
+  - { id: s-2026-10-22, module: m-literacy-101, date: 2026-10-22, start: "09:30", end: "12:30", trainer: p11,
+      attendees: [p12], room: S1,
+      title: { en: "AI literacy foundations (onboarding)", fr: "Socle maîtrise de l'IA (arrivée)" } }
+  - { id: s-2026-10-29, module: m-agent-supervision, date: 2026-10-29, start: "14:00", end: "17:00", trainer: p08,
+      attendees: [p12], room: S1,
+      title: { en: "Supervising agents in production", fr: "Supervision d'agents en production" } }
+  - { id: s-2026-11-05-kata, module: m-no-ai-kata, date: 2026-11-05, start: "10:00", end: "12:00", trainer: p11,
+      attendees: [p02, p06, p10, p12], room: S1,
+      title: { en: "No-AI kata: triaging requests by hand", fr: "Kata sans IA : qualifier des demandes à la main" } }
+  - { id: s-2026-11-05-redteam, module: m-redteam, date: 2026-11-05, start: "14:00", end: "17:00", trainer: p09,
+      attendees: [p03, p04, p05], room: S1,
+      title: { en: "Red team: prompt injection through MCP tools", fr: "Red team : injection de prompt via outils MCP" } }
+  - { id: s-2026-11-12-aiact, module: m-ai-act-iso, date: 2026-11-12, start: "09:30", end: "11:30", trainer: p07,
+      attendees: [p05, p03, p08], room: S1,
+      title: { en: "The AI Act after the 2026/1744 Omnibus, and ISO/IEC 42001", fr: "AI Act après l'Omnibus 2026/1744 et ISO/IEC 42001" } }
+  - { id: s-2026-11-12-oversight, module: m-human-oversight, date: 2026-11-12, start: "14:00", end: "16:00", trainer: p07,
+      attendees: [p11, p12, p01], room: S1,
+      title: { en: "Human oversight: challenge and suspend", fr: "Contrôle humain : contester et suspendre" } }
+  - { id: s-2026-11-17-bias, module: m-bias, date: 2026-11-17, start: "09:30", end: "11:30", trainer: p09,
+      attendees: [p03, p07], room: S1,
+      title: { en: "Bias testing on fictional data", fr: "Tests de biais sur données fictives" } }
+  - { id: s-2026-11-17-incident, module: m-incident, date: 2026-11-17, start: "14:00", end: "15:30", trainer: p07,
+      attendees: [p01, p08, p12], room: S1,
+      title: { en: "Serious incident drill (Art. 73)", fr: "Exercice d'incident grave (art. 73)" } }
+
+rnd:
+  # R&D Lab benches X1..X3. Stages: explore | prototype | evaluate | transfer | stopped.
+  # gpu_hours = local GPU hours per month. No experiment fine-tunes or retrains a model:
+  # the levers are prompts, retrieval, routing, decoding and evaluation.
+  experiments:
+    - id: x-01
+      stage: prototype
+      owner: p10
+      bench: X1
+      linked_usecase: uc-03
+      gpu_hours: 38
+      started: 2026-09-14
+      next_review: 2026-11-19
+      title: { en: "Adaptive routing to small models", fr: "Routage adaptatif vers petits modèles" }
+      hypothesis:
+        en: "A difficulty-based router sends 70% of triage requests to chat-small while losing no more than 1 F1 point"
+        fr: "Un routeur par difficulté envoie 70 % des demandes de tri vers chat-small sans perte de F1 > 1 point"
+      transfer_criteria:
+        en: "Macro F1 ≥ 0.92 on gs-triage-v4, cost per request -60%, no red-team regression"
+        fr: "F1 macro ≥ 0,92 sur gs-triage-v4, coût par requête -60 %, aucune régression red team"
+    - id: x-02
+      stage: evaluate
+      owner: p03
+      bench: X2
+      linked_usecase: uc-01
+      gpu_hours: 22
+      started: 2026-08-31
+      next_review: 2026-11-12
+      title: { en: "RAG context compression", fr: "Compression de contexte RAG" }
+      hypothesis:
+        en: "Summarizing the retrieved passages cuts input tokens by 35% at equal faithfulness"
+        fr: "Résumer les passages récupérés réduit de 35 % les tokens d'entrée à fidélité égale"
+      transfer_criteria:
+        en: "faithfulness ≥ 0.88 and answer_relevancy ≥ 0.85 on gs-procedures-v5, input tokens -30%"
+        fr: "faithfulness ≥ 0,88 et answer_relevancy ≥ 0,85 sur gs-procedures-v5, tokens d'entrée -30 %"
+    - id: x-03
+      stage: explore
+      owner: p09
+      bench: X3
+      linked_usecase: uc-04
+      gpu_hours: 45
+      started: 2026-10-05
+      next_review: 2026-12-03
+      title: { en: "Local LLM judge for C3/C4 data", fr: "Juge LLM local pour données C3/C4" }
+      hypothesis:
+        en: "A judge running on the local GPU reaches a kappa agreement ≥ 0.8 with human annotation"
+        fr: "Un juge exécuté sur le GPU local atteint un accord kappa ≥ 0,8 avec l'annotation humaine"
+      transfer_criteria:
+        en: "Cohen's kappa ≥ 0.8 on 300 annotated cases, < 10 GPU hours per week"
+        fr: "kappa de Cohen ≥ 0,8 sur 300 cas annotés, < 10 h GPU par semaine"
+    - id: x-04
+      stage: explore
+      owner: p10
+      bench: X3
+      linked_usecase: uc-01
+      gpu_hours: 6
+      started: 2026-10-19
+      next_review: 2026-12-03
+      title: { en: "Early detection of query drift", fr: "Détection précoce de dérive des requêtes" }
+      hypothesis:
+        en: "The distance of the query embedding centroid signals a hit-rate drop 7 days in advance"
+        fr: "La distance du centroïde d'embeddings des requêtes annonce une baisse du hit rate 7 jours avant"
+      transfer_criteria:
+        en: "Alert ≥ 7 days in advance on 3 replayed incidents, fewer than one false alert per month"
+        fr: "Alerte ≥ 7 jours avant sur 3 incidents rejoués, moins d'une fausse alerte par mois"
+    - id: x-05
+      stage: transfer
+      owner: p08
+      linked_usecase: uc-01
+      gpu_hours: 4
+      started: 2026-06-08
+      next_review: 2026-11-26
+      title: { en: "Semantic cache in the LLM gateway", fr: "Cache sémantique dans la passerelle LLM" }
+      hypothesis:
+        en: "A semantic cache serves 25% of repeated requests without degrading relevance"
+        fr: "Un cache sémantique sert 25 % des requêtes répétées sans dégrader la pertinence"
+      transfer_criteria:
+        en: "Cache hit rate ≥ 25%, answer_relevancy unchanged within ±0.01, invalidation on every reindexing"
+        fr: "Taux de cache ≥ 25 %, answer_relevancy inchangée à ±0,01, invalidation à chaque réindexation"
+      result:
+        en: "Criteria met: handover to the platform team in progress"
+        fr: "Critères atteints : transfert à l'équipe plateforme en cours"
+    - id: x-06
+      stage: transfer
+      owner: p05
+      linked_usecase: uc-07
+      gpu_hours: 30
+      started: 2026-05-18
+      next_review: 2026-11-26
+      title: { en: "Speculative decoding on the local GPU", fr: "Décodage spéculatif sur le GPU local" }
+      hypothesis:
+        en: "Speculative decoding cuts p95 TTFT by 25% on chat-sensitive"
+        fr: "Le décodage spéculatif réduit le TTFT p95 de 25 % sur chat-sensitive"
+      transfer_criteria:
+        en: "p95 TTFT -25%, identical outputs on the golden set (greedy decoding)"
+        fr: "TTFT p95 -25 %, sorties identiques sur le golden set (décodage glouton)"
+      result:
+        en: "p95 TTFT -31%: rollout planned on vllm-local"
+        fr: "TTFT p95 -31 % : activation prévue sur vllm-local"
+    - id: x-07
+      stage: stopped
+      owner: p10
+      linked_usecase: uc-02
+      gpu_hours: 12
+      started: 2026-04-06
+      next_review: null
+      title: { en: "Goodwill credits without human approval", fr: "Gestes commerciaux sans validation humaine" }
+      hypothesis:
+        en: "The agent can grant goodwill credits under €50 on its own"
+        fr: "L'agent peut accorder seul les gestes inférieurs à 50 €"
+      transfer_criteria:
+        en: "Error rate < 0.5% and a favorable governance review"
+        fr: "Taux d'erreur < 0,5 % et revue gouvernance favorable"
+      result:
+        en: "Stopped: risk deemed unacceptable (MANAGE 1.1); human approval remains mandatory"
+        fr: "Arrêtée : risque jugé inacceptable (MANAGE 1.1), la validation humaine reste obligatoire"

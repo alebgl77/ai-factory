@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use Virtual AI Factory in your work, please cite it as below."
+title: "Virtual AI Factory: the open-source digital twin of an enterprise AI factory"
+type: software
+authors:
+  - family-names: Beguel
+    given-names: Alexandre
+    affiliation: Digitalizor
+repository-code: "https://github.com/alebgl77/ai-factory"
+license: MIT
+version: 1.0.0
+date-released: 2026-11-04
+keywords:
+  - ai-factory
+  - digital-twin
+  - eu-ai-act
+  - nist-ai-rmf
+  - iso-42001
+  - llmops
+  - finops
+  - rag
+  - threejs

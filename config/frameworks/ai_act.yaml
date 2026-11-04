@@ -1,0 +1,353 @@
+# SPDX-License-Identifier: MIT
+# EU AI Act - display labels of the key articles and of the Annex III areas (CONTRACT 2.6).
+# Regulation (EU) 2024/1689 as amended by Regulation (EU) 2026/1744 (Digital Omnibus on AI).
+# English titles follow the official English text (Annex III area names shortened where the
+# official heading adds "in so far as their use is permitted under relevant Union or national
+# law"); French titles follow the official French text. Summaries are short paraphrases, NOT
+# legal advice. Application dates live in config/factory.yaml.
+# Sources and verification status: docs/GOVERNANCE.md.
+#
+# Languages (CONTRACT section 9): human-readable values are {en, fr} mappings; ids, article
+# references and enums are not.
+
+regulation:
+  id: ai_act
+  name:
+    en: "Regulation (EU) 2024/1689 on artificial intelligence (Artificial Intelligence Act)"
+    fr: "Règlement (UE) 2024/1689 sur l'intelligence artificielle"
+  eli: "http://data.europa.eu/eli/reg/2024/1689/oj"
+  oj: { en: "OJ L, 2024/1689, 12.7.2024", fr: "JO L, 2024/1689, 12.7.2024" }
+  amended_by:
+    - id: "2026/1744"
+      name:
+        en: "Regulation (EU) 2026/1744 (Digital Omnibus on AI)"
+        fr: "Règlement (UE) 2026/1744 (Omnibus numérique sur l'IA)"
+      oj: { en: "OJ L, 2026/1744, 24.7.2026", fr: "JO L, 2026/1744, 24.7.2026" }
+      in_force: 2026-07-27
+      url: "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=OJ:L_202601744"
+
+tiers:
+  - id: prohibited
+    label: { en: "Prohibited practice", fr: "Pratique interdite" }
+    basis: "Art. 5"
+  - id: high
+    label: { en: "High risk", fr: "Haut risque" }
+    basis: { en: "Art. 6 and Annexes I and III", fr: "Art. 6 et annexes I et III" }
+  - id: limited
+    label: { en: "Transparency (limited risk)", fr: "Transparence (risque limité)" }
+    basis: "Art. 50"
+  - id: minimal
+    label: { en: "Minimal risk", fr: "Risque minimal" }
+    basis:
+      en: "Art. 4 (AI literacy) and voluntary codes of conduct (Art. 95)"
+      fr: "Art. 4 (maîtrise de l'IA) et codes volontaires (art. 95)"
+  - id: gpai
+    label: { en: "General-purpose AI model (orthogonal)", fr: "Modèle d'IA à usage général (orthogonal)" }
+    basis: { en: "Chapter V, Arts. 51 to 56", fr: "Chapitre V, art. 51 à 56" }
+
+roles:
+  - id: provider
+    label: { en: "Provider", fr: "Fournisseur" }
+    basis: "Art. 3(3)"
+    note:
+      en: "Develops an AI system, or has one developed, and places it on the market or puts it into service under its own name or trademark, including for its own use"
+      fr: "Développe ou fait développer un système et le met sur le marché ou en service sous son nom, y compris pour son propre usage"
+  - id: deployer
+    label: { en: "Deployer", fr: "Déployeur" }
+    basis: "Art. 3(4)"
+    note:
+      en: "Uses an AI system under its authority in the course of a professional activity"
+      fr: "Utilise un système sous son autorité dans un cadre professionnel"
+  - id: both
+    label: { en: "Provider and deployer", fr: "Fournisseur et déployeur" }
+    basis: { en: "Art. 3(3) and 3(4)", fr: "Art. 3(3) et 3(4)" }
+    note:
+      en: "A system built in-house and used by the organization itself"
+      fr: "Cas d'un système construit en interne et utilisé par l'organisation"
+
+articles:
+  - id: "Art. 3"
+    number: 3
+    title: { en: "Definitions", fr: "Définitions" }
+    summary:
+      en: "AI system, provider, deployer, substantial modification (3(23)), serious incident (3(49))"
+      fr: "Système d'IA, fournisseur, déployeur, modification substantielle (3(23)), incident grave (3(49))"
+  - id: "Art. 4"
+    number: 4
+    title: { en: "AI literacy", fr: "Maîtrise de l'IA" }
+    amended: true
+    summary:
+      en: "Rewritten by 2026/1744: providers and deployers take measures to support the AI literacy of their staff, with no obligation to ensure a given level; the Commission and the Member States support them (exact wording to be checked in the Official Journal)"
+      fr: "Réécrit par 2026/1744 : fournisseurs et déployeurs prennent des mesures pour soutenir la maîtrise de l'IA de leur personnel, sans obligation de garantir un niveau donné ; la Commission et les États membres les soutiennent (formulation exacte à vérifier au JO)"
+  - id: "Art. 4a"
+    number: 4
+    title:
+      en: "Processing of special categories of personal data for bias detection"
+      fr: "Traitement de catégories particulières de données pour la détection des biais"
+    amended: true
+    summary:
+      en: "Article introduced by the Omnibus (proposal COM(2025) 836) to replace and broaden Art. 10(5); final numbering and text to be checked in the Official Journal"
+      fr: "Article introduit par l'Omnibus (proposition COM(2025) 836) pour remplacer et élargir l'art. 10(5) ; numérotation et texte finals à vérifier au JO"
+  - id: "Art. 5"
+    number: 5
+    title: { en: "Prohibited AI practices", fr: "Pratiques interdites" }
+    amended: true
+    summary:
+      en: "Manipulation, exploitation of vulnerabilities, social scoring, crime prediction based on profiling, untargeted scraping of facial images, emotion recognition in the workplace and education, biometric categorization by sensitive attributes, real-time remote biometric identification (narrow exceptions); 2026/1744 adds prohibitions on generating non-consensual intimate imagery and child sexual abuse material (to be verified)"
+      fr: "Manipulation, exploitation des vulnérabilités, notation sociale, prédiction criminelle par profilage, moissonnage d'images faciales, reconnaissance des émotions au travail et à l'école, catégorisation biométrique sensible, identification biométrique à distance en temps réel (exceptions encadrées) ; 2026/1744 ajoute des interdictions visant la génération d'images intimes non consenties et de contenus pédocriminels (à vérifier)"
+  - id: "Art. 6"
+    number: 6
+    title: { en: "Classification rules for high-risk AI systems", fr: "Règles de classification des systèmes d'IA à haut risque" }
+    summary:
+      en: "High risk: safety component of an Annex I product subject to third-party conformity assessment, or an Annex III system; 6(3) derogation where there is no significant risk (narrow procedural task, improving the result of a previously completed human activity, detecting decision-making patterns or deviations without replacing human assessment, preparatory task), never when profiling; 6(4) documentation of the assessment and registration (Art. 49(2))"
+      fr: "Haut risque : composant de sécurité d'un produit de l'annexe I soumis à évaluation par un tiers, ou système de l'annexe III ; dérogation 6(3) si pas de risque important (tâche procédurale étroite, amélioration d'une activité humaine achevée, détection d'écarts sans remplacer l'évaluation humaine, tâche préparatoire), jamais en cas de profilage ; 6(4) documentation de l'évaluation et enregistrement (art. 49(2))"
+  - id: "Art. 9"
+    number: 9
+    title: { en: "Risk management system", fr: "Système de gestion des risques" }
+    summary:
+      en: "Iterative process over the entire lifecycle: identification, estimation, measures, testing"
+      fr: "Processus itératif sur tout le cycle de vie : identification, estimation, mesures, tests"
+  - id: "Art. 10"
+    number: 10
+    title: { en: "Data and data governance", fr: "Données et gouvernance des données" }
+    summary:
+      en: "Quality, relevance and representativeness of training, validation and testing data sets; examination of biases; special categories of data for bias detection under conditions (Art. 10(5), moved to an Art. 4a by 2026/1744 according to the proposal, to be verified)"
+      fr: "Qualité, pertinence, représentativité des jeux d'entraînement, de validation et de test ; examen des biais ; données sensibles pour la détection des biais sous conditions (art. 10(5), déplacé vers un art. 4a par 2026/1744 selon la proposition, à vérifier)"
+  - id: "Art. 11"
+    number: 11
+    title: { en: "Technical documentation", fr: "Documentation technique" }
+    summary:
+      en: "Drawn up before placing on the market, kept up to date, content set out in Annex IV"
+      fr: "Établie avant la mise sur le marché, tenue à jour, contenu de l'annexe IV"
+  - id: "Art. 12"
+    number: 12
+    title: { en: "Record-keeping", fr: "Enregistrement (journalisation)" }
+    summary:
+      en: "Automatic recording of events (logs) for traceability"
+      fr: "Journalisation automatique des événements pour la traçabilité"
+  - id: "Art. 13"
+    number: 13
+    title: { en: "Transparency and provision of information to deployers", fr: "Transparence et fourniture d'informations aux déployeurs" }
+    summary:
+      en: "Instructions for use: intended purpose, performance, limitations, human oversight, logs"
+      fr: "Notice d'utilisation : finalité, performances, limites, contrôle humain, journaux"
+  - id: "Art. 14"
+    number: 14
+    title: { en: "Human oversight", fr: "Contrôle humain" }
+    summary:
+      en: "Designed for effective oversight: understand, interpret, disregard the output, interrupt (stop button)"
+      fr: "Conception permettant une supervision effective : comprendre, interpréter, ne pas suivre, interrompre (bouton d'arrêt)"
+  - id: "Art. 15"
+    number: 15
+    title: { en: "Accuracy, robustness and cybersecurity", fr: "Exactitude, robustesse et cybersécurité" }
+    summary:
+      en: "Declared levels, resilience to errors and attacks (data poisoning, adversarial examples)"
+      fr: "Niveaux déclarés, résilience aux erreurs et aux attaques (empoisonnement, exemples adverses)"
+  - id: "Art. 16"
+    number: 16
+    title: { en: "Obligations of providers of high-risk AI systems", fr: "Obligations des fournisseurs de systèmes à haut risque" }
+    summary:
+      en: "Compliance with requirements, QMS, documentation, logs, conformity assessment, registration, CE marking"
+      fr: "Conformité aux exigences, SMQ, documentation, journaux, évaluation de conformité, enregistrement, marquage CE"
+  - id: "Art. 17"
+    number: 17
+    title: { en: "Quality management system", fr: "Système de gestion de la qualité" }
+    summary:
+      en: "Documented policies, procedures and instructions of the provider"
+      fr: "Politiques, procédures et instructions documentées du fournisseur"
+  - id: "Art. 19"
+    number: 19
+    title: { en: "Automatically generated logs", fr: "Journaux générés automatiquement" }
+    summary:
+      en: "Logs under the provider's control kept for at least six months"
+      fr: "Conservation par le fournisseur des journaux sous son contrôle, au moins six mois"
+  - id: "Art. 25"
+    number: 25
+    title: { en: "Responsibilities along the AI value chain", fr: "Responsabilités tout au long de la chaîne de valeur" }
+    summary:
+      en: "A deployer that substantially modifies a system or its intended purpose becomes a provider"
+      fr: "Un déployeur qui modifie substantiellement un système ou sa destination devient fournisseur"
+  - id: "Art. 26"
+    number: 26
+    title: { en: "Obligations of deployers of high-risk AI systems", fr: "Obligations des déployeurs de systèmes à haut risque" }
+    summary:
+      en: "Use in accordance with the instructions, human oversight by competent persons, relevant input data, monitoring and reporting, logs kept for at least six months, information of workers (26(7)) and of affected persons (26(11)), DPIA (26(9))"
+      fr: "Usage conforme à la notice, contrôle humain par des personnes compétentes, pertinence des données d'entrée, surveillance et signalement, journaux au moins six mois, information des travailleurs (26(7)) et des personnes concernées (26(11)), AIPD (26(9))"
+  - id: "Art. 27"
+    number: 27
+    title: { en: "Fundamental rights impact assessment for high-risk AI systems", fr: "Analyse d'impact sur les droits fondamentaux" }
+    summary:
+      en: "Before deployment, for bodies governed by public law, private entities providing public services and deployers of Annex III points 5(b) and (c)"
+      fr: "Avant déploiement, pour les organismes de droit public, les entités privées fournissant des services publics et les déployeurs des points 5 b) et c) de l'annexe III"
+  - id: "Art. 43"
+    number: 43
+    title: { en: "Conformity assessment", fr: "Évaluation de la conformité" }
+    summary:
+      en: "New assessment in the event of a substantial modification (43(4))"
+      fr: "Nouvelle évaluation en cas de modification substantielle (43(4))"
+  - id: "Art. 49"
+    number: 49
+    title: { en: "Registration", fr: "Enregistrement" }
+    amended: true
+    summary:
+      en: "Registration in the EU database, including Annex III systems assessed as not high-risk (49(2), kept by 2026/1744 with less information)"
+      fr: "Enregistrement dans la base de l'UE, y compris des systèmes de l'annexe III déclarés non à haut risque (49(2), maintenu par 2026/1744 avec moins d'informations)"
+  - id: "Art. 50"
+    number: 50
+    title:
+      en: "Transparency obligations for providers and deployers of certain AI systems"
+      fr: "Obligations de transparence pour certains systèmes d'IA"
+    amended: true
+    summary:
+      en: "50(1) inform people that they are interacting with an AI system; 50(2) machine-readable marking of synthetic content; 50(3) information on emotion recognition and biometric categorization; 50(4) disclosure of deep fakes and of generated text published on matters of public interest"
+      fr: "50(1) informer qu'on interagit avec une IA ; 50(2) marquage lisible par machine des contenus synthétiques ; 50(3) information sur la reconnaissance des émotions et la catégorisation biométrique ; 50(4) divulgation des hypertrucages et des textes d'intérêt public générés"
+  - id: "Art. 53"
+    number: 53
+    title: { en: "Obligations for providers of general-purpose AI models", fr: "Obligations des fournisseurs de modèles d'IA à usage général" }
+    summary:
+      en: "Technical documentation, information for downstream providers, copyright policy, summary of the training content"
+      fr: "Documentation technique, informations aux fournisseurs en aval, politique de droit d'auteur, résumé des données d'entraînement"
+  - id: "Art. 55"
+    number: 55
+    title:
+      en: "Obligations of providers of general-purpose AI models with systemic risk"
+      fr: "Obligations des fournisseurs de modèles GPAI présentant un risque systémique"
+    summary:
+      en: "Model evaluation and adversarial testing, mitigation of systemic risks, serious incidents, cybersecurity"
+      fr: "Évaluation et tests adverses, atténuation des risques systémiques, incidents graves, cybersécurité"
+  - id: "Art. 72"
+    number: 72
+    title:
+      en: "Post-market monitoring by providers and post-market monitoring plan for high-risk AI systems"
+      fr: "Surveillance après commercialisation par les fournisseurs"
+    summary:
+      en: "Proportionate post-market monitoring plan, collection and analysis of performance data"
+      fr: "Plan de surveillance après commercialisation proportionné, collecte et analyse des données de performance"
+  - id: "Art. 73"
+    number: 73
+    title: { en: "Reporting of serious incidents", fr: "Signalement des incidents graves" }
+    summary:
+      en: "Notification to the market surveillance authority: no later than 15 days, 2 days for a widespread infringement or a serious disruption of critical infrastructure, 10 days in the event of death"
+      fr: "Notification à l'autorité de surveillance du marché : au plus tard 15 jours, 2 jours en cas d'infraction de grande ampleur ou de perturbation grave d'une infrastructure critique, 10 jours en cas de décès"
+  - id: "Art. 86"
+    number: 86
+    title: { en: "Right to explanation of individual decision-making", fr: "Droit à l'explication des décisions individuelles" }
+    summary:
+      en: "Clear explanation of the role of the AI system in a decision based on an Annex III system"
+      fr: "Explication claire du rôle du système dans une décision fondée sur un système de l'annexe III"
+  - id: "Art. 95"
+    number: 95
+    title:
+      en: "Codes of conduct for voluntary application of specific requirements"
+      fr: "Codes de conduite pour l'application volontaire d'exigences"
+    summary:
+      en: "Voluntary application, including environmental sustainability and AI literacy"
+      fr: "Application volontaire, y compris durabilité environnementale et maîtrise de l'IA"
+  - id: "Art. 99"
+    number: 99
+    title: { en: "Penalties", fr: "Sanctions" }
+    summary:
+      en: "Up to EUR 35 million or 7% of worldwide annual turnover (prohibited practices), EUR 15 million or 3% (other obligations), EUR 7.5 million or 1% (incorrect information)"
+      fr: "Jusqu'à 35 M€ ou 7 % du CA mondial (pratiques interdites), 15 M€ ou 3 % (autres obligations), 7,5 M€ ou 1 % (informations inexactes)"
+
+transparency_duties:              # values of usecases/*.yaml ai_act.transparency
+  - id: chatbot
+    article: "Art. 50(1)"
+    holder: provider
+    label:
+      en: "Inform people that they are interacting with an AI system"
+      fr: "Informer les personnes qu'elles interagissent avec une IA"
+  - id: synthetic_content
+    article: "Art. 50(2)"
+    holder: provider
+    label:
+      en: "Mark synthetic content (machine-readable and detectable)"
+      fr: "Marquer les contenus synthétiques (lisible par machine, détectable)"
+  - id: emotion_recognition
+    article: "Art. 50(3)"
+    holder: deployer
+    label:
+      en: "Inform people exposed to an emotion recognition or biometric categorization system"
+      fr: "Informer les personnes exposées à la reconnaissance des émotions ou à la catégorisation biométrique"
+  - id: deepfake
+    article: "Art. 50(4)"
+    holder: deployer
+    label:
+      en: "Disclose that content has been generated or manipulated (deep fake, text on matters of public interest)"
+      fr: "Divulguer qu'un contenu a été généré ou manipulé (hypertrucage, texte d'intérêt public)"
+
+annex_iii:                        # ids exactly as in CONTRACT section 2.3
+  - id: biometrics
+    point: 1
+    label: { en: "Biometrics", fr: "Biométrie" }
+    scope:
+      en: "Remote biometric identification, biometric categorization by sensitive attributes, emotion recognition (in so far as their use is permitted)"
+      fr: "Identification biométrique à distance, catégorisation biométrique par attributs sensibles, reconnaissance des émotions (dans la mesure où leur usage est permis)"
+  - id: critical_infrastructure
+    point: 2
+    label: { en: "Critical infrastructure", fr: "Infrastructures critiques" }
+    scope:
+      en: "Safety components in the management and operation of critical digital infrastructure, road traffic, and the supply of water, gas, heating and electricity"
+      fr: "Composants de sécurité de la gestion d'infrastructures numériques critiques, du trafic routier, de l'eau, du gaz, du chauffage et de l'électricité"
+  - id: education
+    point: 3
+    label: { en: "Education and vocational training", fr: "Éducation et formation professionnelle" }
+    scope:
+      en: "Access and admission, evaluation of learning outcomes, assessment of the appropriate level of education, monitoring of prohibited behavior during tests"
+      fr: "Admission et affectation, évaluation des acquis, niveau d'enseignement approprié, surveillance des comportements interdits pendant les examens"
+  - id: employment
+    point: 4
+    label:
+      en: "Employment, workers' management and access to self-employment"
+      fr: "Emploi, gestion des travailleurs et accès à l'emploi indépendant"
+    scope:
+      en: "(a) recruitment and selection (targeted job ads, analysis and filtering of applications, evaluation of candidates); (b) decisions affecting terms of work relationships, promotion, termination, task allocation, monitoring and evaluation of performance"
+      fr: "a) recrutement et sélection (annonces ciblées, analyse et filtrage des candidatures, évaluation des candidats) ; b) décisions sur les conditions de travail, promotion, licenciement, attribution des tâches, suivi et évaluation des performances"
+  - id: essential_services
+    point: 5
+    label:
+      en: "Access to and enjoyment of essential private services and essential public services and benefits"
+      fr: "Accès aux services privés essentiels et aux services et prestations publics essentiels"
+    scope:
+      en: "(a) eligibility for public assistance benefits; (b) creditworthiness and credit scoring (except fraud detection); (c) risk assessment and pricing in life and health insurance; (d) evaluation and classification of emergency calls and dispatch of emergency services"
+      fr: "a) éligibilité aux prestations publiques ; b) solvabilité et score de crédit (hors détection de fraude) ; c) évaluation des risques et tarification en assurance vie et santé ; d) tri des appels d'urgence et répartition des secours"
+  - id: law_enforcement
+    point: 6
+    label: { en: "Law enforcement", fr: "Répression (activités répressives)" }
+    scope:
+      en: "Risk of becoming a victim of crime, polygraphs, reliability of evidence, risk of offending or re-offending, profiling in investigations (in so far as their use is permitted)"
+      fr: "Évaluation du risque de victimisation, polygraphes, fiabilité des preuves, risque de récidive, profilage dans les enquêtes (dans la mesure où l'usage est permis)"
+  - id: migration_border
+    point: 7
+    label: { en: "Migration, asylum and border control management", fr: "Migration, asile et contrôle aux frontières" }
+    scope:
+      en: "Polygraphs, risk assessment, examination of applications for asylum, visas and residence permits, detection and identification of persons"
+      fr: "Polygraphes, évaluation des risques, examen des demandes d'asile, de visa et de titres de séjour, détection et identification des personnes"
+  - id: justice_democracy
+    point: 8
+    label:
+      en: "Administration of justice and democratic processes"
+      fr: "Administration de la justice et processus démocratiques"
+    scope:
+      en: "(a) assisting judicial authorities in researching and interpreting facts and the law; (b) influencing the outcome of an election or referendum or voting behavior"
+      fr: "a) assistance aux autorités judiciaires pour rechercher et interpréter les faits et le droit ; b) influence sur le résultat d'une élection ou d'un référendum ou sur le comportement de vote"
+
+art6_3_conditions:
+  - id: a
+    label: { en: "Narrow procedural task", fr: "Tâche procédurale étroite" }
+  - id: b
+    label:
+      en: "Improving the result of a previously completed human activity"
+      fr: "Amélioration du résultat d'une activité humaine déjà achevée"
+  - id: c
+    label:
+      en: "Detecting decision-making patterns or deviations, without replacing or influencing the previously completed human assessment without proper human review"
+      fr: "Détection de schémas décisionnels ou d'écarts, sans remplacer ni influencer l'évaluation humaine sans revue appropriée"
+  - id: d
+    label:
+      en: "Preparatory task to an assessment relevant for the purposes of the Annex III use cases"
+      fr: "Tâche préparatoire à une évaluation pertinente pour un cas de l'annexe III"
+  - id: profiling
+    label:
+      en: "Exclusion: an Annex III system that performs profiling of natural persons is always considered high-risk"
+      fr: "Exclusion : un système de l'annexe III qui effectue un profilage de personnes physiques est toujours à haut risque"

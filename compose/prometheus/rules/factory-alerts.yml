@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: MIT
+# Alerts of the Virtual AI Factory. Thresholds mirror config/factory.yaml
+# (agentops_slo, waste_rules, rollback) - change both together.
+# Annotations, alert names and labels are in English.
+groups:
+  - name: factory-finops
+    rules:
+      - alert: FactoryWasteAlertsPresent
+        expr: sum(factory_waste_alerts) > 0
+        for: 10m
+        labels:
+          severity: warning
+          pillar: finops
+        annotations:
+          summary: "Active waste alerts ({{ $value }})"
+          description: "The FinOps engine reports waste (oversized model, cache, idle GPU...). See the FinOps dashboard."
+      - alert: FactoryWasteAlertCritical
+        expr: sum by (rule) (factory_waste_alerts{severity="crit"}) > 0
+        for: 10m
+        labels:
+          severity: critical
+          pillar: finops
+        annotations:
+          summary: "Critical waste: rule {{ $labels.rule }}"
+          description: "At least one critical waste alert for rule {{ $labels.rule }}."
+
+  - name: factory-agentops
+    rules:
+      - alert: FactoryTTFTp95AboveSLO
+        expr: factory:llm_ttft_seconds:p95_5m > on() group_left() factory:slo_ttft_seconds:p95
+        for: 10m
+        labels:
+          severity: warning
+          pillar: agent_ops
+        annotations:
+          summary: "TTFT p95 above the SLO ({{ $value | humanizeDuration }})"
+          description: "Time to first token (p95, 5 min) exceeds the 1.5 s SLO at the LLM gateway."
+      - alert: FactoryAgentTTFTp95AboveSLO
+        expr: max by (agent) (factory_agent_ttft_seconds{quantile="0.95"}) > on() group_left() factory:slo_ttft_seconds:p95
+        for: 15m
+        labels:
+          severity: warning
+          pillar: agent_ops
+        annotations:
+          summary: "TTFT p95 of agent {{ $labels.agent }} above the SLO"
+          description: "The TTFT p95 computed by the API for agent {{ $labels.agent }} exceeds 1.5 s."
+      - alert: FactoryVectorLatencyAboveSLO
+        expr: max(factory_vector_latency_seconds{quantile="0.95"}) > on() group_left() factory:slo_vector_latency_seconds:p95
+        for: 15m
+        labels:
+          severity: warning
+          pillar: agent_ops
+        annotations:
+          summary: "Vector latency p95 above the SLO"
+          description: "The p95 latency of vector search exceeds 120 ms."
+
+  - name: factory-gateway
+    rules:
+      - alert: FactoryGatewayErrorRateHigh
+        expr: |
+          factory:llm_error_ratio:rate5m > on() group_left() factory:slo_gateway_error_ratio:max
+          and on() sum(rate(factory_llm_requests_total[5m])) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          pillar: llmops
+        annotations:
+          summary: "High LLM gateway error rate ({{ $value | humanizePercentage }})"
+          description: "More than 5% of gateway calls fail (before fallback). Check the cloud providers, the VPS and the local GPU."
+      - alert: FactorySensitiveRouteDown
+        expr: |
+          sum(rate(factory_llm_requests_total{model="chat-sensitive",status="success"}[10m])) == 0
+          and on() sum(rate(factory_llm_requests_total{model="chat-sensitive"}[10m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+          pillar: governance
+        annotations:
+          summary: "No response on chat-sensitive (local GPU)"
+          description: "Sensitive data (C3/C4) is processed on the local GPU only, with no fallback: the affected use cases are stopped."
+
+  - name: factory-gpu
+    rules:
+      - alert: FactoryGPUTemperatureHigh
+        expr: max by (gpu, Hostname) (DCGM_FI_DEV_GPU_TEMP) > on() group_left() factory:gpu_temp_celsius:max_safe
+        for: 5m
+        labels:
+          severity: critical
+          pillar: hybrid_placement
+        annotations:
+          summary: "GPU {{ $labels.gpu }} ({{ $labels.Hostname }}) at {{ $value }} °C"
+          description: "The local GPU temperature has been above 83 °C for 5 minutes."
+      - alert: FactoryGPUIdle
+        expr: avg_over_time(DCGM_FI_DEV_GPU_UTIL[4h]) < on() group_left() factory:gpu_idle_util_percent:max
+        for: 30m
+        labels:
+          severity: warning
+          pillar: finops
+          rule: idle_gpu
+        annotations:
+          summary: "GPU {{ $labels.gpu }} idle (< 10% over 4 h)"
+          description: "The local GPU is underused: consider moving non-sensitive workloads onto it, or shutting it down outside business hours."
+
+  - name: factory-governance
+    rules:
+      - alert: FactoryReevaluationRequired
+        expr: sum(factory_reevaluation_required) > 0
+        for: 30m
+        labels:
+          severity: info
+          pillar: governance
+        annotations:
+          summary: "{{ $value }} use case(s) to re-assess (new model version)"
+          description: "The deployment gate stays blocked (risk_reassessment) until the risk review is done."
+
+  - name: factory-platform
+    rules:
+      - alert: FactoryTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+          pillar: platform
+        annotations:
+          summary: "Target {{ $labels.job }} unreachable ({{ $labels.instance }})"
+          description: "Prometheus can no longer scrape {{ $labels.job }}."

@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: MIT
+// Grafana Alloy (Apache-2.0): Docker log discovery -> Loki.
+// (Promtail reached end of life on 2026-03-02 and is not used.)
+// Only the containers of this compose project are collected.
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "15s"
+
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=" + sys.env("FACTORY_COMPOSE_PROJECT")]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+}
+
+loki.source.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.containers.output
+  relabel_rules    = discovery.relabel.containers.rules
+  refresh_interval = "15s"
+  forward_to       = [loki.process.factory.receiver]
+}
+
+loki.process "factory" {
+  // Defence in depth: mask anything that looks like an API key or a bearer token
+  // before it is stored.
+  stage.replace {
+    expression = "(?i)(sk-[a-z0-9_-]{6,}|pk-lf-[a-z0-9_-]{6,}|bearer\\s+[a-z0-9._-]{12,}|glsa_[a-z0-9_]{12,})"
+    replace    = "***"
+  }
+
+  // Log level as a label when the line carries one (logfmt "level=..." or JSON "level":"...").
+  stage.regex {
+    expression = "(?i)(?:\\blevel\\b|\\blvl\\b|\"level\"|\"severity\")\\s*[=:]\\s*\"?(?P<level>debug|info|warn|warning|error|err|fatal|critical)\\b"
+  }
+
+  stage.template {
+    source   = "level"
+    template = "{{ ToLower .Value }}"
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+  external_labels = { factory = "ai-factory-reference" }
+}

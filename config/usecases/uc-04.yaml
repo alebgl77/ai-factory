@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-04
+code: UC-04
+name: { en: "Job application pre-screening (fictional)", fr: "Présélection de candidatures (fictif)" }
+description:
+  en: >-
+    Gives recruiters a reasoned ranking of the applications against the job criteria. High-risk
+    AI system (Annex III, point 4(a)). No automated decision: every proposal is reviewed by a
+    human. Personal data (C3) processed on the local GPU only. The upgrade of the local model to
+    2026-10 requires a new review (bias testing). Fictional data.
+  fr: >-
+    Propose aux recruteurs un classement argumenté des candidatures au regard des critères du
+    poste. Système à haut risque (annexe III, point 4 a). Aucune décision automatique : chaque
+    proposition est revue par un humain. Données personnelles (C3) traitées uniquement sur le GPU
+    local. La mise à niveau du modèle local 2026-10 impose une nouvelle revue (tests de biais).
+    Données fictives.
+owner: p01
+cost_center: cc-rh
+stage: mvp
+task_type: classification
+sensitivity: C3
+color: "#009e73"
+ai_act:
+  role: both
+  prohibited_practices: []
+  annex_iii_area: employment
+  annex_iii_use:
+    en: "Annex III, point 4(a): analyzing and filtering job applications, evaluating candidates"
+    fr: "Annexe III, point 4 a) : analyser et filtrer les candidatures, évaluer les candidats"
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: true
+  deployer_duties:
+    - { en: "Art. 26(7): informing workers' representatives before putting into service",
+        fr: "Art. 26(7) : information des représentants du personnel avant mise en service" }
+    - { en: "Art. 26(11): informing the candidates concerned",
+        fr: "Art. 26(11) : information des candidats concernés" }
+    - { en: "Art. 26(9): DPIA (GDPR Art. 35) based on the instructions for use",
+        fr: "Art. 26(9) : AIPD (RGPD art. 35) à partir de la notice d'utilisation" }
+  fria_required: false            # Art. 27: not a public-law body nor Annex III 5(b)/(c) (fictional context)
+model:
+  alias: chat-sensitive
+  name: { en: "Open-weight 14B LLM on the local GPU (fictional)", fr: "LLM open-weight 14B sur GPU local (fictif)" }
+  version: "2026-10"
+  history:
+    - { version: "2026-05", from: 2026-05-20 }
+    - { version: "2026-10", from: 2026-10-20 }
+assessment:
+  reviewed_model_version: "2026-05"   # differs from model.version => re-evaluation required
+  last_reviewed: 2026-05-15
+  reviewer: p07
+  decision: approved_with_conditions
+  conditions:
+    - { en: "Human review of 100% of the proposals", fr: "Revue humaine de 100 % des propositions" }
+    - { en: "Bias testing at every model version", fr: "Tests de biais à chaque version de modèle" }
+    - { en: "Logs kept for at least 6 months (Art. 26(6))", fr: "Journalisation conservée au moins 6 mois (art. 26(6))" }
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "AI risk committee (fictional)", fr: "Comité de risque IA (fictif)" }
+      - { en: "Human oversight roles assigned", fr: "Rôles de contrôle humain désignés" }
+  map:
+    status: done
+    evidence:
+      - { en: "Impact assessment on candidates", fr: "Analyse d'impact sur les candidats" }
+      - { en: "Annex III 4(a) classification", fr: "Qualification annexe III 4 a)" }
+  measure:
+    status: partial
+    evidence:
+      - { en: "Bias testing on a fictional dataset, model 2026-05", fr: "Tests de biais sur jeu fictif 2026-05" }
+    gaps:
+      - { en: "Bias testing on model 2026-10", fr: "Tests de biais sur 2026-10" }
+  manage:
+    status: partial
+    evidence:
+      - { en: "Suspension procedure", fr: "Procédure de suspension" }
+    gaps:
+      - { en: "Post-deployment monitoring plan", fr: "Plan de surveillance après mise en service" }
+iso42001: ["A.2.2", "A.3.2", "A.3.3", "A.4.2", "A.4.3", "A.5.2", "A.5.3", "A.5.4", "A.6.1.2", "A.6.2.3",
+           "A.6.2.4", "A.6.2.7", "A.6.2.8", "A.7.4", "A.7.5", "A.8.2", "A.9.2", "A.9.4"]
+rag: { index: kb-fiches-postes, corpus_docs: 260, chunk_size: 500, chunk_overlap: 50, embedding: embed-default,
+       top_k: 4, hybrid_search: false, reranker: false }
+eval:
+  golden_set: "gs-preselection-v2"
+  questions: 300
+  judge_alias: chat-sensitive
+  human_calibration: { en: "10% sample scored by two recruiters", fr: "échantillon de 10 % noté par deux recruteurs" }
+  bias_suite: "bias-emploi-v2"
+kpis:
+  adoption_target: 0.5
+  adoption_actual: 0.31
+  value_metric: { en: "Pre-screening time per job opening", fr: "Temps de présélection par poste" }
+  value_eur_month: 3100

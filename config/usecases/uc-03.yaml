@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-03
+code: UC-03
+name: { en: "Inbound request triage and routing (fictional)", fr: "Tri et routage des demandes entrantes (fictif)" }
+description:
+  en: >-
+    Classifies every inbound request into one of 14 processing queues. A simple task served by
+    the premium model: the FinOps "oversized model" rule recommends chat-small (R&D experiment
+    x-01). No direct interaction with people. Fictional data.
+  fr: >-
+    Classe chaque demande entrante dans l'une de 14 files de traitement. Tâche simple servie par
+    le modèle premium : la règle FinOps « modèle surdimensionné » recommande chat-small
+    (expérience R&D x-01). Aucune interaction directe avec les personnes. Données fictives.
+owner: p08
+cost_center: cc-relation
+stage: run
+task_type: classification
+sensitivity: C2
+color: "#d55e00"
+ai_act:
+  role: both
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: true
+model:
+  alias: chat-default
+  name: { en: "Premium cloud LLM (fictional)", fr: "LLM cloud premium (fictif)" }
+  version: "2026-09"
+  history:
+    - { version: "2026-03", from: 2026-03-16 }
+    - { version: "2026-09", from: 2026-09-23 }
+assessment:
+  reviewed_model_version: "2026-09"
+  last_reviewed: 2026-09-22
+  reviewer: p07
+  decision: approved
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "AI policy v2 (fictional)", fr: "Politique IA v2 (fictive)" }
+  map:
+    status: done
+    evidence:
+      - { en: "Context sheet", fr: "Fiche contexte" }
+      - { en: "Taxonomy of the 14 queues", fr: "Taxonomie des 14 files" }
+  measure:
+    status: partial
+    evidence:
+      - { en: "Weekly macro F1", fr: "F1 macro hebdomadaire" }
+    gaps:
+      - { en: "Confusion matrix per channel", fr: "Matrice de confusion par canal" }
+  manage:
+    status: partial
+    evidence:
+      - { en: "Automatic rollback", fr: "Retour arrière automatique" }
+iso42001: ["A.2.2", "A.4.2", "A.6.2.4", "A.6.2.6", "A.7.4", "A.9.4"]
+rag: null
+eval: { golden_set: "gs-triage-v4", questions: 1400, metric: "f1_macro", judge_alias: chat-small }
+kpis:
+  adoption_target: 0.9
+  adoption_actual: 0.93
+  value_metric: { en: "Time to first assignment", fr: "Délai de première affectation" }
+  value_eur_month: 2600

@@ -1,0 +1,21 @@
+[submodule "integrations/grafana-llmops-forge"]
+	path = integrations/grafana-llmops-forge
+	url = https://github.com/alebgl77/grafana-llmops-forge.git
+[submodule "integrations/openspanguard"]
+	path = integrations/openspanguard
+	url = https://github.com/alebgl77/openspanguard.git
+[submodule "integrations/open-shadow-ai"]
+	path = integrations/open-shadow-ai
+	url = https://github.com/alebgl77/open-shadow-ai.git
+[submodule "integrations/dsh-plugin-otel-genai"]
+	path = integrations/dsh-plugin-otel-genai
+	url = https://github.com/alebgl77/dsh-plugin-otel-genai.git
+[submodule "integrations/tierdecay"]
+	path = integrations/tierdecay
+	url = https://github.com/alebgl77/tierdecay.git
+[submodule "integrations/harnessmeter"]
+	path = integrations/harnessmeter
+	url = https://github.com/alebgl77/harnessmeter.git
+[submodule "integrations/promptor"]
+	path = integrations/promptor
+	url = https://github.com/alebgl77/promptor.git

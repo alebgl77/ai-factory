@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MIT
+# Recording rules: SLO constants (mirror of config/factory.yaml agentops_slo and
+# waste_rules; change both together) and pre-computed gateway quantiles used by the
+# Grafana dashboards and the alerts.
+groups:
+  - name: factory-slo-constants
+    interval: 1m
+    rules:
+      - record: factory:slo_ttft_seconds:p95
+        expr: vector(1.5)
+      - record: factory:slo_vector_latency_seconds:p95
+        expr: vector(0.12)
+      - record: factory:slo_tokens_per_task:p95
+        expr: vector(12000)
+      - record: factory:slo_gateway_error_ratio:max
+        expr: vector(0.05)
+      - record: factory:gpu_temp_celsius:max_safe
+        expr: vector(83)
+      - record: factory:gpu_idle_util_percent:max
+        expr: vector(10)
+
+  - name: factory-gateway
+    interval: 30s
+    rules:
+      - record: factory:llm_ttft_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(factory_llm_ttft_seconds_bucket[5m])))
+      - record: factory:llm_ttft_seconds:p50_5m
+        expr: histogram_quantile(0.50, sum by (le) (rate(factory_llm_ttft_seconds_bucket[5m])))
+      - record: factory:llm_ttft_seconds_by_model:p95_5m
+        expr: histogram_quantile(0.95, sum by (le, model) (rate(factory_llm_ttft_seconds_bucket[5m])))
+      - record: factory:llm_latency_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (le) (rate(factory_llm_latency_seconds_bucket[5m])))
+      - record: factory:llm_requests:rate5m
+        expr: sum by (model, deployment, status) (rate(factory_llm_requests_total[5m]))
+      - record: factory:llm_error_ratio:rate5m
+        expr: |
+          sum(rate(factory_llm_requests_total{status!="success"}[5m]))
+            / clamp_min(sum(rate(factory_llm_requests_total[5m])), 1e-9)
+      - record: factory:llm_cost_eur_by_usecase:increase1h
+        expr: sum by (usecase) (increase(factory_llm_cost_eur_total[1h]))

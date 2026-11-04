@@ -1,0 +1,7 @@
+# Test dependencies (MIT): pytest and its own requirements.
+-r requirements.txt
+pytest==9.2.0               # MIT
+pluggy==1.7.0               # MIT
+iniconfig==2.3.1            # MIT
+packaging==26.3             # Apache-2.0 OR BSD-2-Clause
+Pygments==2.21.0            # BSD-2-Clause

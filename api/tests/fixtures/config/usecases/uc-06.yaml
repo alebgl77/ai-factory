@@ -1,0 +1,19 @@
+id: uc-06
+code: UC-06
+name: { en: "Workplace emotion recognition (fictional, rejected)", fr: "Analyse d'émotions au poste de travail (fictif, refusé)" }
+owner: p01
+cost_center: cc-rh
+stage: cadrage
+task_type: classification
+sensitivity: C4
+color: "#d55e00"
+ai_act:
+  role: deployer
+  prohibited_practices: ["art5_1_f_emotion_recognition_workplace"]
+  annex_iii_area: null
+  transparency: [emotion_recognition]
+  gpai_used: false
+model: { alias: chat-sensitive, name: "n/a", version: "0", history: [] }
+assessment: { reviewed_model_version: "0", last_reviewed: 2026-02-01, reviewer: p07, decision: rejected }
+nist: { govern: { status: done }, map: { status: done }, measure: { status: todo }, manage: { status: todo } }
+iso42001: []

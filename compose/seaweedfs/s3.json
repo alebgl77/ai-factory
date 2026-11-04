@@ -1,0 +1,20 @@
+{
+  "identities": [
+    {
+      "name": "langfuse",
+      "credentials": [
+        {
+          "accessKey": "${S3_ACCESS_KEY}",
+          "secretKey": "${S3_SECRET_KEY}"
+        }
+      ],
+      "actions": [
+        "Admin:${S3_BUCKET}",
+        "Read:${S3_BUCKET}",
+        "Write:${S3_BUCKET}",
+        "List:${S3_BUCKET}",
+        "Tagging:${S3_BUCKET}"
+      ]
+    }
+  ]
+}

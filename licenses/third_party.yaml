@@ -1,0 +1,220 @@
+# SPDX-License-Identifier: MIT
+# Inventory of the third-party components of the Virtual AI Factory and license policy.
+# Read by scripts/check_licenses.py (exit code 1 on a violation). Explanations: docs/LICENSES.md.
+#
+# Fields of an image:
+#   image / tag   exact reference used by docker-compose.yml or a Dockerfile
+#   spdx          SPDX identifier (or expression) evaluated against the policy below
+#   license       human-readable label (may state a scope, e.g. "ee" modules excluded)
+#   usage         separate-service: separate, unmodified container, called over the network
+#                 build-time      : base image or tool used to build / check
+#   modified      false: official image used as is (mandatory for AGPL)
+#   source        repository of the corresponding source code
+schema: 1
+
+policy:
+  # Permissive licenses compatible with an MIT repository (same list as api/app/engines/catalog.py).
+  permissive: [MIT, MIT-0, MIT-CMU, HPND, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, ISC, PSF-2.0, Python-2.0,
+               PostgreSQL, Unlicense, CC0-1.0, Zlib, BSL-1.0]
+  # Allowed under conditions (file-level weak copyleft).
+  conditional:
+    MPL-2.0: "file-level weak copyleft: used unmodified, upstream source code available"
+    OFL-1.1: "font: redistributable with the software, never sold on its own, reserved name if modified"
+  # Allowed ONLY for an unmodified "separate-service" entry (never linked, never copied).
+  separate_service_only: [AGPL-3.0-only, AGPL-3.0-or-later, AGPL-3.0]
+  # Denied everywhere (prefixes): strong copyleft, "source-available" and proprietary licenses.
+  denied_prefixes: [GPL-, LGPL-, AGPL-, SSPL-, EUPL-, OSL-, CC-BY-SA-, BUSL-, Elastic-, RSAL, Commons-Clause, proprietary]
+
+images:
+  # ---------------------------------------------------------------- services (docker-compose.yml)
+  - service: edge
+    image: caddy
+    tag: 2.11.7-alpine
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: separate-service
+    modified: false
+    source: https://github.com/caddyserver/caddy
+  - service: prometheus
+    image: prom/prometheus
+    tag: v3.15.1
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: separate-service
+    modified: false
+    source: https://github.com/prometheus/prometheus
+  - service: grafana
+    image: grafana/grafana-oss
+    tag: 13.0.2
+    spdx: AGPL-3.0-only
+    license: "AGPL-3.0 (separate service, unmodified official image, queried through its HTTP API)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/grafana/grafana
+  - service: loki
+    image: grafana/loki
+    tag: 3.7.9
+    spdx: AGPL-3.0-only
+    license: "AGPL-3.0 (separate service, unmodified official image, fed by Alloy)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/grafana/loki
+  - service: alloy
+    image: grafana/alloy
+    tag: v1.21.3
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: separate-service
+    modified: false
+    source: https://github.com/grafana/alloy
+  - service: qdrant
+    image: qdrant/qdrant
+    tag: v1.20.0-unprivileged
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: separate-service
+    modified: false
+    source: https://github.com/qdrant/qdrant
+  - service: litellm
+    image: litellm/litellm
+    tag: v1.106.6
+    spdx: MIT
+    license: "MIT (enterprise/ excluded, no license key)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/BerriAI/litellm
+    note: "No LITELLM_LICENSE variable: the features of the enterprise/ directory (commercial license) stay inactive. The factory_callbacks.py callback is MIT code from this repository, mounted read-only."
+  - service: postgres
+    image: postgres
+    tag: 17.11-alpine
+    spdx: PostgreSQL
+    license: PostgreSQL
+    usage: separate-service
+    modified: false
+    source: https://www.postgresql.org/ftp/source/
+  - service: langfuse-web
+    image: langfuse/langfuse
+    tag: 3.227.0
+    spdx: MIT
+    license: "MIT (EE dirs excluded, no license key)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/langfuse/langfuse
+    note: "No LANGFUSE_EE_LICENSE_KEY variable: the 'ee' directories (commercial license) are not enabled."
+  - service: langfuse-worker
+    image: langfuse/langfuse-worker
+    tag: 3.227.0
+    spdx: MIT
+    license: "MIT (EE dirs excluded, no license key)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/langfuse/langfuse
+  - service: clickhouse
+    image: clickhouse/clickhouse-server
+    tag: 26.8.36.3
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: separate-service
+    modified: false
+    source: https://github.com/ClickHouse/ClickHouse
+  - service: valkey
+    image: valkey/valkey
+    tag: 8.1.11-alpine
+    spdx: BSD-3-Clause
+    license: "BSD-3-Clause (replaces Redis ≥ 7.4, licensed under RSALv2/SSPLv1/AGPLv3)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/valkey-io/valkey
+  - service: seaweedfs
+    image: chrislusf/seaweedfs
+    tag: "4.52"
+    spdx: Apache-2.0
+    license: "Apache-2.0 (S3 API, replaces MinIO, licensed under AGPLv3)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/seaweedfs/seaweedfs
+  - service: ollama-vps
+    image: ollama/ollama
+    tag: 0.40.14
+    spdx: MIT
+    license: MIT
+    usage: separate-service
+    modified: false
+    profile: vps
+    source: https://github.com/ollama/ollama
+  - service: vllm-local
+    image: vllm/vllm-openai
+    tag: v0.33.0
+    spdx: Apache-2.0
+    license: "Apache-2.0 (CUDA libraries of the image under the NVIDIA license, not redistributed by this repository)"
+    usage: separate-service
+    modified: false
+    profile: local-gpu
+    source: https://github.com/vllm-project/vllm
+  - service: dcgm-exporter
+    image: nvidia/dcgm-exporter
+    tag: 4.6.1-4.8.4
+    spdx: Apache-2.0
+    license: "Apache-2.0 (CUDA libraries of the image under the NVIDIA license, not redistributed by this repository)"
+    usage: separate-service
+    modified: false
+    profile: local-gpu
+    source: https://github.com/NVIDIA/dcgm-exporter
+
+  # ------------------------------------------- base images (FROM lines of the repository Dockerfiles)
+  - service: "api, mock-llm, traffic, gpu-sim, grafana-bootstrap (base image)"
+    image: python
+    tag: 3.12.16-slim
+    spdx: PSF-2.0
+    license: "PSF-2.0 (CPython); Debian packages of the image under their own licenses (aggregate)"
+    usage: build-time
+    modified: false
+    source: https://github.com/docker-library/python
+  - service: "dashboard (vendor stage: fetches Three.js, absent from the final image)"
+    image: node
+    tag: 24.22.2-alpine
+    spdx: MIT
+    license: "MIT (Node.js); Alpine packages of the image under their own licenses (aggregate)"
+    usage: build-time
+    modified: false
+    source: https://github.com/nodejs/docker-node
+  - service: "dashboard (nginx base image)"
+    image: nginxinc/nginx-unprivileged
+    tag: 1.30.6-alpine
+    spdx: BSD-2-Clause
+    license: "BSD-2-Clause (nginx); Alpine packages of the image under their own licenses (aggregate)"
+    usage: build-time
+    modified: false
+    source: https://github.com/nginx/docker-nginx-unprivileged
+
+# Third-party code embedded at build time (never committed to the repository).
+vendored:
+  - name: three
+    version: 0.186.1
+    spdx: MIT
+    license: MIT
+    usage: build-time
+    where: "dashboard/Dockerfile (npm pack + SRI integrity check, copied to /vendor/three); jsDelivr CDN in file:// mode"
+    source: https://github.com/mrdoob/three.js
+    check: {file: dashboard/Dockerfile, pattern: "ARG THREE_VERSION=([0-9.]+)"}
+
+# Verification tools (CI, scripts): never shipped in the stack images.
+tools:
+  - name: gitleaks
+    image: zricethezav/gitleaks
+    tag: v8.30.1
+    spdx: MIT
+    license: MIT
+    usage: build-time
+    where: "scripts/scan_secrets.sh, scripts/inventory_github.py"
+    source: https://github.com/gitleaks/gitleaks
+  - name: playwright
+    version: 1.64.1
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "e2e tests (installed in CI with --no-save, not committed)"
+    source: https://github.com/microsoft/playwright
+
+# Licenses checked by hand when the metadata of a Python package is missing or ambiguous.
+python_overrides: {}

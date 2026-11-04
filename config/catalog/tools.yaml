@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MIT
+# Self-service tool catalog: MCP servers exposed to the LangGraph agents (CONTRACT 2.5).
+# FICTIONAL. permissions: read | write | execute | admin. risk: low | medium | high.
+# Approval path (catalog engine): low -> none, medium -> owner, high -> governance; any
+# write/execute permission needs at least the owner's approval. human_approval: true means
+# every call is confirmed by a person (human-in-the-loop interrupt in the agent graph).
+# name and description are bilingual {en, fr} (CONTRACT section 9).
+
+tools:
+  - { id: tl-qdrant-search, kind: mcp, transport: http,
+      permissions: [read], risk: low, owner: p08, data_classes: [C1, C2, C3, C4],
+      name: { en: "Vector search (Qdrant)", fr: "Recherche vectorielle (Qdrant)" },
+      description: { en: "Hybrid search in the collections of the calling use case (collection filter enforced)",
+                     fr: "Recherche hybride dans les collections du cas d'usage appelant (filtre par collection imposé)" } }
+  - { id: tl-citation-check, kind: mcp, transport: stdio,
+      permissions: [read], risk: low, owner: p09, data_classes: [C1, C2, C3],
+      name: { en: "Citation check", fr: "Vérification des citations" },
+      description: { en: "Checks that every claim cites a retrieved passage (grounding)",
+                     fr: "Contrôle que chaque affirmation cite un passage récupéré (ancrage)" } }
+  - { id: tl-kb-read, kind: mcp, transport: http,
+      permissions: [read], risk: low, owner: p06, data_classes: [C1, C2],
+      name: { en: "Support knowledge base reader", fr: "Lecture de la base de connaissances support" } }
+  - { id: tl-ticket-read, kind: mcp, transport: http,
+      permissions: [read], risk: medium, owner: p12, data_classes: [C2],
+      name: { en: "Customer ticket reader", fr: "Lecture des tickets clients" },
+      description: { en: "Minimized personal data: pseudonymized identifiers",
+                     fr: "Données personnelles minimisées : identifiants pseudonymisés" } }
+  - { id: tl-ticket-route, kind: mcp, transport: http,
+      permissions: [write], risk: medium, owner: p12, data_classes: [C2],
+      name: { en: "Ticket queue assignment", fr: "Affectation d'un ticket à une file" } }
+  - { id: tl-crm-read, kind: mcp, transport: http,
+      permissions: [read], risk: medium, owner: p05, data_classes: [C2],
+      name: { en: "Customer record reader (CRM)", fr: "Lecture de la fiche client (CRM)" } }
+  - { id: tl-email-draft, kind: mcp, transport: http,
+      permissions: [write], risk: medium, owner: p03, data_classes: [C2],
+      name: { en: "Reply draft (never sent directly)", fr: "Brouillon de réponse (jamais d'envoi direct)" } }
+  - { id: tl-refund-request, kind: mcp, transport: http,
+      permissions: [write, execute], risk: high, owner: p02, data_classes: [C2], human_approval: true,
+      name: { en: "Goodwill credit request", fr: "Demande de geste commercial" },
+      description: { en: "Always subject to human approval (LangGraph interrupt); fictional cap of €200",
+                     fr: "Toujours soumis à validation humaine (interruption LangGraph) ; plafond fictif 200 €" } }
+  - { id: tl-ats-read, kind: mcp, transport: http,
+      permissions: [read], risk: high, owner: p04, data_classes: [C3], local_only: true,
+      name: { en: "Job application reader (ATS, pseudonymized)", fr: "Lecture des candidatures (ATS, pseudonymisées)" } }
+  - { id: tl-pii-redact, kind: mcp, transport: stdio,
+      permissions: [execute], risk: low, owner: p06, data_classes: [C2, C3, C4], local_only: true,
+      name: { en: "Personal data pseudonymization", fr: "Pseudonymisation des données personnelles" } }
+  - { id: tl-ocr-local, kind: mcp, transport: stdio,
+      permissions: [read, execute], risk: low, owner: p06, data_classes: [C3], local_only: true,
+      name: { en: "Local OCR of supporting documents", fr: "OCR local des pièces justificatives" } }
+  - { id: tl-doc-checklist, kind: mcp, transport: stdio,
+      permissions: [read], risk: low, owner: p07, data_classes: [C1, C2, C3],
+      name: { en: "Required documents checklist", fr: "Référentiel des pièces requises" } }
+  - { id: tl-brand-guide, kind: mcp, transport: stdio,
+      permissions: [read], risk: low, owner: p02, data_classes: [C1],
+      name: { en: "Editorial guidelines", fr: "Charte éditoriale" } }
+  - { id: tl-content-marking, kind: mcp, transport: stdio,
+      permissions: [execute], risk: medium, owner: p08, data_classes: [C1],
+      name: { en: "Generated content marking (Art. 50(2))", fr: "Marquage des contenus générés (art. 50(2))" },
+      description: { en: "Adds machine-readable provenance metadata and a visible disclosure",
+                     fr: "Ajoute des métadonnées de provenance lisibles par machine et une mention visible" } }
+  - { id: tl-transcript-read, kind: mcp, transport: stdio,
+      permissions: [read], risk: high, owner: p04, data_classes: [C3], local_only: true,
+      name: { en: "Committee transcript reader", fr: "Lecture des transcriptions de comités" } }
+  - { id: tl-clause-library, kind: mcp, transport: stdio,
+      permissions: [read], risk: medium, owner: p07, data_classes: [C4], local_only: true,
+      name: { en: "Standard clause library", fr: "Bibliothèque de clauses types" } }

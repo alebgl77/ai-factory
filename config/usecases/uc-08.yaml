@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-08
+code: UC-08
+name: { en: "Confidential contract clause analysis (fictional)", fr: "Analyse de clauses contractuelles confidentielles (fictif)" }
+description:
+  en: >-
+    Identifies risky clauses in confidential contracts and compares them with the library of
+    standard clauses. In scoping: risk review pending. Secret data (C4): local GPU only.
+    Fictional data.
+  fr: >-
+    Repère et compare les clauses à risque de contrats confidentiels avec la bibliothèque de
+    clauses types. En cadrage : revue de risque en attente. Données secrètes (C4) : GPU local
+    uniquement. Données fictives.
+owner: p07
+cost_center: cc-finance
+stage: cadrage
+task_type: extraction
+sensitivity: C4
+color: "#999999"
+ai_act:
+  role: both
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: true
+model:
+  alias: chat-sensitive
+  name: { en: "Open-weight 14B LLM on the local GPU (fictional)", fr: "LLM open-weight 14B sur GPU local (fictif)" }
+  version: "2026-10"
+  history: []
+assessment:
+  reviewed_model_version: null       # never reviewed: decision pending
+  last_reviewed: null
+  reviewer: p07
+  decision: pending
+nist:
+  govern:
+    status: partial
+    evidence:
+      - { en: "Scoping note (fictional)", fr: "Note de cadrage (fictive)" }
+  map:
+    status: partial
+    evidence:
+      - { en: "C4 classification", fr: "Classification C4" }
+    gaps:
+      - { en: "Intended purpose and limitations", fr: "Usage prévu et limites" }
+  measure: { status: todo,    evidence: [] }
+  manage:  { status: todo,    evidence: [] }
+iso42001: ["A.2.2"]
+rag: { index: kb-clauses, corpus_docs: 450, chunk_size: 700, chunk_overlap: 100, embedding: embed-default,
+       top_k: 6, hybrid_search: true, reranker: true }
+kpis:
+  adoption_target: 0.5
+  value_metric: { en: "Contract review time", fr: "Temps de revue d'un contrat" }
+  value_eur_month: 5200

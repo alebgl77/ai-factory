@@ -1,0 +1,4 @@
+# Local build-time CA bundles for TLS-intercepting proxies (BUILD_CA_BUNDLE): never committed.
+*
+!.gitignore
+!no-extra-ca.pem

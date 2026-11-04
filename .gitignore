@@ -1,0 +1,15 @@
+.env
+*.pyc
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+dashboard/vendor/
+data/
+*.log
+
+# raw generated images (only the optimised bundle is versioned)
+dashboard/assets/src/
+.ruff_cache/
+# optimised WebP copies (the data-URI bundle assets.js is what ships)
+dashboard/assets/out/

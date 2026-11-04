@@ -1,0 +1,5 @@
+functions:
+  - { id: govern, label: { en: Govern, fr: Gouverner } }
+  - { id: map, label: { en: Map, fr: Cartographier } }
+  - { id: measure, label: { en: Measure, fr: Mesurer } }
+  - { id: manage, label: { en: Manage, fr: Gérer } }

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Versioned dashboards (compose/grafana/dashboards/*.json), provisioned read-only.
+apiVersion: 1
+
+providers:
+  - name: ai-factory
+    orgId: 1
+    folder: "AI Factory"
+    folderUid: ai-factory
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

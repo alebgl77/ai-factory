@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+# Self-service agent catalog (CONTRACT section 2.5). FICTIONAL LangGraph agents.
+# risk_tier mirrors the AI Act tier computed for the linked use case (the catalog engine flags
+# any mismatch). eval_status: passed | pending | failed; only "passed" agents are offered in
+# self-service. Agents call models only through the LiteLLM gateway with
+# metadata.usecase / metadata.agent for cost attribution, and tools only through MCP.
+# name, pattern, human_in_the_loop and note are bilingual {en, fr} (CONTRACT section 9).
+
+agents:
+  - { id: ag-doc-research, framework: LangGraph, version: "1.4.0",
+      owner: p03, usecase: uc-01, tools: [tl-qdrant-search, tl-citation-check], risk_tier: limited,
+      eval_status: passed, model_alias: chat-default,
+      name: { en: "Document research agent", fr: "Agent de recherche documentaire" },
+      pattern: { en: "Agentic RAG (retrieval, query rewriting, citation)",
+                 fr: "RAG agentique (récupération, reformulation, citation)" } }
+
+  - { id: ag-support-supervisor, framework: LangGraph, version: "2.1.0",
+      owner: p05, usecase: uc-02, tools: [tl-ticket-read, tl-crm-read], risk_tier: limited,
+      eval_status: passed, model_alias: chat-default,
+      name: { en: "Customer support supervisor", fr: "Superviseur support client" },
+      pattern: { en: "Multi-agent supervisor: delegates to research, then to drafting",
+                 fr: "Superviseur multi-agents : délègue à la recherche puis à la rédaction" },
+      human_in_the_loop: { en: "Escalates to a human on low confidence or for any goodwill credit",
+                           fr: "Escalade vers un humain si confiance faible ou geste commercial" } }
+
+  - { id: ag-support-research, framework: LangGraph, version: "2.1.0",
+      owner: p03, usecase: uc-02, tools: [tl-kb-read, tl-qdrant-search, tl-citation-check], risk_tier: limited,
+      eval_status: passed, model_alias: chat-default,
+      name: { en: "Knowledge base research sub-agent", fr: "Sous-agent recherche base de connaissances" } }
+
+  - { id: ag-support-writer, framework: LangGraph, version: "2.2.0-rc1",
+      owner: p03, usecase: uc-02, tools: [tl-email-draft, tl-refund-request], risk_tier: limited,
+      eval_status: pending, model_alias: chat-default,
+      name: { en: "Reply drafting sub-agent", fr: "Sous-agent rédaction de réponse" },
+      note: { en: "Release candidate on model 2026-10: evaluation and risk review in progress",
+              fr: "Version candidate sur le modèle 2026-10 : évaluation et revue de risque en cours" } }
+
+  - { id: ag-triage, framework: LangGraph, version: "1.2.0",
+      owner: p08, usecase: uc-03, tools: [tl-ticket-read, tl-ticket-route], risk_tier: minimal,
+      eval_status: passed, model_alias: chat-default,
+      name: { en: "Inbound request triage agent", fr: "Agent de tri des demandes entrantes" },
+      note: { en: "Simple classification on a premium model: FinOps oversized_model alert, see x-01",
+              fr: "Classification simple sur modèle premium : alerte FinOps oversized_model, voir x-01" } }
+
+  - { id: ag-cv-screening, framework: LangGraph,
+      version: "0.9.0", owner: p04, usecase: uc-04, tools: [tl-ats-read, tl-pii-redact, tl-qdrant-search],
+      risk_tier: high, eval_status: pending, model_alias: chat-sensitive,
+      name: { en: "Pre-screening assistant (proposal only, human decision)",
+              fr: "Assistant de présélection (proposition, décision humaine)" },
+      human_in_the_loop: { en: "No automated decision: every proposal is reviewed by a recruiter (Art. 14)",
+                           fr: "Aucune décision automatique : chaque proposition est revue par un recruteur (art. 14)" },
+      note: { en: "Bias tests to be rerun on local model 2026-10",
+              fr: "Tests de biais à rejouer sur le modèle local 2026-10" } }
+
+  - { id: ag-loan-docs, framework: LangGraph, version: "1.1.0",
+      owner: p06, usecase: uc-05, tools: [tl-ocr-local, tl-doc-checklist, tl-pii-redact], risk_tier: minimal,
+      eval_status: passed, model_alias: chat-sensitive,
+      name: { en: "Loan file completeness agent", fr: "Agent de contrôle de complétude des dossiers" } }
+
+  - { id: ag-marketing-writer, framework: LangGraph, version: "1.3.1",
+      owner: p02, usecase: uc-06, tools: [tl-brand-guide, tl-qdrant-search, tl-content-marking], risk_tier: limited,
+      eval_status: passed, model_alias: chat-default,
+      name: { en: "Marketing copywriting agent", fr: "Agent de rédaction marketing" } }
+
+  - { id: ag-minutes, framework: LangGraph, version: "0.3.0",
+      owner: p04, usecase: uc-07, tools: [tl-transcript-read, tl-pii-redact, tl-qdrant-search], risk_tier: minimal,
+      eval_status: pending, model_alias: chat-sensitive,
+      name: { en: "Committee minutes agent", fr: "Agent de synthèse de comités" } }
+
+  - { id: ag-contracts, framework: LangGraph, version: "0.1.0",
+      owner: p07, usecase: uc-08, tools: [tl-clause-library, tl-pii-redact], risk_tier: minimal,
+      eval_status: pending, model_alias: chat-sensitive,
+      name: { en: "Clause analysis agent (scoping)", fr: "Agent d'analyse de clauses (cadrage)" } }

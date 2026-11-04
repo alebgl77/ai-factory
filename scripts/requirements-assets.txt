@@ -1,0 +1,2 @@
+# Optional: only needed to rebuild the visual pack (scripts/build_assets.py)
+Pillow==13.0.0

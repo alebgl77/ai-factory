@@ -1,0 +1,23 @@
+# Fictional profiles (test fixture).
+roles:
+  - { id: head, label: "Head of AI Factory", literacy_level: expert }
+  - { id: po, label: { en: "AI product owner", fr: "Product owner IA" }, literacy_level: intermediate }
+  - { id: llm_engineer, label: { en: "LLM engineer", fr: "Ingénieur LLM" }, literacy_level: expert }
+  - { id: governance, label: { en: "Governance and compliance", fr: "Gouvernance et conformité" }, literacy_level: expert }
+  - { id: research, label: { en: "R&D researcher", fr: "Chercheur R&D" }, literacy_level: expert }
+  - { id: enablement, label: "Enablement", literacy_level: expert }
+people:
+  - { id: p01, name: "Camille Laurent", role: head, color: "#7c3aed", skin: "#f1c9a5", desk: D1, locker: 1,
+      skills: [{ en: Scoping, fr: Cadrage }], squads: [uc-03], cost_center: cc-ops, pattern: [1, 1, 0, 1, 1] }
+  - { id: p02, name: "Noé Martin", role: po, color: "#0072b2", skin: "#e0ac69", desk: D2, locker: 2,
+      skills: [{ en: Product, fr: Produit }], squads: [uc-01, uc-02], cost_center: cc-ops, pattern: [1, 1, 1, 1, 0] }
+  - { id: p03, name: "Inès Robert", role: llm_engineer, color: "#009e73", skin: "#c68642", desk: D3, locker: 3,
+      skills: [RAG, LangGraph], squads: [uc-01, uc-04], cost_center: cc-ops, pattern: [1, 1, 1, 1, 1] }
+  - { id: p04, name: "Lou Bernard", role: llm_engineer, color: "#e69f00", skin: "#f1c9a5", desk: D4, locker: 4,
+      skills: [{ en: Evaluation, fr: Évaluation }], squads: [uc-02], cost_center: cc-relation, pattern: [0, 1, 1, 1, 1] }
+  - { id: p07, name: "Sacha Petit", role: governance, color: "#cc79a7", skin: "#8d5524", desk: D5, locker: 5,
+      skills: [AI Act, ISO 42001], squads: [uc-04, uc-05], cost_center: cc-ops, pattern: [1, 0, 1, 1, 1] }
+  - { id: p10, name: "Yanis Moreau", role: research, color: "#56b4e9", skin: "#e0ac69", desk: X1, locker: 6,
+      skills: [{ en: Routing, fr: Routage }], squads: [], cost_center: cc-ops, pattern: [1, 1, 1, 0, 1] }
+  - { id: p11, name: "Alix Garnier", role: enablement, color: "#d55e00", skin: "#c68642", desk: D6, locker: 7,
+      skills: [{ en: Teaching, fr: Pédagogie }], squads: [], cost_center: cc-ops, pattern: [1, 1, 1, 1, 1] }

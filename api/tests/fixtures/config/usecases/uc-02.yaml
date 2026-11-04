@@ -1,0 +1,36 @@
+id: uc-02
+code: UC-02
+name: { en: "Customer support agent (fictional)", fr: "Agent support client (fictif)" }
+owner: p04
+cost_center: cc-relation
+stage: run
+task_type: agent
+sensitivity: C2
+color: "#e69f00"
+ai_act:
+  role: deployer
+  prohibited_practices: []
+  annex_iii_area: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: [chatbot]
+  gpai_used: true
+model:
+  alias: chat-default
+  name: "cloud/large"
+  version: "2026-07"
+  history:
+    - { version: "2026-07", from: 2026-07-01 }
+assessment:
+  reviewed_model_version: "2026-07"
+  last_reviewed: 2026-07-03
+  reviewer: p07
+  decision: approved_with_conditions
+nist:
+  govern:  { status: done }
+  map:     { status: done }
+  measure: { status: done }
+  manage:  { status: partial }
+iso42001: ["A.5.2", "A.8.2"]
+rag: { index: kb-support, corpus_docs: 900, chunk_size: 600, chunk_overlap: 80, embedding: embed-default }
+kpis: { adoption_target: 0.7, value_metric: { en: "Tickets resolved", fr: "Tickets résolus" }, value_eur_month: 6000 }

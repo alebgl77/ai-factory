@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: MIT
+# Edge proxy of the Virtual AI Factory (the "VPS proxy"), Caddy 2 (Apache-2.0).
+#
+#   {$FACTORY_HOST}            -> dashboard (static 3D page) and /api/* -> api:8000
+#   grafana.{$FACTORY_HOST}    -> grafana:3000   (Grafana keeps its own login)
+#   langfuse.{$FACTORY_HOST}   -> langfuse-web:3000 (Langfuse keeps its own login)
+#   :3001 / :3002 (published on 127.0.0.1 only) -> Grafana / Langfuse, for local use when
+#   *.localhost names do not resolve.
+#
+# Local mode : FACTORY_SCHEME=http,  FACTORY_HOST=localhost  -> plain HTTP, no certificate.
+# VPS mode   : FACTORY_SCHEME=https, FACTORY_HOST=factory.example.org -> automatic TLS (ACME)
+#              for the three names (DNS A/AAAA records required for each of them).
+# LiteLLM, Prometheus, Qdrant, ClickHouse, Postgres, Loki are never exposed.
+# Optional basic auth on the dashboard and the API: FACTORY_AUTH=basic (see .env.example).
+# CSP: Three.js is vendored by the dashboard image (DASHBOARD_THREE_SOURCE=vendored); only
+# with DASHBOARD_THREE_SOURCE=cdn does the policy allow https://cdn.jsdelivr.net.
+
+{
+	admin localhost:2019
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		# Ignored by browsers over plain HTTP; effective in VPS (HTTPS) mode.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+		-X-Powered-By
+	}
+}
+
+(csp-vendored) {
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+}
+
+(csp-cdn) {
+	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+}
+
+(auth-none) {
+}
+
+(auth-basic) {
+	# FACTORY_BASIC_AUTH_HASH is a bcrypt hash: caddy hash-password --plaintext '...'
+	basic_auth @protected {
+		{$FACTORY_BASIC_AUTH_USER:factory} {$FACTORY_BASIC_AUTH_HASH:invalid}
+	}
+}
+
+(app) {
+	import security_headers
+	import csp-{$DASHBOARD_THREE_SOURCE:vendored}
+	header X-Frame-Options "DENY"
+	encode zstd gzip
+
+	@protected not path /healthz
+	import auth-{$FACTORY_AUTH:none}
+
+	request_body {
+		max_size 1MB
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# The API exposes /metrics for Prometheus only; it is not routed to the outside.
+	handle {
+		reverse_proxy dashboard:80
+	}
+}
+
+(grafana) {
+	import security_headers
+	header X-Frame-Options "SAMEORIGIN"
+	encode zstd gzip
+	reverse_proxy grafana:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+}
+
+(langfuse) {
+	import security_headers
+	header X-Frame-Options "SAMEORIGIN"
+	encode zstd gzip
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy langfuse-web:3000 {
+		header_up X-Real-IP {remote_host}
+	}
+}
+
+{$FACTORY_SCHEME:http}://{$FACTORY_HOST:localhost} {
+	import app
+}
+
+{$FACTORY_SCHEME:http}://grafana.{$FACTORY_HOST:localhost} {
+	import grafana
+}
+
+{$FACTORY_SCHEME:http}://langfuse.{$FACTORY_HOST:localhost} {
+	import langfuse
+}
+
+# Alternate local ports (published on 127.0.0.1 only by docker-compose.yml).
+http://:3001 {
+	import grafana
+}
+
+http://:3002 {
+	import langfuse
+}

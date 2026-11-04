@@ -1,0 +1,26 @@
+id: uc-05
+code: UC-05
+name: { en: "Case file completeness check (fictional)", fr: "Contrôle de complétude de dossiers (fictif)" }
+owner: p07
+cost_center: cc-rh
+stage: mvp
+task_type: summarization
+sensitivity: C4
+color: "#56b4e9"
+ai_act:
+  role: deployer
+  prohibited_practices: []
+  annex_iii_area: education
+  annex_iii_use: { en: "Narrow procedural task (Art. 6(3))", fr: "Tâche procédurale étroite (art. 6, par. 3)" }
+  art6_3_exemption: true
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: false
+model:
+  alias: chat-sensitive
+  name: "local/secure-14b"
+  version: "1.2"
+  history: [{ version: "1.2", from: 2026-08-01 }]
+assessment: { reviewed_model_version: "1.2", last_reviewed: 2026-08-06, reviewer: p07, decision: approved }
+nist: { govern: { status: done }, map: { status: done }, measure: { status: partial }, manage: { status: partial } }
+iso42001: ["A.5.2"]

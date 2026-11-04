@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas (Discussions)
+    url: https://github.com/alebgl77/ai-factory/discussions
+    about: Ask questions, share your factory configuration, discuss the roadmap.
+  - name: Security issue
+    url: https://github.com/alebgl77/ai-factory/security/advisories/new
+    about: Report vulnerabilities privately, never in a public issue.

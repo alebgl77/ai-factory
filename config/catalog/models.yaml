@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MIT
+# Self-service model catalog (CONTRACT section 2.5). FICTIONAL providers and figures.
+#
+# Each entry is a deployment behind a LiteLLM alias (compose/litellm/config.yaml):
+#   chat-default   cloud first, fallbacks VPS then local GPU
+#   chat-small     VPS first, fallback cloud (small) then local GPU
+#   chat-sensitive local GPU only (C3/C4), no fallback outside the local GPU
+#   embed-default  local GPU only (corpora may hold C3/C4 documents)
+# The first entry of an alias is its primary deployment (used by the FinOps and placement
+# engines). Prices are fictional EUR per 1k tokens, aligned with the LiteLLM config; the VPS
+# and the local GPU have no marginal token price (fixed costs allocated by the FinOps engine).
+# No entry is ever fine-tuned: models are consumed as published (open weights or API).
+# name and provider are bilingual {en, fr} (CONTRACT section 9); ids and aliases are not.
+
+models:
+  - id: cloud-large
+    name: { en: "Premium cloud LLM (fictional)", fr: "LLM cloud premium (fictif)" }
+    alias: chat-default
+    provider: { en: "Cloud provider A (fictional)", fr: "Fournisseur cloud A (fictif)" }
+    hosting: cloud
+    license: proprietary
+    params_b: null            # not disclosed by the provider
+    context_k: 128
+    price_in_per_1k: 0.002
+    price_out_per_1k: 0.006
+    tier: premium
+    allowed_classes: [C1, C2]
+    gpai: true                # general-purpose AI model (AI Act chapter V duties sit with its provider)
+    versions: ["2026-03", "2026-09", "2026-10"]
+    fallbacks: [vps-small, local-secure]
+    eval: { faithfulness: 0.91, answer_relevancy: 0.89, judge_score: 4.3, redteam_pass: 0.97 }
+    owner: p05
+
+  - id: vps-small
+    name: { en: "Open-weight 8B LLM on a VPS (fictional)", fr: "LLM open-weight 8B sur VPS (fictif)" }
+    alias: chat-small
+    provider: { en: "VPS — Ollama (fictional)", fr: "VPS — Ollama (fictif)" }
+    hosting: vps
+    license: Apache-2.0
+    params_b: 8
+    context_k: 32
+    quantization: "Q4_K_M"
+    price_in_per_1k: 0.0
+    price_out_per_1k: 0.0
+    tier: standard
+    allowed_classes: [C1, C2]
+    gpai: true
+    versions: ["2026-06"]
+    fallbacks: [cloud-small, local-secure]
+    eval: { faithfulness: 0.84, answer_relevancy: 0.83, judge_score: 3.9, redteam_pass: 0.94 }
+    owner: p08
+
+  - id: cloud-small
+    name: { en: "Economy cloud LLM (fictional)", fr: "LLM cloud économique (fictif)" }
+    alias: chat-small           # fallback deployment of chat-small
+    provider: { en: "Cloud provider A (fictional)", fr: "Fournisseur cloud A (fictif)" }
+    hosting: cloud
+    license: proprietary
+    params_b: null
+    context_k: 128
+    price_in_per_1k: 0.0002
+    price_out_per_1k: 0.0006
+    tier: economy
+    allowed_classes: [C1, C2]
+    gpai: true
+    versions: ["2026-08"]
+    eval: { faithfulness: 0.86, answer_relevancy: 0.85, judge_score: 4.0, redteam_pass: 0.95 }
+    owner: p08
+
+  - id: local-secure
+    name: { en: "Open-weight 14B LLM on the local GPU (fictional)", fr: "LLM open-weight 14B sur GPU local (fictif)" }
+    alias: chat-sensitive
+    provider: { en: "Local GPU — vLLM (fictional)", fr: "GPU local — vLLM (fictif)" }
+    hosting: local
+    license: Apache-2.0
+    params_b: 14
+    context_k: 32
+    quantization: "AWQ int4"
+    price_in_per_1k: 0.0
+    price_out_per_1k: 0.0
+    tier: standard
+    allowed_classes: [C1, C2, C3, C4]
+    gpai: true
+    versions: ["2026-05", "2026-10"]   # 2026-10 upgrade triggered the re-evaluation of uc-04, uc-05, uc-07
+    eval: { faithfulness: 0.88, answer_relevancy: 0.86, judge_score: 4.0, redteam_pass: 0.98 }
+    owner: p04
+
+  - id: local-embed
+    name: { en: "Local multilingual embedding model (fictional)", fr: "Modèle d'embeddings multilingue local (fictif)" }
+    alias: embed-default
+    provider: { en: "Local GPU — embedding server (fictional)", fr: "GPU local — serveur d'embeddings (fictif)" }
+    hosting: local
+    license: Apache-2.0
+    params_b: 0.6
+    context_k: 8
+    dimensions: 1024
+    price_in_per_1k: 0.0
+    price_out_per_1k: 0.0
+    tier: standard
+    allowed_classes: [C1, C2, C3, C4]
+    gpai: false
+    versions: ["2026-02"]
+    eval: { recall_at_10: 0.87 }
+    owner: p06

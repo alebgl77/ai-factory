@@ -1,0 +1,155 @@
+# SPDX-License-Identifier: MIT
+# LiteLLM gateway of the Virtual AI Factory (MIT core, no enterprise feature, no licence key).
+#
+# Placement policy (CONTRACT section 6), "cloud first":
+#   chat-default    cloud  -> fallback VPS -> fallback local GPU
+#   chat-small      VPS    -> fallback cloud (small) -> fallback local GPU
+#   chat-sensitive  local GPU ONLY (data classes C3/C4), no fallback outside the local GPU
+#   embed-default   local GPU ONLY (corpora may hold C3/C4 documents), no fallback
+#
+# Every endpoint is configured through environment variables (see .env.example). With the
+# default values of .env.example and `--profile sim`, the three targets are served by
+# sim/mock-llm, so the whole chain runs without any real API key.
+# Deployments use the OpenAI-compatible protocol ("openai/<model>" + api_base): this covers
+# most cloud providers, Ollama (VPS) and vLLM (local GPU). For a provider with its own
+# protocol, replace the `model` value with the LiteLLM provider prefix (e.g. "mistral/...").
+#
+# Prices are FICTIONAL EUR per token, aligned with config/catalog/models.yaml
+# (price_in_per_1k / 1000). The VPS and the local GPU have no marginal token price: their
+# fixed cost (VPS subscription, GPU amortisation, energy) is allocated by the FinOps engine.
+
+model_list:
+  # ---------------------------------------------------------------- chat-default (cloud)
+  - model_name: chat-default
+    litellm_params:
+      model: os.environ/CLOUD_CHAT_MODEL
+      api_base: os.environ/CLOUD_API_BASE
+      api_key: os.environ/CLOUD_API_KEY
+      input_cost_per_token: 0.000002
+      output_cost_per_token: 0.000006
+      timeout: 60
+      stream_timeout: 20
+    model_info:
+      id: cloud-chat-default
+      factory_deployment: cloud
+      mode: chat
+
+  - model_name: chat-default-vps        # fallback 1 of chat-default
+    litellm_params:
+      model: os.environ/VPS_CHAT_MODEL
+      api_base: os.environ/VPS_API_BASE
+      api_key: os.environ/VPS_API_KEY
+      input_cost_per_token: 0.0
+      output_cost_per_token: 0.0
+      timeout: 120
+      stream_timeout: 45
+    model_info:
+      id: vps-chat-default
+      factory_deployment: vps
+      mode: chat
+
+  - model_name: chat-default-local      # fallback 2 of chat-default
+    litellm_params:
+      model: os.environ/LOCAL_CHAT_MODEL
+      api_base: os.environ/LOCAL_API_BASE
+      api_key: os.environ/LOCAL_API_KEY
+      input_cost_per_token: 0.0
+      output_cost_per_token: 0.0
+      timeout: 90
+      stream_timeout: 30
+    model_info:
+      id: local-chat-default
+      factory_deployment: local
+      mode: chat
+
+  # ------------------------------------------------------------------ chat-small (VPS)
+  - model_name: chat-small
+    litellm_params:
+      model: os.environ/VPS_CHAT_MODEL
+      api_base: os.environ/VPS_API_BASE
+      api_key: os.environ/VPS_API_KEY
+      input_cost_per_token: 0.0
+      output_cost_per_token: 0.0
+      timeout: 120
+      stream_timeout: 45
+    model_info:
+      id: vps-chat-small
+      factory_deployment: vps
+      mode: chat
+
+  - model_name: chat-small-cloud        # fallback 1 of chat-small
+    litellm_params:
+      model: os.environ/CLOUD_SMALL_MODEL
+      api_base: os.environ/CLOUD_API_BASE
+      api_key: os.environ/CLOUD_API_KEY
+      input_cost_per_token: 0.0000002
+      output_cost_per_token: 0.0000006
+      timeout: 60
+      stream_timeout: 20
+    model_info:
+      id: cloud-chat-small
+      factory_deployment: cloud
+      mode: chat
+
+  # --------------------------------------------------- chat-sensitive (local GPU only)
+  - model_name: chat-sensitive
+    litellm_params:
+      model: os.environ/LOCAL_CHAT_MODEL
+      api_base: os.environ/LOCAL_API_BASE
+      api_key: os.environ/LOCAL_API_KEY
+      input_cost_per_token: 0.0
+      output_cost_per_token: 0.0
+      timeout: 90
+      stream_timeout: 30
+    model_info:
+      id: local-chat-sensitive
+      factory_deployment: local
+      mode: chat
+
+  # ---------------------------------------------------- embed-default (local GPU only)
+  - model_name: embed-default
+    litellm_params:
+      model: os.environ/LOCAL_EMBED_MODEL
+      api_base: os.environ/LOCAL_EMBED_API_BASE
+      api_key: os.environ/LOCAL_API_KEY
+      input_cost_per_token: 0.0
+      output_cost_per_token: 0.0
+      timeout: 60
+    model_info:
+      id: local-embed-default
+      factory_deployment: local
+      mode: embedding
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 1
+  retry_after: 0
+  timeout: 120
+  allowed_fails: 3
+  cooldown_time: 30
+  fallbacks:
+    - chat-default: ["chat-default-vps", "chat-default-local"]
+    - chat-small: ["chat-small-cloud", "chat-default-local"]
+  # chat-sensitive and embed-default have NO fallback on purpose: sensitive data never
+  # leaves the local GPU. When the local GPU is down these aliases fail closed.
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 120
+  # MIT custom callback: factory_llm_* Prometheus metrics on :9464 and sensitive-data guard.
+  callbacks: ["factory_callbacks.factory_metrics"]
+  # Langfuse (self-hosted, MIT core) receives every call; sensitive calls are masked by the
+  # callback above (mask_input / mask_output).
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  redact_user_api_key_info: true
+  # Keep Langfuse tags to the factory ones (usecase, data class, task type).
+  disable_add_user_agent_to_request_tags: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: false
+  disable_reset_budget: false
+  background_health_checks: false
+  proxy_batch_write_at: 30

@@ -1,0 +1,27 @@
+id: uc-04
+code: UC-04
+name: { en: "Job application pre-screening (fictional)", fr: "Pré-tri de candidatures (fictif)" }
+owner: p03
+cost_center: cc-rh
+stage: poc
+task_type: extraction
+sensitivity: C3
+color: "#cc79a7"
+ai_act:
+  role: deployer
+  prohibited_practices: []
+  annex_iii_area: employment
+  annex_iii_use: { en: "Annex III point 4(a): recruitment", fr: "Annexe III point 4 a) : recrutement" }
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: false
+model:
+  alias: chat-sensitive
+  name: "local/secure-14b"
+  version: "1.2"
+  history: [{ version: "1.2", from: 2026-08-01 }]
+assessment: { reviewed_model_version: "1.2", last_reviewed: 2026-08-05, reviewer: p07, decision: approved_with_conditions }
+nist: { govern: { status: done }, map: { status: partial }, measure: { status: todo }, manage: { status: todo } }
+iso42001: ["A.5.2", "A.7.4"]
+rag: { index: kb-rh, corpus_docs: 300, chunk_size: 500, chunk_overlap: 50, embedding: embed-default }

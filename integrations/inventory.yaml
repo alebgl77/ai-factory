@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: MIT
+# Inventaire des dépôts GitHub publics du compte alebgl77 et classement par pilier de l'usine.
+# Entrée de scripts/inventory_github.py (le classement par pilier est une décision humaine,
+# le script vérifie licence, dépendances et secrets puis calcule la décision).
+#
+# Piliers : rag | evaluation | multi_agents | llmops_observability | governance_security | none
+# Source de la liste : liste des dépôts de la session du 2026-11-03 (gh n'était pas authentifié).
+# Pour la régénérer : python scripts/inventory_github.py --from-gh alebgl77 (gh auth login requis) ;
+# les dépôts absents de ce fichier sont alors classés « none » en attendant une revue humaine.
+owner: alebgl77
+snapshot_date: 2026-11-03
+
+# Chemins ignorés pour l'analyse des dépendances (recettes de reconstruction d'images tierces,
+# fixtures de banc d'essai) : ce ne sont pas des dépendances du code du projet.
+dependency_exclude_paths:
+  open-shadow-ai: ["requirements/service-builds/", "tests/fixtures/"]
+  tierdecay: ["benchmarks/"]
+
+# Fichiers de verrouillage au nom non standard, analysés en plus des manifestes (dépendances transitives
+# figées, déployées dans les images du projet).
+extra_manifests:
+  open-shadow-ai: ["requirements/runtime.txt", "requirements/agent.txt"]
+
+# Licences de dépendances vérifiées à la main (métadonnées absentes ou ambiguës).
+license_overrides: {}
+
+repos:
+  # ------------------------------------------------------------------ dépôts propres (non forks)
+  - name: grafana-llmops-forge
+    pillar: llmops_observability
+    summary: "Découvre la télémétrie existante, génère et déploie des dashboards Grafana IA/LLM (coûts, agents, qualité, gouvernance) et capture leur rendu pour revue."
+    rationale: "Cœur du pilier LLMOps et observabilité : dashboards Grafana provisionnables, coûts par fournisseur, preuves AI Act / ISO 42001 / NIST AI RMF."
+  - name: openspanguard
+    pillar: evaluation
+    summary: "Passerelle OTLP/HTTP qui enrichit les spans de génération avec des signaux d'évaluation et leur couverture, exposés dans Prometheus et Grafana."
+    rationale: "Pilier évaluation : évaluation en ligne attachée aux traces, couverture d'évaluation mesurée (complément des gates RAGAS / LLM-as-judge)."
+    notes: "Sa stack de démonstration (compose.yaml) lance Grafana et Tempo (AGPL-3.0) comme services séparés non modifiés ; l'usine ne la déploie pas."
+  - name: open-shadow-ai
+    pillar: governance_security
+    summary: "Découverte auto-hébergée de l'IA fantôme : corrèle signaux réseau, postes et annuaire, en distinguant présence et usage observé."
+    rationale: "Pilier gouvernance et sécurité : alimente le registre des use cases avec les usages non déclarés (AI Act, ISO 42001 A.6)."
+    notes: "Son déploiement construit Redis 7.4.11 (RSALv2/SSPLv1, non libre) comme service séparé ; l'usine ne le déploie pas. Recommandé côté projet : Valkey (BSD-3-Clause). certifi (MPL-2.0) figure dans ses dépendances transitives, utilisé sans modification."
+  - name: dsh-plugin-otel-genai
+    pillar: llmops_observability
+    summary: "Plugin qui exporte les métriques OpenTelemetry GenAI (tokens, durée des appels) d'un harnais d'agents en OTLP/HTTP."
+    rationale: "Pilier LLMOps et observabilité : métriques GenAI normalisées vers Alloy / Prometheus, sans contenu des conversations."
+    notes: "Dépendances pairs @deepseek-ai/cordis et @deepseek-ai/schemastery (MIT) : fournies par le harnais hôte."
+  - name: tierdecay
+    pillar: llmops_observability
+    summary: "Couche d'apprentissage par dépôt pour routeurs de modèles : certifie statistiquement des tiers moins chers par classe de tâches et recertifie à chaque changement de modèle."
+    rationale: "Pilier LLMOps (routage et coûts) : alimente le changement de routage de la boucle de données et l'alerte « modèle surdimensionné », sans réentraînement."
+  - name: harnessmeter
+    pillar: llmops_observability
+    summary: "Inventorie instructions et skills des agents de code, estime leur empreinte en tokens et impose des budgets en CI."
+    rationale: "Pilier LLMOps et observabilité (FinOps des agents) : tokens par tâche et dérive de la taille des prompts (règle prompt_bloat)."
+  - name: promptor
+    pillar: evaluation
+    summary: "Architecte de prompts : protocole itératif humain, grille C1–C6, sortie d'essai obligatoire et tournoi jugé à l'aveugle."
+    rationale: "Pilier évaluation : évaluation par les sorties (LLM-as-judge à l'aveugle) et registre de prompts, en amont du versionnage des prompts."
+  - name: awesome-ai-architect
+    pillar: none
+    summary: "Carte de veille du stack GenAI générée chaque jour à partir des étoiles GitHub."
+    rationale: "Liste de veille documentaire, pas un composant de l'usine (utile comme lien de veille du R&D Lab)."
+  - name: generative-engine-monitor
+    pillar: none
+    summary: "Observatoire auto-hébergé de la visibilité d'une marque dans les réponses des moteurs génératifs."
+    rationale: "Mesure marketing (GEO) des réponses de fournisseurs, hors des piliers de l'usine."
+  - name: ftp-deploy-mcp
+    pillar: none
+    summary: "Serveur MCP de déploiement FTP, FTPS et SFTP pour agents de code."
+    rationale: "Outil de livraison de sites web, hors des piliers de l'usine."
+  - name: design-md-viewer
+    pillar: none
+    summary: "Explorateur de DESIGN.md et de jetons de design dans le navigateur."
+    rationale: "Outil de design, hors des piliers de l'usine."
+  - name: pilovo
+    pillar: none
+    summary: "Extension Chrome qui suit l'état des onglets d'assistants IA."
+    rationale: "Productivité individuelle dans le navigateur, hors des piliers de l'usine."
+  - name: open-fullscreenshot
+    pillar: none
+    summary: "Extension Chrome de capture d'écran pleine page, sans permission d'hôte."
+    rationale: "Outil de capture d'écran, hors des piliers de l'usine."
+  - name: alebgl77
+    pillar: none
+    summary: "README de profil GitHub."
+    rationale: "Page de profil, aucun code."
+  - name: alebgl77.github.io
+    pillar: none
+    summary: "Site de profil statique (GitHub Pages)."
+    rationale: "Site de présentation, aucun code applicatif."
+
+  # ------------------------------------------- forks : projets amont, ni intégrés ni relicenciables
+  - {name: openwiki, fork: true}
+  - {name: semantic-conventions-genai, fork: true}
+  - {name: awesome-agent-harness, fork: true}
+  - {name: Awesome-LLMOps, fork: true}
+  - {name: agentshield, fork: true}
+  - {name: swarms, fork: true}
+  - {name: plugin-tools, fork: true}
+  - {name: LibreChat, fork: true}
+  - {name: awesome-observability, fork: true}
+  - {name: awesome-ai-model-routing, fork: true}
+  - {name: awesome-cli-coding-agents, fork: true}
+  - {name: cal.diy, fork: true}
+
+  # ------------------------------------------------------------------------------ dépôt privé
+  - {name: ai-quote-engine, private: true}

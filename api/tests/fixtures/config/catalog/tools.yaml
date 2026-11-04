@@ -1,0 +1,4 @@
+tools:
+  - { id: tl-qdrant, name: { en: "Vector search", fr: "Recherche vectorielle" }, kind: mcp, permissions: [read], risk: low, owner: p03 }
+  - { id: tl-search, name: { en: "Full-text search", fr: "Recherche plein texte" }, kind: function, permissions: [read], risk: low, owner: p03 }
+  - { id: tl-crm, name: { en: "CRM update (fictional)", fr: "Mise à jour du CRM (fictif)" }, kind: mcp, permissions: [read, write], risk: medium, owner: p04 }

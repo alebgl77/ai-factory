@@ -1,0 +1,41 @@
+id: uc-01
+code: UC-01
+name: { en: "Document RAG assistant (fictional)", fr: "Assistant RAG documentaire (fictif)" }
+description:
+  en: "Question answering over a fictional document base."
+  fr: "Questions-réponses sur une base documentaire fictive."
+owner: p02
+cost_center: cc-ops
+stage: mvp
+task_type: rag_qa
+sensitivity: C2
+color: "#0072b2"
+ai_act:
+  role: deployer
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: [chatbot]
+  gpai_used: true
+model:
+  alias: chat-default
+  name: { en: "cloud/large (fictional)", fr: "cloud/large (fictif)" }
+  version: "2026-09"
+  history:
+    - { version: "2026-06", from: 2026-06-10 }
+    - { version: "2026-09", from: 2026-09-15 }
+assessment:
+  reviewed_model_version: "2026-06"
+  last_reviewed: 2026-06-12
+  reviewer: p07
+  decision: approved
+nist:
+  govern:  { status: done,    evidence: [{ en: "AI policy v2", fr: "Politique IA v2" }, "RACI"] }
+  map:     { status: done,    evidence: [{ en: "Context sheet", fr: "Fiche contexte" }] }
+  measure: { status: partial, evidence: [{ en: "Golden set, 120 Q&A", fr: "Golden set 120 Q/R" }] }
+  manage:  { status: todo,    evidence: [] }
+iso42001: ["A.5.2", "A.6.2.4", "A.7.4"]
+rag: { index: kb-docs, corpus_docs: 1840, chunk_size: 800, chunk_overlap: 120, embedding: embed-default }
+kpis: { adoption_target: 0.6, value_metric: { en: "Document search time", fr: "Temps de recherche documentaire" }, value_eur_month: 4200 }

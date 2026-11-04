@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-05
+code: UC-05
+name: { en: "Loan application completeness check (fictional)", fr: "Contrôle de complétude des dossiers de prêt (fictif)" }
+description:
+  en: >-
+    Checks that the supporting documents of a loan application are present and legible, and
+    flags what is missing to the loan officer. Falls within the area of Annex III, point 5(b),
+    but with a documented Art. 6(3)(a) derogation: narrow procedural task, no creditworthiness
+    assessment, no profiling. Financial data (C3): local GPU only. Fictional data.
+  fr: >-
+    Vérifie la présence et la lisibilité des pièces justificatives d'un dossier de prêt et
+    signale les manques à l'instructeur. Relève du domaine de l'annexe III, point 5 b), mais
+    dérogation art. 6(3) a) documentée : tâche procédurale étroite, aucune appréciation de
+    solvabilité, aucun profilage. Données financières (C3) : GPU local uniquement. Données fictives.
+owner: p06
+cost_center: cc-finance
+stage: indus
+task_type: extraction
+sensitivity: C3
+color: "#e69f00"
+ai_act:
+  role: both
+  prohibited_practices: []
+  annex_iii_area: essential_services
+  annex_iii_use:
+    en: "Annex III, point 5(b) (area): preliminary document check, with no evaluation of creditworthiness"
+    fr: "Annexe III, point 5 b) (domaine) : contrôle documentaire préalable, sans évaluation de la solvabilité"
+  art6_3_exemption: true
+  art6_3_basis:
+    condition: "a"                # narrow procedural task
+    profiling: false              # profiling would make the system high-risk whatever the condition
+    record:
+      en: "Art. 6(4) assessment documented before putting into service (DOC-GOV-014, fictional)"
+      fr: "Évaluation art. 6(4) documentée avant mise en service (DOC-GOV-014, fictif)"
+    registration:
+      en: "Art. 49(2) registration in the EU database (retained by 2026/1744)"
+      fr: "Enregistrement art. 49(2) dans la base de l'UE (maintenu par 2026/1744)"
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: true
+model:
+  alias: chat-sensitive
+  name: { en: "Open-weight 14B LLM on the local GPU (fictional)", fr: "LLM open-weight 14B sur GPU local (fictif)" }
+  version: "2026-10"
+  history:
+    - { version: "2026-05", from: 2026-06-02 }
+    - { version: "2026-10", from: 2026-10-23 }
+assessment:
+  reviewed_model_version: "2026-10"
+  last_reviewed: 2026-10-22
+  reviewer: p07
+  decision: approved
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "Art. 6(3) derogation file", fr: "Dossier de dérogation art. 6(3)" }
+  map:
+    status: done
+    evidence:
+      - { en: "Closed list of the documents checked", fr: "Liste fermée des pièces contrôlées" }
+      - { en: "Absence of profiling verified", fr: "Absence de profilage vérifiée" }
+  measure:
+    status: done
+    evidence:
+      - { en: "Precision / recall per document type", fr: "Précision / rappel par type de pièce" }
+      - { en: "Reassessment of model 2026-10 on 2026-10-22", fr: "Réévaluation 2026-10 du 2026-10-22" }
+  manage:
+    status: partial
+    evidence:
+      - { en: "Queueing when the local GPU is unavailable", fr: "File d'attente si GPU local indisponible" }
+iso42001: ["A.2.2", "A.4.3", "A.5.2", "A.5.3", "A.6.2.4", "A.6.2.6", "A.6.2.8", "A.7.4", "A.7.5", "A.9.4"]
+rag: null
+eval:
+  golden_set: "gs-pieces-v3"
+  questions: 520
+  metric: { en: "recall per document type", fr: "rappel par type de pièce" }
+  judge_alias: chat-sensitive
+kpis:
+  adoption_target: 0.8
+  adoption_actual: 0.72
+  value_metric: { en: "Incomplete applications caught before review", fr: "Dossiers incomplets détectés avant instruction" }
+  value_eur_month: 2900

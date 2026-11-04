@@ -1,0 +1,350 @@
+# SPDX-License-Identifier: MIT
+# Crosswalk NIST AI RMF 1.0 <-> EU AI Act <-> ISO/IEC 42001:2023 (CONTRACT section 2.6).
+# INDICATIVE mapping written for this reference factory: it is neither an official mapping
+# nor legal advice. The ISO text is not public, so ISO references rely on control titles
+# from secondary sources. Each entry cites its basis.
+#
+# tiers: AI Act tiers for which the family is *required* by the factory policy
+# (prohibited | high | limited | minimal | gpai). The risk engine lists, for each use case,
+# the families whose tiers contain its tier (or "gpai" when a GPAI model is used); a family
+# counts as evidenced when one of its iso42001 references is in the use case's iso42001 list.
+# Where the AI Act only binds high-risk systems, wider tiers reflect the factory's own policy
+# (noted in "basis").
+#
+# Languages (CONTRACT section 9): title, evidence_hint and basis are {en, fr} mappings;
+# ids, framework references and tiers are not.
+
+meta:
+  title:
+    en: "Indicative crosswalk NIST AI RMF ↔ AI Act ↔ ISO/IEC 42001"
+    fr: "Correspondance indicative NIST AI RMF ↔ AI Act ↔ ISO/IEC 42001"
+  indicative: true
+  version: "2026-11"
+  reviewed: 2026-11-03
+  reviewer: p07
+  sources:
+    en: "docs/GOVERNANCE.md, Sources section"
+    fr: "docs/GOVERNANCE.md, section Sources"
+
+controls:
+  - id: prohibited-screening
+    title: { en: "Screening for prohibited practices", fr: "Filtrage des pratiques interdites" }
+    nist: ["GOVERN 1.1", "MAP 1.1", "MANAGE 1.1"]
+    ai_act: ["Art. 5"]
+    iso42001: ["4.1", "A.9.4"]
+    tiers: [prohibited, high, limited, minimal]
+    evidence_hint:
+      en: "Art. 5 questionnaire signed at scoping, replayed whenever the intended purpose changes"
+      fr: "Questionnaire art. 5 signé au cadrage, rejoué si la finalité change"
+    basis:
+      en: "Art. 5 applies to every system; MANAGE 1.1 go / no-go decision"
+      fr: "Art. 5 applicable à tous les systèmes ; MANAGE 1.1 décision go / no-go"
+
+  - id: ai-policy
+    title: { en: "AI policy and policy alignment", fr: "Politique IA et alignement des politiques" }
+    nist: ["GOVERN 1.2", "GOVERN 1.4", "GOVERN 4.1"]
+    ai_act: ["Art. 17"]
+    iso42001: ["5.2", "A.2.2", "A.2.3", "A.2.4"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "Versioned AI policy, reviewed annually, aligned with security and data protection policies"
+      fr: "Politique IA versionnée, revue annuelle, alignée sécurité et protection des données"
+    basis:
+      en: "Art. 17(1) for high-risk providers; factory policy for the other tiers"
+      fr: "Art. 17(1) pour les fournisseurs haut risque ; politique de l'usine pour les autres niveaux"
+
+  - id: roles-accountability
+    title: { en: "Roles, accountability and reporting of concerns", fr: "Rôles, responsabilités et remontée des préoccupations" }
+    nist: ["GOVERN 2.1", "GOVERN 2.3", "GOVERN 3.2"]
+    ai_act: ["Art. 17", "Art. 26"]
+    iso42001: ["5.3", "A.3.2", "A.3.3"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "RACI per use case, owner and reviewer named in the registry, whistleblowing channel"
+      fr: "RACI par use case, propriétaire et relecteur désignés dans le registre, canal d'alerte"
+    basis:
+      en: "Art. 17(1)(m) accountability framework; Art. 26(2) competent persons for human oversight"
+      fr: "Art. 17(1)(m) cadre de responsabilité ; art. 26(2) personnes compétentes pour le contrôle humain"
+
+  - id: ai-literacy
+    title: { en: "AI literacy and role-based skills", fr: "Maîtrise de l'IA et compétences par rôle" }
+    nist: ["GOVERN 2.2", "MAP 3.4"]
+    ai_act: ["Art. 4"]
+    iso42001: ["7.2", "7.3", "A.4.6"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "Skills Lab learning paths per role, coverage and scheduled sessions (config/skills.yaml)"
+      fr: "Parcours Skills Lab par rôle, couverture et sessions planifiées (config/skills.yaml)"
+    basis:
+      en: "Art. 4 as rewritten by 2026/1744: support measures tailored to the role, the risk and the context"
+      fr: "Art. 4 réécrit par 2026/1744 : mesures de soutien adaptées au rôle, au risque et au contexte"
+
+  - id: ai-inventory
+    title: { en: "AI system inventory and registry", fr: "Inventaire et registre des systèmes d'IA" }
+    nist: ["GOVERN 1.6", "MAP 2.1"]
+    ai_act: ["Art. 49", "Art. 6"]
+    iso42001: ["4.3", "A.4.2"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "GitOps registry config/usecases, EU database registration for Annex III (including the 6(3) derogation)"
+      fr: "Registre GitOps config/usecases, enregistrement UE pour l'annexe III (y compris dérogation 6(3))"
+    basis:
+      en: "GOVERN 1.6 inventory; Art. 49(1) and 49(2) registration"
+      fr: "GOVERN 1.6 inventaire ; art. 49(1) et 49(2) enregistrement"
+
+  - id: risk-classification
+    title: { en: "AI Act risk classification", fr: "Qualification du niveau de risque AI Act" }
+    nist: ["MAP 1.1", "MAP 1.5", "MAP 3.3"]
+    ai_act: ["Art. 6", "Art. 50"]
+    iso42001: ["6.1.2", "A.5.2", "A.9.4"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "Decision tree: Art. 5, Annex I, Annex III and documented 6(3) derogation, Art. 50"
+      fr: "Arbre de décision : art. 5, annexe I, annexe III et dérogation 6(3) documentée, art. 50"
+    basis:
+      en: "Art. 6(3)-(4): the not-high-risk assessment is documented before the system is put into service"
+      fr: "Art. 6(3)-(4) : l'évaluation de non-haut risque est documentée avant mise en service"
+
+  - id: risk-management
+    title: { en: "Lifecycle risk management", fr: "Gestion des risques sur le cycle de vie" }
+    nist: ["GOVERN 1.3", "MAP 1.1", "MEASURE 1.1", "MANAGE 1.1", "MANAGE 1.2", "MANAGE 1.3"]
+    ai_act: ["Art. 9"]
+    iso42001: ["6.1", "8.2", "8.3", "A.5.2"]
+    tiers: [high]
+    evidence_hint:
+      en: "Risk register, reviewed at every model version"
+      fr: "Registre des risques, revue à chaque version de modèle"
+    basis:
+      en: "Art. 9 risk management system; ISO 6.1, 8.2, 8.3"
+      fr: "Art. 9 système de gestion des risques ; ISO 6.1, 8.2, 8.3"
+
+  - id: impact-assessment
+    title:
+      en: "Impact assessment (individuals, fundamental rights, society)"
+      fr: "Analyse d'impact (personnes, droits fondamentaux, société)"
+    nist: ["MAP 3.1", "MAP 3.2", "MAP 5.1", "MAP 5.2"]
+    ai_act: ["Art. 27", "Art. 26"]
+    iso42001: ["6.1.4", "8.4", "A.5.3", "A.5.4", "A.5.5"]
+    tiers: [high]
+    evidence_hint:
+      en: "DPIA (GDPR) and, where Art. 27 applies, a fundamental rights impact assessment (FRIA)"
+      fr: "AIPD (RGPD) et, si art. 27 applicable, analyse d'impact sur les droits fondamentaux"
+    basis:
+      en: "Art. 27 limited to public bodies, public services and Annex III 5(b) and (c); Art. 26(9) DPIA"
+      fr: "Art. 27 limité aux organismes publics, services publics et annexe III 5 b) et c) ; art. 26(9) AIPD"
+
+  - id: data-governance
+    title: { en: "Data governance and quality", fr: "Gouvernance et qualité des données" }
+    nist: ["MAP 2.3", "MEASURE 2.1"]
+    ai_act: ["Art. 10"]
+    iso42001: ["A.4.3", "A.7.2", "A.7.3", "A.7.4", "A.7.5", "A.7.6"]
+    tiers: [high]
+    evidence_hint:
+      en: "Datasheets, provenance, freshness of RAG corpora, versioned golden sets"
+      fr: "Fiches de jeux de données, provenance, fraîcheur des corpus RAG, golden sets versionnés"
+    basis:
+      en: "Art. 10; ISO A.7; with no retraining, it covers corpora, evaluation sets and input data"
+      fr: "Art. 10 ; ISO A.7 ; sans réentraînement, concerne corpus, jeux d'évaluation et données d'entrée"
+
+  - id: data-classification-placement
+    title: { en: "Data classification and sovereign placement", fr: "Classification des données et placement souverain" }
+    nist: ["MEASURE 2.10", "MAP 4.1", "GOVERN 6.1"]
+    ai_act: ["Art. 10", "Art. 26"]
+    iso42001: ["A.4.5", "A.7.3", "A.7.5"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "C1–C4 class in the registry; C3/C4 served by chat-sensitive on the local GPU, never cloud or VPS"
+      fr: "Classe C1–C4 au registre ; C3/C4 servis par chat-sensitive sur GPU local, jamais cloud ni VPS"
+    basis:
+      en: "Factory policy (placement); Art. 10(5) or new Art. 4a (to be verified) for sensitive data; Art. 26(4) input data"
+      fr: "Politique de l'usine (placement) ; art. 10(5) ou nouvel art. 4a (à vérifier) données sensibles ; art. 26(4) données d'entrée"
+
+  - id: technical-documentation
+    title: { en: "Technical documentation and version traceability", fr: "Documentation technique et traçabilité des versions" }
+    nist: ["MAP 2.2", "MEASURE 2.9", "GOVERN 4.2"]
+    ai_act: ["Art. 11", "Art. 13"]
+    iso42001: ["7.5", "A.6.2.3", "A.6.2.7", "A.8.2"]
+    tiers: [high]
+    evidence_hint:
+      en: "Annex IV: model, prompt, agent and index versions; instructions for use"
+      fr: "Annexe IV : versions de modèle, prompt, agent et index ; notice d'utilisation"
+    basis:
+      en: "Art. 11 and Annex IV; Art. 13 information for deployers"
+      fr: "Art. 11 et annexe IV ; art. 13 informations aux déployeurs"
+
+  - id: record-keeping
+    title: { en: "Logging and log retention", fr: "Journalisation et conservation des traces" }
+    nist: ["MEASURE 2.4", "GOVERN 4.3"]
+    ai_act: ["Art. 12", "Art. 19", "Art. 26"]
+    iso42001: ["A.6.2.8"]
+    tiers: [high]
+    evidence_hint:
+      en: "Langfuse traces and Loki logs kept for at least six months, timestamped, per use case"
+      fr: "Traces Langfuse et journaux Loki conservés au moins six mois, horodatés, par use case"
+    basis:
+      en: "Art. 12 record-keeping; Art. 19 and 26(6) retention for at least six months"
+      fr: "Art. 12 journalisation ; art. 19 et 26(6) conservation au moins six mois"
+
+  - id: human-oversight
+    title: { en: "Human oversight and kill switch", fr: "Contrôle humain et coupe-circuit" }
+    nist: ["GOVERN 3.2", "MAP 3.5", "MANAGE 2.4"]
+    ai_act: ["Art. 14", "Art. 26"]
+    iso42001: ["A.9.2", "A.9.3"]
+    tiers: [high]
+    evidence_hint:
+      en: "Human interrupts in the LangGraph graph, tested Agent Ops kill switch"
+      fr: "Interruptions humaines dans le graphe LangGraph, coupe-circuit Agent Ops testé"
+    basis:
+      en: "Art. 14 design; Art. 26(2) assignment to competent persons"
+      fr: "Art. 14 conception ; art. 26(2) affectation à des personnes compétentes"
+
+  - id: evaluation-tevv
+    title:
+      en: "Evaluation, accuracy and robustness (evaluation gates)"
+      fr: "Évaluation, exactitude et robustesse (portes d'évaluation)"
+    nist: ["MEASURE 1.1", "MEASURE 2.3", "MEASURE 2.5", "MEASURE 2.13"]
+    ai_act: ["Art. 15", "Art. 9"]
+    iso42001: ["A.6.2.4"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "RAGAS and LLM-as-judge on a golden set, thresholds per tier (eval_gates in factory.yaml)"
+      fr: "RAGAS et LLM-as-judge sur golden set, seuils par niveau (eval_gates de factory.yaml)"
+    basis:
+      en: "Art. 15 for high risk (Art. 9(6)-(8) testing); lower thresholds for limited and minimal (policy)"
+      fr: "Art. 15 pour le haut risque (art. 9(6)-(8) tests) ; seuils plus bas pour limited et minimal (politique)"
+
+  - id: security-redteam
+    title: { en: "Cybersecurity and LLM red teaming", fr: "Cybersécurité et red teaming LLM" }
+    nist: ["MEASURE 2.7", "MEASURE 2.6", "MANAGE 2.3"]
+    ai_act: ["Art. 15", "Art. 55"]
+    iso42001: ["A.6.1.3", "A.6.2.4"]
+    tiers: [high, limited, gpai]
+    evidence_hint:
+      en: "Red team campaign (prompt injection, exfiltration through MCP tools) at every version"
+      fr: "Campagne red team (injection de prompt, exfiltration via outils MCP) à chaque version"
+    basis:
+      en: "Art. 15(5) resilience to attacks; Art. 55 for providers of GPAI models with systemic risk; NIST AI 600-1 information security"
+      fr: "Art. 15(5) résilience aux attaques ; art. 55 pour les fournisseurs GPAI systémiques ; NIST AI 600-1 sécurité de l'information"
+
+  - id: fairness-bias
+    title: { en: "Fairness and bias", fr: "Équité et biais" }
+    nist: ["MEASURE 2.11", "GOVERN 3.1"]
+    ai_act: ["Art. 10", "Art. 4a"]
+    iso42001: ["A.5.4", "A.7.4"]
+    tiers: [high]
+    evidence_hint:
+      en: "Disparate treatment tests on fictional datasets, replayed at every model version"
+      fr: "Tests d'écart de traitement sur jeux fictifs, rejoués à chaque version de modèle"
+    basis:
+      en: "Art. 10(2)(f)-(g) examination and mitigation of biases; Art. 10(5) or new Art. 4a (to be verified)"
+      fr: "Art. 10(2) f)-g) examen et atténuation des biais ; art. 10(5) ou nouvel art. 4a (à vérifier)"
+
+  - id: change-reassessment
+    title:
+      en: "Change management and reassessment at every model version"
+      fr: "Gestion des changements et réévaluation à chaque version de modèle"
+    nist: ["GOVERN 1.5", "MANAGE 3.2", "MEASURE 3.1"]
+    ai_act: ["Art. 43", "Art. 25", "Art. 3"]
+    iso42001: ["6.3", "A.6.2.5"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "A model.version change => mandatory review, deployment gate blocked (risk_reassessment)"
+      fr: "Changement de model.version => revue obligatoire, porte de déploiement bloquée (risk_reassessment)"
+    basis:
+      en: "Art. 43(4) and 3(23) substantial modification; Art. 25(1); MANAGE 3.2 pre-trained models"
+      fr: "Art. 43(4) et 3(23) modification substantielle ; art. 25(1) ; MANAGE 3.2 modèles pré-entraînés"
+
+  - id: transparency-users
+    title:
+      en: "Transparency toward individuals (chatbot, synthetic content)"
+      fr: "Transparence envers les personnes (chatbot, contenus synthétiques)"
+    nist: ["MEASURE 2.8", "MAP 2.2"]
+    ai_act: ["Art. 50"]
+    iso42001: ["A.8.2", "A.8.5"]
+    tiers: [limited]
+    evidence_hint:
+      en: "\"You are chatting with an AI\" notice, machine-readable marking of generated content"
+      fr: "Mention « vous échangez avec une IA », marquage lisible par machine des contenus générés"
+    basis:
+      en: "Art. 50(1)-(4); also applies to a high-risk system that has these features"
+      fr: "Art. 50(1)-(4) ; s'applique aussi à un système à haut risque doté de ces fonctions"
+
+  - id: post-market-monitoring
+    title: { en: "Post-deployment monitoring and user feedback", fr: "Surveillance après mise en service et retours d'usage" }
+    nist: ["MEASURE 2.4", "MEASURE 3.3", "MANAGE 4.1", "MANAGE 4.2"]
+    ai_act: ["Art. 72", "Art. 26"]
+    iso42001: ["9.1", "A.6.2.6"]
+    tiers: [high, limited]
+    evidence_hint:
+      en: "Grafana dashboards, thumbs up / down feedback, data-loop drifts"
+      fr: "Tableaux Grafana, retours pouce haut / bas, dérives de la boucle de données"
+    basis:
+      en: "Art. 72 provider's plan; Art. 26(5) monitoring by the deployer"
+      fr: "Art. 72 plan du fournisseur ; art. 26(5) surveillance par le déployeur"
+
+  - id: incident-rollback
+    title: { en: "Serious incidents, rollback and reporting", fr: "Incidents graves, retour arrière et signalement" }
+    nist: ["MANAGE 2.3", "MANAGE 2.4", "MANAGE 4.3", "GOVERN 4.3"]
+    ai_act: ["Art. 73", "Art. 26"]
+    iso42001: ["10.2", "A.8.4", "A.3.3"]
+    tiers: [high, limited]
+    evidence_hint:
+      en: "Logged automatic rollback, incident runbook, Art. 73 notification deadlines"
+      fr: "Retour arrière automatique journalisé, runbook incident, délais de notification art. 73"
+    basis:
+      en: "Art. 73 serious incidents (high risk); Art. 26(5); rollback extended to the limited tier by policy"
+      fr: "Art. 73 incidents graves (haut risque) ; art. 26(5) ; retour arrière étendu au niveau limited par politique"
+
+  - id: third-party-gpai
+    title: { en: "Third-party suppliers and GPAI models (value chain)", fr: "Fournisseurs tiers et modèles GPAI (chaîne de valeur)" }
+    nist: ["GOVERN 6.1", "GOVERN 6.2", "MAP 4.2", "MANAGE 3.1"]
+    ai_act: ["Art. 25", "Art. 53"]
+    iso42001: ["A.10.2", "A.10.3", "A.4.4"]
+    tiers: [gpai, high]
+    evidence_hint:
+      en: "GPAI provider documentation (Art. 53(1)(b)), contracts, licenses, VPS / local fallback plan"
+      fr: "Documentation du fournisseur GPAI (art. 53(1)(b)), contrats, licences, plan de repli VPS / local"
+    basis:
+      en: "Art. 53(1)(b) information for downstream providers; Art. 25; NIST AI 600-1 value chain"
+      fr: "Art. 53(1)(b) informations aux fournisseurs en aval ; art. 25 ; NIST AI 600-1 chaîne de valeur"
+
+  - id: quality-management
+    title: { en: "Quality and AI management system", fr: "Système de management de la qualité et de l'IA" }
+    nist: ["GOVERN 1.4", "GOVERN 1.5", "MEASURE 1.3"]
+    ai_act: ["Art. 17", "Art. 16"]
+    iso42001: ["4.4", "9.2", "9.3", "10.1", "A.6.1.2"]
+    tiers: [high]
+    evidence_hint:
+      en: "Provider QMS, internal audits, quarterly management review (fictional)"
+      fr: "SMQ du fournisseur, audits internes, revue de direction trimestrielle (fictive)"
+    basis:
+      en: "Art. 17 QMS; ISO 42001 clauses 9 and 10; ISO certification does not equal AI Act compliance"
+      fr: "Art. 17 SMQ ; ISO 42001 clauses 9 et 10 ; une certification ISO ne vaut pas conformité AI Act"
+
+  - id: explanation-contestation
+    title:
+      en: "Information of affected persons, explanation and contestation"
+      fr: "Information des personnes concernées, explication et contestation"
+    nist: ["MEASURE 3.3", "GOVERN 5.1"]
+    ai_act: ["Art. 86", "Art. 26"]
+    iso42001: ["A.8.3", "A.8.5", "A.10.4"]
+    tiers: [high]
+    evidence_hint:
+      en: "Notice to applicants and customers, means of redress, explanation of the role of the system"
+      fr: "Mention aux candidats et clients, voie de recours, explication du rôle du système"
+    basis:
+      en: "Art. 26(11) information; Art. 86 right to explanation for Annex III decisions"
+      fr: "Art. 26(11) information ; art. 86 droit à l'explication pour les décisions annexe III"
+
+  - id: sustainability-cost
+    title: { en: "Frugality, costs and environmental impact", fr: "Sobriété, coûts et impact environnemental" }
+    nist: ["MEASURE 2.12", "MANAGE 2.1", "MAP 3.2"]
+    ai_act: ["Art. 95"]
+    iso42001: ["A.4.5", "A.5.5"]
+    tiers: [high, limited, minimal]
+    evidence_hint:
+      en: "FinOps waste rules, local GPU energy, choice of the smallest sufficient model"
+      fr: "Règles de gaspillage FinOps, énergie du GPU local, choix du plus petit modèle suffisant"
+    basis:
+      en: "Art. 95 voluntary codes (sustainability); NIST AI 600-1 environmental impacts; factory policy"
+      fr: "Art. 95 codes volontaires (durabilité) ; NIST AI 600-1 impacts environnementaux ; politique de l'usine"

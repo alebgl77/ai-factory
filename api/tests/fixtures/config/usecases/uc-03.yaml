@@ -1,0 +1,26 @@
+id: uc-03
+code: UC-03
+name: { en: "Ticket classification (fictional)", fr: "Classification de tickets (fictif)" }
+owner: p01
+cost_center: cc-ops
+stage: indus
+task_type: classification
+sensitivity: C1
+color: "#009e73"
+ai_act:
+  role: deployer
+  prohibited_practices: []
+  annex_iii_area: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: []
+  gpai_used: true
+model:
+  alias: chat-default
+  name: "cloud/large"
+  version: "2026-05"
+  history: [{ version: "2026-05", from: 2026-05-02 }]
+assessment: { reviewed_model_version: "2026-05", last_reviewed: 2026-05-04, reviewer: p07, decision: approved }
+nist: { govern: { status: done }, map: { status: done }, measure: { status: done }, manage: { status: done } }
+iso42001: ["A.5.2"]
+kpis: { adoption_target: 0.9, value_metric: { en: "Tickets routed", fr: "Tickets routés" }, value_eur_month: 1500 }

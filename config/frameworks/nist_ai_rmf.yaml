@@ -1,0 +1,499 @@
+# SPDX-License-Identifier: MIT
+# NIST AI Risk Management Framework 1.0 - display labels (CONTRACT section 2.6).
+# Identifiers (functions, categories, subcategories) follow NIST AI 100-1, January 2023.
+# English labels are shortened from the public-domain NIST text (official wording kept where
+# possible); French labels are a free, shortened translation. Refer to the original for the
+# authoritative wording. Sources: docs/GOVERNANCE.md.
+#
+# Languages (CONTRACT section 9): human-readable values are {en, fr} mappings; ids are not.
+
+framework:
+  id: nist_ai_rmf
+  name: "NIST AI Risk Management Framework"
+  version: "1.0"
+  document: "NIST AI 100-1"
+  published: 2023-01-26
+  url: "https://doi.org/10.6028/NIST.AI.100-1"
+  playbook: "https://airc.nist.gov/"
+  status_note:
+    en: "Version 1.0 still current as of 2026-11-03; NIST has announced a revision"
+    fr: "Version 1.0 toujours en vigueur au 2026-11-03 ; une révision est annoncée par le NIST"
+  counts: { functions: 4, categories: 19, subcategories: 72 }
+  translation:
+    en: "shortened from the official NIST wording"
+    fr: "traduction libre et abrégée"
+
+profiles:
+  - id: genai
+    document: "NIST AI 600-1"
+    title: "Artificial Intelligence Risk Management Framework: Generative Artificial Intelligence Profile"
+    published: 2024-07-26
+    url: "https://doi.org/10.6028/NIST.AI.600-1"
+    note:
+      en: "Cross-sectoral profile: 12 risks that are unique to or exacerbated by generative AI, with suggested actions mapped to AI RMF subcategories"
+      fr: "Profil transversal : 12 risques propres ou aggravés par l'IA générative, actions suggérées rattachées aux sous-catégories de l'AI RMF"
+    risks:
+      - id: cbrn
+        label:
+          en: "CBRN information or capabilities (chemical, biological, radiological, nuclear)"
+          fr: "Informations ou capacités NRBC (chimiques, biologiques, radiologiques, nucléaires)"
+      - id: confabulation
+        label:
+          en: "Confabulation (confidently stated false content)"
+          fr: "Confabulation (contenu faux présenté avec assurance)"
+      - id: dangerous_content
+        label:
+          en: "Dangerous, violent, or hateful content"
+          fr: "Contenus dangereux, violents ou haineux"
+      - id: data_privacy
+        label:
+          en: "Data privacy"
+          fr: "Protection des données personnelles"
+      - id: environmental
+        label:
+          en: "Environmental impacts"
+          fr: "Impacts environnementaux"
+      - id: harmful_bias
+        label:
+          en: "Harmful bias or homogenization"
+          fr: "Biais préjudiciables et homogénéisation"
+      - id: human_ai_configuration
+        label:
+          en: "Human-AI configuration (overreliance, anthropomorphization)"
+          fr: "Configuration humain-IA (sur-confiance, anthropomorphisme)"
+      - id: information_integrity
+        label:
+          en: "Information integrity (mis- and disinformation)"
+          fr: "Intégrité de l'information (désinformation)"
+      - id: information_security
+        label:
+          en: "Information security (prompt injection, cyberattacks)"
+          fr: "Sécurité de l'information (injection de prompt, cyberattaques)"
+      - id: intellectual_property
+        label:
+          en: "Intellectual property"
+          fr: "Propriété intellectuelle"
+      - id: abusive_content
+        label:
+          en: "Obscene, degrading, and/or abusive content"
+          fr: "Contenus obscènes, dégradants ou abusifs"
+      - id: value_chain
+        label:
+          en: "Value chain and component integration"
+          fr: "Chaîne de valeur et intégration de composants tiers"
+
+functions:
+  - id: govern
+    code: GOVERN
+    label: { en: "Govern", fr: "Gouverner" }
+    description:
+      en: "Culture, policies, accountability and oversight of AI risk management; cross-cutting function"
+      fr: "Culture, politiques, responsabilités et supervision de la gestion des risques IA ; fonction transversale"
+    categories:
+      - id: "GOVERN 1"
+        label:
+          en: "Policies, processes, procedures, and practices for AI risk management are in place, transparent, and implemented effectively"
+          fr: "Politiques, processus et pratiques de gestion des risques IA en place, transparents et appliqués"
+        subcategories:
+          - id: "GOVERN 1.1"
+            label:
+              en: "Legal and regulatory requirements involving AI are understood, managed, and documented"
+              fr: "Exigences légales et réglementaires comprises, gérées et documentées"
+          - id: "GOVERN 1.2"
+            label:
+              en: "Characteristics of trustworthy AI are integrated into organizational policies and practices"
+              fr: "Caractéristiques d'une IA digne de confiance intégrées aux politiques"
+          - id: "GOVERN 1.3"
+            label:
+              en: "Level of risk management activities is determined by the organization's risk tolerance"
+              fr: "Niveau de gestion des risques déterminé selon la tolérance au risque"
+          - id: "GOVERN 1.4"
+            label:
+              en: "Risk management process and outcomes are established through transparent policies, procedures, and controls"
+              fr: "Processus de gestion des risques établi par des politiques et contrôles transparents"
+          - id: "GOVERN 1.5"
+            label:
+              en: "Ongoing monitoring and periodic review are planned, with roles and review frequency defined"
+              fr: "Surveillance continue et revue périodique planifiées, rôles et fréquence définis"
+          - id: "GOVERN 1.6"
+            label:
+              en: "Mechanisms to inventory AI systems are in place and resourced according to risk priorities"
+              fr: "Mécanismes d'inventaire des systèmes IA, dotés selon les priorités de risque"
+          - id: "GOVERN 1.7"
+            label:
+              en: "Processes are in place for decommissioning and phasing out AI systems safely"
+              fr: "Décommissionnement et retrait des systèmes IA en sécurité"
+      - id: "GOVERN 2"
+        label:
+          en: "Accountability structures are in place: appropriate teams and individuals are empowered, responsible, and trained"
+          fr: "Structures de responsabilité : équipes habilitées, responsables et formées"
+        subcategories:
+          - id: "GOVERN 2.1"
+            label:
+              en: "Roles, responsibilities, and lines of communication are documented and clear"
+              fr: "Rôles, responsabilités et circuits de communication documentés et clairs"
+          - id: "GOVERN 2.2"
+            label:
+              en: "Personnel and partners receive AI risk management training"
+              fr: "Personnel et partenaires formés à la gestion des risques IA"
+          - id: "GOVERN 2.3"
+            label:
+              en: "Executive leadership takes responsibility for risk decisions on AI development and deployment"
+              fr: "La direction assume les décisions de risque liées au développement et au déploiement"
+      - id: "GOVERN 3"
+        label:
+          en: "Workforce diversity, equity, inclusion, and accessibility are prioritized throughout the lifecycle"
+          fr: "Diversité, équité, inclusion et accessibilité prises en compte sur le cycle de vie"
+        subcategories:
+          - id: "GOVERN 3.1"
+            label:
+              en: "Decision-making is informed by a diverse team (demographics, disciplines, experience, expertise)"
+              fr: "Décisions éclairées par une équipe diverse (profils, disciplines, expertises)"
+          - id: "GOVERN 3.2"
+            label:
+              en: "Roles and responsibilities for human-AI configurations and oversight of AI systems are defined"
+              fr: "Rôles définis pour les configurations humain-IA et la supervision humaine"
+      - id: "GOVERN 4"
+        label:
+          en: "Organizational teams are committed to a culture that considers and communicates AI risk"
+          fr: "Culture d'équipe qui considère et communique les risques IA"
+        subcategories:
+          - id: "GOVERN 4.1"
+            label:
+              en: "A critical thinking and safety-first mindset is fostered in design, development, deployment, and use"
+              fr: "Esprit critique et priorité à la sécurité dans la conception et l'usage"
+          - id: "GOVERN 4.2"
+            label:
+              en: "Teams document AI risks and potential impacts and communicate about them broadly"
+              fr: "Risques et impacts documentés et communiqués largement"
+          - id: "GOVERN 4.3"
+            label:
+              en: "Practices are in place to enable AI testing, identification of incidents, and information sharing"
+              fr: "Pratiques de test, d'identification des incidents et de partage d'information"
+      - id: "GOVERN 5"
+        label:
+          en: "Processes are in place for robust engagement with relevant AI actors"
+          fr: "Engagement robuste avec les acteurs IA concernés"
+        subcategories:
+          - id: "GOVERN 5.1"
+            label:
+              en: "Feedback from external parties on potential individual and societal impacts is collected and integrated"
+              fr: "Retours de parties externes sur les impacts collectés et intégrés"
+          - id: "GOVERN 5.2"
+            label:
+              en: "Adjudicated feedback from relevant AI actors is regularly incorporated into system design"
+              fr: "Retours arbitrés des acteurs IA intégrés régulièrement à la conception"
+      - id: "GOVERN 6"
+        label:
+          en: "AI risks and benefits arising from third-party software, data, and other supply chain issues are addressed"
+          fr: "Risques et bénéfices liés aux tiers (logiciels, données, chaîne d'approvisionnement)"
+        subcategories:
+          - id: "GOVERN 6.1"
+            label:
+              en: "Policies address AI risks associated with third parties, including intellectual property infringement"
+              fr: "Politiques sur les risques des tiers, y compris propriété intellectuelle"
+          - id: "GOVERN 6.2"
+            label:
+              en: "Contingency processes handle failures or incidents in high-risk third-party data or AI systems"
+              fr: "Plans de contingence pour les défaillances de données ou systèmes tiers à haut risque"
+
+  - id: map
+    code: MAP
+    label: { en: "Map", fr: "Cartographier" }
+    description:
+      en: "Establish the context, categorize the AI system, and identify risks and impacts"
+      fr: "Établir le contexte, catégoriser le système et identifier les risques et impacts"
+    categories:
+      - id: "MAP 1"
+        label:
+          en: "Context is established and understood"
+          fr: "Le contexte est établi et compris"
+        subcategories:
+          - id: "MAP 1.1"
+            label:
+              en: "Intended purposes, beneficial uses, applicable laws and norms, and deployment settings are documented"
+              fr: "Finalités, usages, lois et normes applicables et contexte de déploiement documentés"
+          - id: "MAP 1.2"
+            label:
+              en: "Interdisciplinary AI actors and competencies are engaged and their participation is documented"
+              fr: "Acteurs et compétences interdisciplinaires mobilisés et documentés"
+          - id: "MAP 1.3"
+            label:
+              en: "The organization's mission and relevant goals for AI technology are understood and documented"
+              fr: "Mission et objectifs de l'organisation pour l'IA compris et documentés"
+          - id: "MAP 1.4"
+            label:
+              en: "Business value or context of business use is clearly defined (or re-evaluated)"
+              fr: "Valeur métier ou contexte d'usage clairement défini (ou réévalué)"
+          - id: "MAP 1.5"
+            label:
+              en: "Organizational risk tolerances are determined and documented"
+              fr: "Tolérances au risque de l'organisation déterminées et documentées"
+          - id: "MAP 1.6"
+            label:
+              en: "System requirements are elicited and design decisions take socio-technical implications into account"
+              fr: "Exigences système recueillies, implications socio-techniques prises en compte"
+      - id: "MAP 2"
+        label:
+          en: "Categorization of the AI system is performed"
+          fr: "Le système IA est catégorisé"
+        subcategories:
+          - id: "MAP 2.1"
+            label:
+              en: "Specific tasks and methods of the AI system are defined (classifier, generative model, recommender)"
+              fr: "Tâches et méthodes du système définies (classifieur, génératif, recommandation)"
+          - id: "MAP 2.2"
+            label:
+              en: "Knowledge limits and how outputs may be used and overseen by humans are documented"
+              fr: "Limites de connaissance et modalités de supervision humaine des sorties documentées"
+          - id: "MAP 2.3"
+            label:
+              en: "Scientific integrity and TEVV considerations are identified and documented"
+              fr: "Intégrité scientifique et considérations TEVV identifiées et documentées"
+      - id: "MAP 3"
+        label:
+          en: "AI capabilities, targeted usage, goals, and expected benefits and costs are understood"
+          fr: "Capacités, usage ciblé, objectifs, bénéfices et coûts attendus compris"
+        subcategories:
+          - id: "MAP 3.1"
+            label:
+              en: "Potential benefits of intended functionality and performance are examined and documented"
+              fr: "Bénéfices potentiels examinés et documentés"
+          - id: "MAP 3.2"
+            label:
+              en: "Potential costs of AI errors, including non-monetary costs, are examined and documented"
+              fr: "Coûts potentiels, y compris non monétaires, des erreurs examinés et documentés"
+          - id: "MAP 3.3"
+            label:
+              en: "Targeted application scope is specified and documented"
+              fr: "Périmètre d'application ciblé spécifié et documenté"
+          - id: "MAP 3.4"
+            label:
+              en: "Operator and practitioner proficiency is defined, assessed, and documented"
+              fr: "Compétence des opérateurs et praticiens définie et évaluée"
+          - id: "MAP 3.5"
+            label:
+              en: "Processes for human oversight are defined, assessed, and documented"
+              fr: "Processus de supervision humaine définis, évalués et documentés"
+      - id: "MAP 4"
+        label:
+          en: "Risks and benefits are mapped for all components, including third-party software and data"
+          fr: "Risques et bénéfices cartographiés pour tous les composants, y compris tiers"
+        subcategories:
+          - id: "MAP 4.1"
+            label:
+              en: "Technology and legal risks of components, including third-party data or software, are mapped"
+              fr: "Risques technologiques et juridiques des composants (dont tiers) cartographiés"
+          - id: "MAP 4.2"
+            label:
+              en: "Internal risk controls for components, including third-party AI technologies, are identified and documented"
+              fr: "Contrôles internes des composants, y compris IA tierces, identifiés et documentés"
+      - id: "MAP 5"
+        label:
+          en: "Impacts to individuals, groups, communities, organizations, and society are characterized"
+          fr: "Impacts sur les personnes, groupes, organisations et la société caractérisés"
+        subcategories:
+          - id: "MAP 5.1"
+            label:
+              en: "Likelihood and magnitude of each identified impact are identified and documented"
+              fr: "Probabilité et ampleur de chaque impact identifiées et documentées"
+          - id: "MAP 5.2"
+            label:
+              en: "Practices for regular engagement and feedback about impacts are in place and documented"
+              fr: "Pratiques d'engagement régulier et de retour sur les impacts en place"
+
+  - id: measure
+    code: MEASURE
+    label: { en: "Measure", fr: "Mesurer" }
+    description:
+      en: "Analyze, assess, benchmark, and monitor AI risks and trustworthiness characteristics"
+      fr: "Analyser, évaluer, tester et suivre les risques et les caractéristiques de confiance"
+    categories:
+      - id: "MEASURE 1"
+        label:
+          en: "Appropriate methods and metrics are identified and applied"
+          fr: "Méthodes et métriques appropriées identifiées et appliquées"
+        subcategories:
+          - id: "MEASURE 1.1"
+            label:
+              en: "Approaches and metrics are selected, starting with the most significant AI risks"
+              fr: "Approches et métriques choisies en commençant par les risques majeurs"
+          - id: "MEASURE 1.2"
+            label:
+              en: "Appropriateness of metrics and effectiveness of existing controls are regularly assessed and updated"
+              fr: "Pertinence des métriques et efficacité des contrôles réévaluées régulièrement"
+          - id: "MEASURE 1.3"
+            label:
+              en: "Independent internal experts or external assessors are involved in regular assessments"
+              fr: "Experts internes indépendants ou évaluateurs externes impliqués"
+      - id: "MEASURE 2"
+        label:
+          en: "AI systems are evaluated for trustworthy characteristics"
+          fr: "Le système est évalué au regard des caractéristiques d'une IA digne de confiance"
+        subcategories:
+          - id: "MEASURE 2.1"
+            label:
+              en: "Test sets, metrics, and details about the tools used during TEVV are documented"
+              fr: "Jeux de test, métriques et outils TEVV documentés"
+          - id: "MEASURE 2.2"
+            label:
+              en: "Evaluations involving human subjects meet applicable requirements and are representative"
+              fr: "Évaluations impliquant des humains conformes et représentatives"
+          - id: "MEASURE 2.3"
+            label:
+              en: "Performance is measured and demonstrated for conditions similar to the deployment setting"
+              fr: "Performance mesurée dans des conditions proches du déploiement"
+          - id: "MEASURE 2.4"
+            label:
+              en: "Functionality and behavior of the AI system are monitored in production"
+              fr: "Fonctionnement et comportement surveillés en production"
+          - id: "MEASURE 2.5"
+            label:
+              en: "The AI system is demonstrated to be valid and reliable; limits of generalizability are documented"
+              fr: "Validité et fiabilité démontrées, limites de généralisation documentées"
+          - id: "MEASURE 2.6"
+            label:
+              en: "The AI system is evaluated regularly for safety risks"
+              fr: "Risques de sûreté évalués régulièrement"
+          - id: "MEASURE 2.7"
+            label:
+              en: "AI system security and resilience are evaluated and documented"
+              fr: "Sécurité et résilience évaluées et documentées"
+          - id: "MEASURE 2.8"
+            label:
+              en: "Risks associated with transparency and accountability are examined and documented"
+              fr: "Risques de transparence et de responsabilité examinés"
+          - id: "MEASURE 2.9"
+            label:
+              en: "The AI model is explained, validated, and documented; output is interpreted within its context"
+              fr: "Modèle expliqué et validé, sorties interprétées dans leur contexte"
+          - id: "MEASURE 2.10"
+            label:
+              en: "Privacy risk of the AI system is examined and documented"
+              fr: "Risques pour la vie privée examinés et documentés"
+          - id: "MEASURE 2.11"
+            label:
+              en: "Fairness and bias are evaluated and results are documented"
+              fr: "Équité et biais évalués, résultats documentés"
+          - id: "MEASURE 2.12"
+            label:
+              en: "Environmental impact and sustainability are assessed and documented"
+              fr: "Impact environnemental et soutenabilité évalués"
+          - id: "MEASURE 2.13"
+            label:
+              en: "Effectiveness of the employed TEVV metrics and processes is evaluated and documented"
+              fr: "Efficacité des métriques et processus TEVV évaluée"
+      - id: "MEASURE 3"
+        label:
+          en: "Mechanisms for tracking identified AI risks over time are in place"
+          fr: "Mécanismes de suivi des risques identifiés dans le temps"
+        subcategories:
+          - id: "MEASURE 3.1"
+            label:
+              en: "Existing, unanticipated, and emergent AI risks are regularly identified and tracked in deployment"
+              fr: "Suivi régulier des risques existants, imprévus et émergents en déploiement"
+          - id: "MEASURE 3.2"
+            label:
+              en: "Risk tracking is considered where risks are difficult to assess with current measurement techniques"
+              fr: "Suivi des risques difficiles à mesurer avec les techniques actuelles"
+          - id: "MEASURE 3.3"
+            label:
+              en: "Feedback processes for end users to report problems and appeal outcomes are integrated into evaluation metrics"
+              fr: "Retours des utilisateurs et voies de contestation intégrés aux métriques"
+      - id: "MEASURE 4"
+        label:
+          en: "Feedback about efficacy of measurement is gathered and assessed"
+          fr: "Retours sur l'efficacité de la mesure collectés et évalués"
+        subcategories:
+          - id: "MEASURE 4.1"
+            label:
+              en: "Measurement approaches are connected to deployment context and informed by domain experts"
+              fr: "Approches de mesure reliées au contexte de déploiement avec des experts métier"
+          - id: "MEASURE 4.2"
+            label:
+              en: "Trustworthiness results are validated with input from domain experts and relevant AI actors"
+              fr: "Résultats de confiance validés par les experts et acteurs concernés"
+          - id: "MEASURE 4.3"
+            label:
+              en: "Measurable performance improvements or declines are identified and documented"
+              fr: "Améliorations ou dégradations mesurables identifiées et documentées"
+
+  - id: manage
+    code: MANAGE
+    label: { en: "Manage", fr: "Gérer" }
+    description:
+      en: "Prioritize, treat, monitor, and communicate risks; response and recovery"
+      fr: "Prioriser, traiter, surveiller et communiquer les risques ; réponse et reprise"
+    categories:
+      - id: "MANAGE 1"
+        label:
+          en: "AI risks identified by the MAP and MEASURE functions are prioritized, responded to, and managed"
+          fr: "Risques issus de MAP et MEASURE priorisés, traités et gérés"
+        subcategories:
+          - id: "MANAGE 1.1"
+            label:
+              en: "A determination is made as to whether development or deployment should proceed"
+              fr: "Décision de poursuivre ou non le développement ou le déploiement"
+          - id: "MANAGE 1.2"
+            label:
+              en: "Treatment of documented AI risks is prioritized based on impact, likelihood, and available resources"
+              fr: "Traitement des risques priorisé selon impact, probabilité et ressources"
+          - id: "MANAGE 1.3"
+            label:
+              en: "Responses to high-priority risks are developed, planned, and documented (mitigate, transfer, avoid, accept)"
+              fr: "Réponses aux risques prioritaires planifiées et documentées (atténuer, transférer, éviter, accepter)"
+          - id: "MANAGE 1.4"
+            label:
+              en: "Negative residual risks to downstream acquirers and end users are documented"
+              fr: "Risques résiduels négatifs documentés pour les acquéreurs et utilisateurs"
+      - id: "MANAGE 2"
+        label:
+          en: "Strategies to maximize AI benefits and minimize negative impacts are planned, implemented, and documented"
+          fr: "Stratégies pour maximiser les bénéfices et minimiser les impacts négatifs"
+        subcategories:
+          - id: "MANAGE 2.1"
+            label:
+              en: "Required resources and viable non-AI alternatives are taken into account"
+              fr: "Ressources nécessaires et alternatives non IA prises en compte"
+          - id: "MANAGE 2.2"
+            label:
+              en: "Mechanisms are in place and applied to sustain the value of deployed AI systems"
+              fr: "Mécanismes pour maintenir la valeur des systèmes déployés"
+          - id: "MANAGE 2.3"
+            label:
+              en: "Procedures are followed to respond to and recover from a previously unknown risk"
+              fr: "Procédures de réponse et de reprise face à un risque inconnu"
+          - id: "MANAGE 2.4"
+            label:
+              en: "Mechanisms exist to supersede, disengage, or deactivate AI systems inconsistent with intended use"
+              fr: "Mécanismes pour remplacer, désengager ou désactiver un système hors usage prévu"
+      - id: "MANAGE 3"
+        label:
+          en: "AI risks and benefits from third-party entities are managed"
+          fr: "Risques et bénéfices des entités tierces gérés"
+        subcategories:
+          - id: "MANAGE 3.1"
+            label:
+              en: "AI risks and benefits from third-party resources are regularly monitored; risk controls are applied and documented"
+              fr: "Risques des ressources tierces surveillés, contrôles appliqués et documentés"
+          - id: "MANAGE 3.2"
+            label:
+              en: "Pre-trained models are monitored as part of regular AI system monitoring and maintenance"
+              fr: "Modèles pré-entraînés surveillés dans la maintenance régulière du système"
+      - id: "MANAGE 4"
+        label:
+          en: "Risk treatments, including response and recovery, and communication plans are documented and monitored regularly"
+          fr: "Traitements, réponse, reprise et communication documentés et surveillés"
+        subcategories:
+          - id: "MANAGE 4.1"
+            label:
+              en: "Post-deployment monitoring plans are implemented (user input, appeal and override, incidents, change management)"
+              fr: "Plans de surveillance post-déploiement (retours, contestation, incidents, changements)"
+          - id: "MANAGE 4.2"
+            label:
+              en: "Measurable activities for continual improvement are integrated into AI system updates"
+              fr: "Activités d'amélioration continue intégrées aux mises à jour"
+          - id: "MANAGE 4.3"
+            label:
+              en: "Incidents and errors are communicated to relevant AI actors, tracked, and documented"
+              fr: "Incidents et erreurs communiqués, suivis et documentés"

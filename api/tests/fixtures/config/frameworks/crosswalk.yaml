@@ -1,0 +1,13 @@
+controls:
+  - { id: risk-management, title: { en: "Risk management system", fr: "Système de gestion des risques" }, nist: ["GOVERN 1.3", "MANAGE 1.1"], ai_act: ["Art. 9"],
+      iso42001: ["6.1", "A.5.2"], tiers: [high], evidence_hint: { en: "Risk register", fr: "Registre des risques" } }
+  - { id: data-governance, title: { en: "Data and data governance", fr: "Données et gouvernance des données" }, nist: ["MAP 2.3"], ai_act: ["Art. 10"],
+      iso42001: ["A.7.4"], tiers: [high], evidence_hint: { en: "Datasheets", fr: "Fiches de données" } }
+  - { id: human-oversight, title: { en: "Human oversight", fr: "Contrôle humain" }, nist: ["MANAGE 2.4"], ai_act: ["Art. 14"],
+      iso42001: ["A.9.2"], tiers: [high], evidence_hint: { en: "Review procedure", fr: "Procédure de revue" } }
+  - { id: transparency, title: { en: "Transparency towards users", fr: "Transparence envers les utilisateurs" }, nist: ["GOVERN 4.2"], ai_act: ["Art. 50"],
+      iso42001: ["A.8.2"], tiers: [limited, high], evidence_hint: { en: "AI disclosure notice", fr: "Mention d'interaction avec une IA" } }
+  - { id: literacy, title: { en: "AI literacy", fr: "Maîtrise de l'IA" }, nist: ["GOVERN 2.2"], ai_act: ["Art. 4"],
+      iso42001: ["7.2"], tiers: [minimal, limited, high], evidence_hint: { en: "Training plan", fr: "Plan de formation" } }
+  - { id: gpai-docs, title: { en: "Technical documentation of GPAI models", fr: "Documentation technique des modèles d'IA à usage général" }, nist: ["MAP 4.1"], ai_act: ["Art. 53"],
+      iso42001: ["A.10.3"], tiers: [gpai], evidence_hint: { en: "Provider documentation" } }

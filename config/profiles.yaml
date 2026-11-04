@@ -1,0 +1,233 @@
+# SPDX-License-Identifier: MIT
+# Team profiles of the Virtual AI Factory (CONTRACT section 2.2).
+# FICTIONAL: names, skills, squads and presence patterns are invented. Any resemblance to a
+# real person is coincidental. Edit freely: the dashboard and the API adapt to any count.
+#
+# Desks (3D resources): D1..D6 delivery floor, B1..B2 secure lab (sensitive data, local GPU),
+# X1..X3 R&D Lab benches, O1..O2 Agent Ops consoles. 12 people for 13 desks (X3 is the
+# shared R&D bench). Avatar colors avoid the status colors of the dashboard
+# (free green, busy red, soon amber, later blue).
+# pattern = demo presence Mon..Fri (1 on site, 0 remote); Thursday is the team day.
+#
+# Languages (CONTRACT section 9): labels, descriptions and skills are either a plain string
+# (same in every language, e.g. "FinOps") or a mapping {en: "...", fr: "..."}. Person names,
+# ids, colors and desks are never translated.
+
+presence:
+  team_day: 3                 # index in pattern (0 = Monday): Thursday
+  note:
+    en: "Thursday: team day (team rituals, risk reviews, Skills Lab)"
+    fr: "Jeudi : journée d'équipe (rituels, revues de risque, Skills Lab)"
+
+roles:
+  - id: head
+    label: "Head of AI Factory"
+    literacy_level: expert
+    description:
+      en: "Arbitrates the portfolio and is accountable for risk decisions (GOVERN 2.3)"
+      fr: "Arbitre le portefeuille, porte la responsabilité des décisions de risque (GOVERN 2.3)"
+  - id: po
+    label: { en: "AI Product Owner", fr: "Product Owner IA" }
+    literacy_level: advanced
+    description:
+      en: "Frames value, KPIs and adoption; business owner of the use cases"
+      fr: "Cadre la valeur, les KPI et l'adoption ; propriétaire métier des use cases"
+  - id: architect
+    label: { en: "AI and platform architect", fr: "Architecte IA et plateforme" }
+    literacy_level: expert
+    description:
+      en: "Designs the hybrid cloud / VPS / local GPU placement and the RAG and agent patterns"
+      fr: "Conçoit le placement hybride cloud / VPS / GPU local et les patrons RAG et agents"
+  - id: llm_engineer
+    label: { en: "LLM engineer", fr: "Ingénieur·e LLM" }
+    literacy_level: expert
+    description:
+      en: "Builds prompts, LangGraph agents and RAG chains; no fine-tuning"
+      fr: "Construit prompts, agents LangGraph et chaînes RAG ; aucun fine-tuning"
+  - id: data_engineer
+    label: { en: "Data engineer (ingestion and indexing)", fr: "Data engineer (ingestion et indexation)" }
+    literacy_level: advanced
+    description:
+      en: "Ingestion, chunking, embeddings, corpus freshness, reindexing"
+      fr: "Ingestion, découpage, embeddings, fraîcheur des corpus, réindexation"
+  - id: eval_scientist
+    label: { en: "Eval scientist (evaluation and red teaming)", fr: "Eval scientist (évaluation et red team)" }
+    literacy_level: expert
+    description:
+      en: "Golden sets, RAGAS, LLM-as-a-judge, red teaming, bias testing"
+      fr: "Golden sets, RAGAS, LLM-as-judge, red teaming, tests de biais"
+  - id: llmops
+    label: { en: "LLMOps engineer", fr: "Ingénieur·e LLMOps" }
+    literacy_level: expert
+    description:
+      en: "Pipeline, LLM gateway, observability, automatic rollback, FinOps"
+      fr: "Pipeline, passerelle LLM, observabilité, retour arrière automatique, FinOps"
+  - id: governance
+    label: { en: "AI governance and compliance lead", fr: "Responsable gouvernance IA et conformité" }
+    literacy_level: expert
+    description:
+      en: "Registry, AI Act / NIST AI RMF / ISO/IEC 42001 risk reviews, incidents"
+      fr: "Registre, revues de risque AI Act / NIST AI RMF / ISO/IEC 42001, incidents"
+  - id: agent_ops
+    label: { en: "Agent Ops operator", fr: "Opérateur·rice Agent Ops" }
+    literacy_level: advanced
+    description:
+      en: "Supervises agents in production: escalations, kill switch, SLOs"
+      fr: "Supervise les agents en production : escalades, coupe-circuit, SLO"
+  - id: research
+    label: { en: "Applied R&D researcher", fr: "Chercheur·se R&D appliquée" }
+    literacy_level: expert
+    description:
+      en: "Runs experiments in the R&D Lab and transfers them against measurable criteria"
+      fr: "Expérimente au R&D Lab et transfère selon des critères mesurables"
+  - id: enablement
+    label: { en: "Skills Lab lead (AI enablement)", fr: "Responsable Skills Lab (acculturation)" }
+    literacy_level: advanced
+    description:
+      en: "Runs the Art. 4 measures: role-based learning paths, no-AI katas, sessions"
+      fr: "Pilote les mesures art. 4 : parcours par rôle, katas sans IA, sessions"
+
+people:
+  - id: p01
+    name: "Camille Laurent"
+    role: head
+    color: "#7c3aed"
+    skin: "#f1c9a5"
+    desk: D1
+    locker: 1
+    skills: [{ en: Scoping, fr: Cadrage }, { en: Governance, fr: Gouvernance }, FinOps, AI Act]
+    squads: [uc-04, uc-08]
+    cost_center: cc-ops
+    pattern: [1, 1, 0, 1, 1]
+
+  - id: p02
+    name: "Yanis Morel"
+    role: po
+    color: "#c026d3"
+    skin: "#c68642"
+    desk: D2
+    locker: 2
+    skills: [{ en: Scoping, fr: Cadrage }, Product management, Adoption, { en: Evaluation, fr: Évaluation }]
+    squads: [uc-01, uc-02, uc-06]
+    cost_center: cc-relation
+    pattern: [1, 0, 1, 1, 1]
+
+  - id: p03
+    name: "Inès Garnier"
+    role: llm_engineer
+    color: "#db2777"
+    skin: "#e0ac69"
+    desk: D3
+    locker: 3
+    skills: [RAG, LangGraph, Prompt engineering, { en: Evaluation, fr: Évaluation }]
+    squads: [uc-01, uc-02, uc-06]
+    cost_center: cc-relation
+    pattern: [0, 1, 1, 1, 0]
+
+  - id: p04
+    name: "Hugo Lemaire"
+    role: llm_engineer
+    color: "#0891b2"
+    skin: "#f3d2b3"
+    desk: B1                  # secure lab: sensitive use cases on the local GPU
+    locker: 4
+    skills: [RAG, { en: LLM security, fr: Sécurité LLM }, vLLM, LangGraph]
+    squads: [uc-04, uc-05, uc-07]
+    cost_center: cc-rh
+    pattern: [1, 1, 0, 1, 0]
+
+  - id: p05
+    name: "Salomé Barbier"
+    role: architect
+    color: "#0f766e"
+    skin: "#ffdbac"
+    desk: D4
+    locker: 5
+    skills: [Architecture, LLMOps, { en: LLM security, fr: Sécurité LLM }, { en: Hybrid placement, fr: Placement hybride }]
+    squads: [uc-02, uc-03]
+    cost_center: cc-ops
+    pattern: [1, 0, 1, 1, 1]
+
+  - id: p06
+    name: "Mehdi Fontaine"
+    role: data_engineer
+    color: "#92400e"
+    skin: "#a1665e"
+    desk: B2                  # secure lab: ingestion of C3/C4 corpora
+    locker: 6
+    skills: [Data engineering, RAG, Qdrant, { en: Data quality, fr: Qualité des données }]
+    squads: [uc-01, uc-05, uc-07]
+    cost_center: cc-finance
+    pattern: [1, 1, 1, 1, 0]
+
+  - id: p07
+    name: "Claire Vasseur"
+    role: governance
+    color: "#475569"
+    skin: "#f1c9a5"
+    desk: D5
+    locker: 7
+    skills: [{ en: Governance, fr: Gouvernance }, AI Act, ISO 42001, { en: Scoping, fr: Cadrage }]
+    squads: [uc-04, uc-05, uc-08]
+    cost_center: cc-ops
+    pattern: [0, 1, 0, 1, 1]
+
+  - id: p08
+    name: "Théo Marchand"
+    role: llmops
+    color: "#6b7a1f"
+    skin: "#e8c4a0"
+    desk: O2                  # Agent Ops room: pipeline and gateway supervision
+    locker: 8
+    skills: [LLMOps, { en: Observability, fr: Observabilité }, FinOps, { en: LLM security, fr: Sécurité LLM }]
+    squads: [uc-01, uc-02, uc-03]
+    cost_center: cc-ops
+    pattern: [1, 1, 0, 1, 1]
+
+  - id: p09
+    name: "Nora Benali"
+    role: eval_scientist
+    color: "#f0abfc"
+    skin: "#c68642"
+    desk: X2                  # R&D bench: evaluation research (local judge, metrics)
+    locker: 9
+    skills: [{ en: Evaluation, fr: Évaluation }, Red teaming, { en: LLM security, fr: Sécurité LLM }, { en: Statistics, fr: Statistiques }]
+    squads: [uc-01, uc-02, uc-04]
+    cost_center: cc-rh
+    pattern: [1, 1, 0, 1, 0]
+
+  - id: p10
+    name: "Lucas Perrin"
+    role: research
+    color: "#831843"
+    skin: "#ffdbac"
+    desk: X1
+    locker: 10
+    skills: [{ en: Research, fr: Recherche }, { en: Evaluation, fr: Évaluation }, RAG, { en: Model routing, fr: Routage de modèles }]
+    squads: [uc-03]
+    cost_center: cc-ops
+    pattern: [0, 1, 1, 1, 1]
+
+  - id: p11
+    name: "Aïcha Diallo"
+    role: enablement
+    color: "#a8a29e"
+    skin: "#8d5524"
+    desk: D6
+    locker: 11
+    skills: [{ en: Instructional design, fr: Pédagogie }, AI Act, { en: Scoping, fr: Cadrage }, { en: Change management, fr: Conduite du changement }]
+    squads: []
+    cost_center: cc-ops
+    pattern: [1, 1, 1, 1, 0]
+
+  - id: p12
+    name: "Julien Roche"
+    role: agent_ops
+    color: "#c4b5fd"
+    skin: "#e0ac69"
+    desk: O1
+    locker: 12
+    skills: [Agent Ops, { en: Observability, fr: Observabilité }, LLMOps, { en: Incident management, fr: Gestion des incidents }]
+    squads: [uc-02, uc-03]
+    cost_center: cc-relation
+    pattern: [1, 1, 1, 1, 1]

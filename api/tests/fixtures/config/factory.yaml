@@ -1,0 +1,54 @@
+# Test fixture (fictional). Mirrors CONTRACT section 2.1.
+# Human-readable values are plain strings or {en, fr} mappings (CONTRACT section 9).
+factory:
+  name: "Virtual AI Factory (fixture)"
+  tagline: { en: "Generic AI factory — fictional demo", fr: "Usine IA générique — démo fictive" }
+  currency: EUR
+  demo: true
+  fine_tuning: false
+  timezone: Europe/Paris
+regulatory:
+  ai_act:
+    regulation: "Regulation (EU) 2024/1689"
+    amended_by: "Regulation (EU) 2026/1744 (Digital Omnibus on AI)"
+    milestones:
+      - { id: prohibitions, date: 2025-02-02, label: { en: "Art. 5 prohibited AI practices", fr: "Art. 5 pratiques interdites" } }
+      - { id: literacy,     date: 2025-02-02, label: { en: "Art. 4 AI literacy", fr: "Art. 4 maîtrise de l'IA" } }
+      - { id: gpai,         date: 2025-08-02, label: { en: "Chapter V general-purpose AI models", fr: "Chapitre V modèles d'IA à usage général" } }
+      - { id: transparency, date: 2026-08-02, label: { en: "Art. 50 transparency obligations", fr: "Art. 50 obligations de transparence" } }
+      - { id: annex_iii,    date: 2027-12-02, label: { en: "High-risk AI systems, Annex III", fr: "Systèmes d'IA à haut risque, annexe III" } }
+      - { id: annex_i,      date: 2028-08-02, label: { en: "High-risk AI systems, Annex I", fr: "Systèmes d'IA à haut risque, annexe I" } }
+cost_centers:
+  - { id: cc-ops, name: { en: "Operations (fictional)", fr: "Opérations (fictif)" }, budget_month_eur: 1800 }
+  - { id: cc-relation, name: { en: "Customer relations (fictional)", fr: "Relation client (fictif)" }, budget_month_eur: 900 }
+  - { id: cc-rh, name: { en: "Human resources (fictional)", fr: "Ressources humaines (fictif)" }, budget_month_eur: 600 }
+rates:
+  local_gpu: { capex_eur: 4500, amortization_months: 36, power_w: 240, kwh_eur: 0.21 }
+  cloud_gpu_eur_per_hour: { h100: 2.9, l4: 0.7 }
+  vps_eur_per_month: 40
+  platform_overhead_pct: 12
+chargeback:
+  mode: showback
+  shared_allocation: tokens
+waste_rules:
+  oversized_model:  { simple_task_types: [classification, extraction, routing], premium_tier: premium }
+  low_cache_hit:    { min_repeat_ratio: 0.4, max_cache_hit: 0.2 }
+  retry_storm:      { max_retry_ratio: 0.05 }
+  prompt_bloat:     { max_growth_pct: 30 }
+  idle_gpu:         { max_util_pct: 10, min_hours: 4 }
+  orphan_index:     { max_idle_days: 14 }
+  eval_overspend:   { max_share_pct: 25 }
+  budget_breach:    { warn_pct: 90 }
+placement:
+  order: [cloud, vps, local]
+  sensitive_classes: [C3, C4]
+  vps_max_params_b: 8
+agentops_slo: { ttft_ms_p95: 1500, vector_latency_ms_p95: 120, tokens_per_task_p95: 12000 }
+eval_gates:
+  minimal: { faithfulness: 0.75, answer_relevancy: 0.75, context_precision: 0.70, judge_score: 3.5, redteam_pass: 0.90 }
+  limited: { faithfulness: 0.80, answer_relevancy: 0.80, context_precision: 0.75, judge_score: 3.8, redteam_pass: 0.95 }
+  high:    { faithfulness: 0.90, answer_relevancy: 0.85, context_precision: 0.85, judge_score: 4.2, redteam_pass: 0.99 }
+rollback:
+  thumbs_down_ratio_max: 2.0
+  online_faithfulness_drop_max: 0.08
+  error_rate_max: 0.05

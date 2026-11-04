@@ -1,0 +1,828 @@
+# SPDX-License-Identifier: MIT
+# Virtual AI Factory - deployable stack (CONTRACT.md section 6).
+#
+#   cp .env.example .env            # then change every "change-me" value
+#   docker compose --profile sim up -d --build      # key-less demo (mock LLM, traffic, GPU sim)
+#   docker compose up -d --build                     # core only (real providers from .env)
+#   docker compose --profile vps up -d               # + Ollama on the VPS (CPU)
+#   docker compose --profile local-gpu up -d         # + vLLM and dcgm-exporter on a local NVIDIA GPU
+#
+# Licences: our code is MIT. Grafana and Loki (AGPLv3) run as separate, unmodified
+# containers; nothing of their code is vendored or linked. Langfuse runs its MIT core
+# without any "ee" licence key; LiteLLM runs without any enterprise licence key.
+# Only the edge proxy publishes ports; every other service stays on the internal network.
+
+name: ai-factory
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+
+x-build-secrets: &build-secrets
+  secrets:
+    - build_ca
+
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:?set LANGFUSE_DB_PASSWORD in .env}@postgres:5432/langfuse
+  SALT: ${LANGFUSE_SALT:?set LANGFUSE_SALT in .env}
+  ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?set LANGFUSE_ENCRYPTION_KEY in .env (64 hex chars)}
+  NEXTAUTH_URL: ${LANGFUSE_PUBLIC_URL:-http://langfuse.localhost}
+  NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set LANGFUSE_NEXTAUTH_SECRET in .env}
+  TELEMETRY_ENABLED: "false"
+  LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?set CLICKHOUSE_PASSWORD in .env}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  REDIS_HOST: valkey
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${VALKEY_PASSWORD:?set VALKEY_PASSWORD in .env}
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${S3_BUCKET:-langfuse}
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: us-east-1
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://seaweedfs:8333
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${S3_BUCKET:-langfuse}
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: us-east-1
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://seaweedfs:8333
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  LANGFUSE_S3_BATCH_EXPORT_ENABLED: "false"
+  LANGFUSE_LOG_LEVEL: ${LANGFUSE_LOG_LEVEL:-info}
+
+services:
+  # ======================================================================== edge & front
+  edge:
+    image: caddy:2.11.7-alpine
+    <<: *hardening
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      FACTORY_HOST: ${FACTORY_HOST:-localhost}
+      FACTORY_SCHEME: ${FACTORY_SCHEME:-http}
+      FACTORY_AUTH: ${FACTORY_AUTH:-none}
+      FACTORY_BASIC_AUTH_USER: ${FACTORY_BASIC_AUTH_USER:-factory}
+      FACTORY_BASIC_AUTH_HASH: ${FACTORY_BASIC_AUTH_HASH:-}
+      DASHBOARD_THREE_SOURCE: ${DASHBOARD_THREE_SOURCE:-vendored}
+    ports:
+      - "${EDGE_HTTP_PORT:-80}:80"
+      - "${EDGE_HTTPS_PORT:-443}:443"
+      - "${EDGE_HTTPS_PORT:-443}:443/udp"
+      - "${EDGE_ALT_BIND:-127.0.0.1}:${GRAFANA_ALT_PORT:-3001}:3001"
+      - "${EDGE_ALT_BIND:-127.0.0.1}:${LANGFUSE_ALT_PORT:-3002}:3002"
+    volumes:
+      - ./compose/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [factory, egress]
+    depends_on:
+      dashboard:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2019/config/"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 128M }
+    logging: *logging
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        DASHBOARD_THREE_SOURCE: ${DASHBOARD_THREE_SOURCE:-vendored}
+      <<: *build-secrets
+    image: ai-factory/dashboard:${FACTORY_IMAGE_TAG:-local}
+    <<: *hardening
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    networks: [factory]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+    logging: *logging
+
+  api:
+    build:
+      context: ./api
+      <<: *build-secrets
+    image: ai-factory/api:${FACTORY_IMAGE_TAG:-local}
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      FACTORY_CONFIG_DIR: /config
+      FACTORY_STATE_DIR: /data
+      FACTORY_DEMO_MODE: ${FACTORY_DEMO_MODE:-auto}
+      FACTORY_DEMO_SEED: ${FACTORY_DEMO_SEED:-42}
+      FACTORY_DEFAULT_LANG: ${FACTORY_DEFAULT_LANG:-en}
+      PROMETHEUS_URL: http://prometheus:9090
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_TOKEN_FILE: /var/run/factory/grafana/token
+      GRAFANA_PROM_DS_UID: prometheus
+      GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://grafana.localhost}
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:?set LANGFUSE_INIT_PROJECT_PUBLIC_KEY in .env}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:?set LANGFUSE_INIT_PROJECT_SECRET_KEY in .env}
+      LITELLM_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      QDRANT_URL: http://qdrant:6333
+    volumes:
+      - ./config:/config:ro
+      - api-state:/data
+      - grafana-token:/var/run/factory/grafana:ro
+    networks: [factory]
+    depends_on:
+      prometheus:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 512M }
+    logging: *logging
+
+  # ===================================================================== observability
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    <<: *hardening
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+    volumes:
+      - ./compose/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./compose/prometheus/rules:/etc/prometheus/rules:ro
+      - ./compose/prometheus/targets:/etc/prometheus/targets:ro
+      - prometheus-data:/prometheus
+    networks: [factory]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 768M }
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SERVER_ROOT_URL: ${GRAFANA_PUBLIC_URL:-http://grafana.localhost}
+      GF_SECURITY_CSRF_TRUSTED_ORIGINS: ${GRAFANA_CSRF_TRUSTED_ORIGINS:-localhost:3001}
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-false}
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_LOG_MODE: console
+      GF_LOG_LEVEL: warn
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/factory-overview.json
+    volumes:
+      - ./compose/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./compose/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks: [factory]
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 512M }
+    logging: *logging
+
+  grafana-bootstrap:
+    build:
+      context: ./compose/grafana-bootstrap
+    image: ai-factory/grafana-bootstrap:${FACTORY_IMAGE_TAG:-local}
+    <<: *hardening
+    restart: "no"
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GRAFANA_SA_NAME: ${GRAFANA_SA_NAME:-factory-api-viewer}
+      GRAFANA_TOKEN_FILE: /var/run/factory/grafana/token
+    volumes:
+      - grafana-token:/var/run/factory/grafana
+    networks: [factory]
+    depends_on:
+      grafana:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+    logging: *logging
+
+  loki:
+    image: grafana/loki:3.7.9
+    <<: *hardening
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./compose/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+    networks: [factory]
+    # The Loki image is distroless (no shell, no HTTP client): readiness (/ready) is
+    # checked through Grafana by scripts/smoke_stack.sh.
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 512M }
+    logging: *logging
+
+  alloy:
+    image: grafana/alloy:v1.21.3
+    <<: *hardening
+    restart: unless-stopped
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+    environment:
+      FACTORY_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-ai-factory}
+    volumes:
+      - ./compose/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      # Read-only Docker socket for log discovery (the socket grants Docker API access:
+      # keep this host dedicated to the factory).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [factory]
+    depends_on:
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/12345 && printf 'GET /-/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200'"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  # ============================================================== gateway & vector DB
+  litellm:
+    image: ${LITELLM_IMAGE:-litellm/litellm:v1.106.6}
+    <<: *hardening
+    restart: unless-stopped
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000", "--num_workers", "1"]
+    environment:
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD:?set LITELLM_DB_PASSWORD in .env}@postgres:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set LITELLM_SALT_KEY in .env}
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      LITELLM_LOG: ${LITELLM_LOG:-WARNING}
+      JSON_LOGS: "True"
+      STORE_MODEL_IN_DB: "False"
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      # Cloud first (OpenAI-compatible endpoint of the chosen provider).
+      CLOUD_API_BASE: ${CLOUD_API_BASE:-http://mock-llm:8080/cloud/v1}
+      CLOUD_API_KEY: ${CLOUD_API_KEY:-sk-mock-not-a-secret}
+      CLOUD_CHAT_MODEL: ${CLOUD_CHAT_MODEL:-openai/mock-cloud-large}
+      CLOUD_SMALL_MODEL: ${CLOUD_SMALL_MODEL:-openai/mock-cloud-small}
+      # Fallback 1: the VPS (Ollama, CPU).
+      VPS_API_BASE: ${VPS_API_BASE:-http://mock-llm:8080/vps/v1}
+      VPS_API_KEY: ${VPS_API_KEY:-sk-mock-not-a-secret}
+      VPS_CHAT_MODEL: ${VPS_CHAT_MODEL:-openai/mock-vps-8b}
+      # Fallback 2 and sensitive data: the local GPU (vLLM).
+      LOCAL_API_BASE: ${LOCAL_API_BASE:-http://mock-llm:8080/local/v1}
+      LOCAL_API_KEY: ${LOCAL_API_KEY:-sk-mock-not-a-secret}
+      LOCAL_CHAT_MODEL: ${LOCAL_CHAT_MODEL:-openai/mock-local-14b}
+      LOCAL_EMBED_API_BASE: ${LOCAL_EMBED_API_BASE:-http://mock-llm:8080/local/v1}
+      LOCAL_EMBED_MODEL: ${LOCAL_EMBED_MODEL:-openai/mock-embed}
+      # Factory callback (compose/litellm/factory_callbacks.py).
+      FACTORY_METRICS_PORT: "9464"
+      FACTORY_COST_FX: ${FACTORY_COST_FX:-1.0}
+      FACTORY_ENFORCE_SENSITIVE_ROUTING: ${FACTORY_ENFORCE_SENSITIVE_ROUTING:-true}
+      FACTORY_SENSITIVE_CLASSES: ${FACTORY_SENSITIVE_CLASSES:-C3,C4}
+    volumes:
+      - ./compose/litellm/config.yaml:/etc/litellm/config.yaml:ro
+      - ./compose/litellm/factory_callbacks.py:/etc/litellm/factory_callbacks.py:ro
+    networks: [factory, egress]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      langfuse-web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "2.00", memory: 1536M }
+    logging: *logging
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.0-unprivileged
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+      QDRANT__LOG_LEVEL: WARN
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks: [factory]
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200'"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1G }
+    logging: *logging
+
+  # =============================================================== Langfuse (MIT core)
+  langfuse-web:
+    image: langfuse/langfuse:3.227.0
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      <<: *langfuse-env
+      HOSTNAME: 0.0.0.0
+      NODE_OPTIONS: --max-old-space-size=${LANGFUSE_WEB_HEAP_MB:-1536}
+      AUTH_DISABLE_SIGNUP: "true"
+      # Headless initialisation of the fictional demo organisation and project.
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-org-factory-demo}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-AI Factory (fictional demo)}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-prj-factory-demo}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-ai-factory-demo}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-admin@factory.example}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Admin (fictional)}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?set LANGFUSE_INIT_USER_PASSWORD in .env}
+    networks: [factory]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/public/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits: { cpus: "1.50", memory: 2G }
+    logging: *logging
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3.227.0
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      <<: *langfuse-env
+      HOSTNAME: 0.0.0.0
+      NODE_OPTIONS: --max-old-space-size=${LANGFUSE_WORKER_HEAP_MB:-768}
+    networks: [factory]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3030/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 1G }
+    logging: *logging
+
+  # ============================================================================ storage
+  postgres:
+    image: postgres:17.11-alpine
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: postgres
+      LITELLM_DB_PASSWORD: ${LITELLM_DB_PASSWORD}
+      LANGFUSE_DB_PASSWORD: ${LANGFUSE_DB_PASSWORD}
+    volumes:
+      - ./compose/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - postgres-data:/var/lib/postgresql/data
+    networks: [factory]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -q"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1.00", memory: 512M }
+    logging: *logging
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:26.8.36.3
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+    ulimits:
+      # Recommended by ClickHouse; lower CLICKHOUSE_NOFILE if the host hard limit is smaller.
+      nofile:
+        soft: ${CLICKHOUSE_NOFILE:-262144}
+        hard: ${CLICKHOUSE_NOFILE:-262144}
+    volumes:
+      - ./compose/clickhouse/low-resources.xml:/etc/clickhouse-server/config.d/low-resources.xml:ro
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+    networks: [factory]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8123/ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "2.00", memory: 2G }
+    logging: *logging
+
+  valkey:
+    image: valkey/valkey:8.1.11-alpine
+    <<: *hardening
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --requirepass
+      - ${VALKEY_PASSWORD}
+      - --maxmemory
+      - 256mb
+      # Langfuse queues (BullMQ) need noeviction.
+      - --maxmemory-policy
+      - noeviction
+      - --appendonly
+      - "yes"
+    environment:
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD}
+    volumes:
+      - valkey-data:/data
+    networks: [factory]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 384M }
+    logging: *logging
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    <<: *hardening
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/seaweedfs/factory-entrypoint.sh"]
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET: ${S3_BUCKET:-langfuse}
+    volumes:
+      - ./compose/seaweedfs/entrypoint.sh:/etc/seaweedfs/factory-entrypoint.sh:ro
+      - ./compose/seaweedfs/s3.json:/etc/seaweedfs/s3.json.tmpl:ro
+      - seaweedfs-data:/data
+    tmpfs:
+      - /run/seaweedfs:size=1m,mode=0700
+    networks: [factory]
+    healthcheck:
+      # S3 gateway up and master past its warm-up (a file id can be assigned).
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz && wget -q -O- http://127.0.0.1:9333/dir/assign | grep -q '\"fid\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 512M }
+    logging: *logging
+
+  # ====================================================== profile "sim": key-less demo
+  mock-llm:
+    profiles: [sim]
+    build:
+      context: ./sim/mock-llm
+      <<: *build-secrets
+    image: ai-factory/mock-llm:${FACTORY_IMAGE_TAG:-local}
+    <<: *hardening
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp:size=16m
+    environment:
+      MOCK_FAILURE_RATE_CLOUD: ${MOCK_FAILURE_RATE_CLOUD:-0.03}
+      MOCK_FAILURE_RATE_VPS: ${MOCK_FAILURE_RATE_VPS:-0.01}
+      MOCK_FAILURE_RATE_LOCAL: ${MOCK_FAILURE_RATE_LOCAL:-0.005}
+    networks: [factory]
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  traffic:
+    profiles: [sim]
+    build:
+      context: ./sim/traffic
+      <<: *build-secrets
+    image: ai-factory/traffic:${FACTORY_IMAGE_TAG:-local}
+    <<: *hardening
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    tmpfs:
+      - /tmp:size=8m
+    environment:
+      LITELLM_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      QDRANT_URL: http://qdrant:6333
+      LANGFUSE_HOST: http://langfuse-web:3000
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      FACTORY_CONFIG_DIR: /config
+      TRAFFIC_TASKS_PER_MIN: ${TRAFFIC_TASKS_PER_MIN:-30}
+      TRAFFIC_CONCURRENCY: ${TRAFFIC_CONCURRENCY:-4}
+    volumes:
+      - ./config:/config:ro
+    networks: [factory]
+    depends_on:
+      litellm:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.50", memory: 256M }
+    logging: *logging
+
+  gpu-sim:
+    profiles: [sim]
+    build:
+      context: ./sim/gpu-sim
+    image: ai-factory/gpu-sim:${FACTORY_IMAGE_TAG:-local}
+    <<: *hardening
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    environment:
+      GPU_SIM_COUNT: ${GPU_SIM_COUNT:-1}
+      GPU_SIM_MODEL: ${GPU_SIM_MODEL:-NVIDIA RTX A5000}
+      GPU_SIM_HOSTNAME: ${GPU_SIM_HOSTNAME:-gpu-local-01}
+      GPU_SIM_SOURCE_URL: http://mock-llm:8080/stats
+    networks: [factory]
+    depends_on:
+      mock-llm:
+        condition: service_started
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 64M }
+    logging: *logging
+
+  # ================================================== profile "vps": Ollama on the VPS CPU
+  ollama-vps:
+    profiles: [vps]
+    image: ollama/ollama:0.40.14
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-2}
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks: [factory, egress]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "${OLLAMA_CPUS:-4.0}", memory: "${OLLAMA_MEMORY:-8G}" }
+    logging: *logging
+
+  ollama-vps-pull:
+    profiles: [vps]
+    image: ollama/ollama:0.40.14
+    <<: *hardening
+    restart: "no"
+    entrypoint: ["ollama", "pull", "${OLLAMA_VPS_MODEL:-qwen3:4b}"]
+    environment:
+      OLLAMA_HOST: ollama-vps:11434
+    networks: [factory]
+    depends_on:
+      ollama-vps:
+        condition: service_healthy
+    logging: *logging
+
+  # ======================================= profile "local-gpu": vLLM + DCGM on NVIDIA GPU
+  vllm-local:
+    profiles: [local-gpu]
+    image: vllm/vllm-openai:v0.33.0
+    <<: *hardening
+    restart: unless-stopped
+    command:
+      - --model
+      - ${VLLM_MODEL:-Qwen/Qwen3-8B-AWQ}
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL_NAME:-local-chat}
+      - --gpu-memory-utilization
+      - "${VLLM_GPU_MEMORY_UTILIZATION:-0.80}"
+      - --max-model-len
+      - "${VLLM_MAX_MODEL_LEN:-8192}"
+      - --api-key
+      - ${LOCAL_API_KEY:-sk-mock-not-a-secret}
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_NO_USAGE_STATS: "1"
+      DO_NOT_TRACK: "1"
+    ipc: host
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    networks: [factory, egress]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *logging
+
+  vllm-embed:
+    profiles: [local-gpu]
+    image: vllm/vllm-openai:v0.33.0
+    <<: *hardening
+    restart: unless-stopped
+    command:
+      - --model
+      - ${VLLM_EMBED_MODEL:-BAAI/bge-m3}
+      - --served-model-name
+      - ${VLLM_EMBED_SERVED_MODEL_NAME:-local-embed}
+      - --gpu-memory-utilization
+      - "${VLLM_EMBED_GPU_MEMORY_UTILIZATION:-0.10}"
+      - --api-key
+      - ${LOCAL_API_KEY:-sk-mock-not-a-secret}
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      VLLM_NO_USAGE_STATS: "1"
+      DO_NOT_TRACK: "1"
+    ipc: host
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    networks: [factory, egress]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *logging
+
+  dcgm-exporter:
+    profiles: [local-gpu]
+    image: nvidia/dcgm-exporter:4.6.1-4.8.4
+    <<: *hardening
+    restart: unless-stopped
+    environment:
+      DCGM_EXPORTER_LISTEN: ":9400"
+      DCGM_EXPORTER_KUBERNETES: "false"
+    networks: [factory]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *logging
+
+networks:
+  # Internal network: no route to the outside world.
+  factory:
+    internal: true
+  # Egress for the services that must reach the Internet: edge (ACME), LiteLLM (cloud
+  # providers), Ollama and vLLM (model downloads).
+  egress: {}
+
+volumes:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  grafana-data:
+  grafana-token:
+  loki-data:
+  alloy-data:
+  qdrant-data:
+  postgres-data:
+  clickhouse-data:
+  clickhouse-logs:
+  valkey-data:
+  seaweedfs-data:
+  api-state:
+  ollama-data:
+  hf-cache:
+
+secrets:
+  # Optional extra CA certificates for TLS-intercepting proxies at build time only
+  # (BUILD_CA_BUNDLE in .env). The default file is empty.
+  build_ca:
+    file: ${BUILD_CA_BUNDLE:-./compose/build/no-extra-ca.pem}

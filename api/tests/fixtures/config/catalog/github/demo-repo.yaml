@@ -1,0 +1,10 @@
+id: gh-demo-rag
+name: demo-rag
+url: https://github.com/example/demo-rag
+pillar: rag
+license: MIT
+status: integrated
+submodule: integrations/demo-rag
+reason: { en: "Fictional example", fr: "Exemple fictif" }
+secrets_scan: clean
+copyleft_deps: []

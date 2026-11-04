@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Grafana datasources (provisioned, read-only in the UI). The UIDs are part of the
+# interface contract: the API runs its named queries through
+# /api/datasources/proxy/uid/prometheus/... with a Viewer service-account token.
+apiVersion: 1
+
+prune: true
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      prometheusType: Prometheus
+      cacheLevel: Low
+      incrementalQuerying: false
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      timeout: 60

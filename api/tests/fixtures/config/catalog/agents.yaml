@@ -1,0 +1,7 @@
+agents:
+  - { id: ag-research, name: { en: "Document research agent", fr: "Agent de recherche documentaire" }, framework: LangGraph, version: "1.4.0",
+      owner: p03, usecase: uc-01, tools: [tl-search, tl-qdrant], risk_tier: limited, eval_status: passed }
+  - { id: ag-support, name: { en: "Customer support agent", fr: "Agent de support client" }, framework: LangGraph, version: "2.1.0",
+      owner: p04, usecase: uc-02, tools: [tl-qdrant, tl-crm], risk_tier: limited, eval_status: passed }
+  - { id: ag-rh, name: { en: "HR pre-screening agent", fr: "Agent de pré-tri RH" }, framework: LangGraph, version: "0.3.0",
+      owner: p03, usecase: uc-04, tools: [tl-qdrant], risk_tier: limited, eval_status: running }

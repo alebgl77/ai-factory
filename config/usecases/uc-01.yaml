@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-01
+code: UC-01
+name: { en: "Internal document RAG assistant (fictional)", fr: "Assistant RAG documentaire interne (fictif)" }
+description:
+  en: >-
+    Answers employees' questions from the published internal procedures, citing the source
+    passages. Conversational agent: users are informed that they are interacting with an AI
+    system (Art. 50(1)). Fictional data.
+  fr: >-
+    Répond aux questions des collaborateurs à partir des procédures internes publiées, en citant
+    les passages sources. Agent conversationnel : les utilisateurs sont informés qu'ils échangent
+    avec une IA (art. 50(1)). Données fictives.
+owner: p02
+cost_center: cc-ops
+stage: run
+task_type: rag_qa
+sensitivity: C2
+color: "#0072b2"
+ai_act:
+  role: both                      # built in-house (provider) and used internally (deployer)
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: [chatbot]
+  gpai_used: true
+model:
+  alias: chat-default
+  name: { en: "Premium cloud LLM (fictional)", fr: "LLM cloud premium (fictif)" }
+  version: "2026-09"
+  history:
+    - { version: "2026-03", from: 2026-03-02 }
+    - { version: "2026-09", from: 2026-09-21 }
+assessment:
+  reviewed_model_version: "2026-09"
+  last_reviewed: 2026-09-18
+  reviewer: p07
+  decision: approved
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "AI policy v2 (fictional)", fr: "Politique IA v2 (fictive)" }
+      - { en: "Factory RACI", fr: "RACI de l'usine" }
+  map:
+    status: done
+    evidence:
+      - { en: "Context and intended purpose sheet", fr: "Fiche contexte et usage prévu" }
+      - { en: "C2 classification", fr: "Classification C2" }
+  measure:
+    status: done
+    evidence:
+      - { en: "Golden set of 240 Q&A pairs", fr: "Golden set 240 Q/R" }
+      - { en: "RAGAS + LLM-as-a-judge on every version", fr: "RAGAS + LLM-as-judge à chaque version" }
+  manage:
+    status: partial
+    evidence:
+      - { en: "Automatic rollback", fr: "Retour arrière automatique" }
+    gaps:
+      - { en: "Decommissioning plan to be written", fr: "Plan de décommissionnement à rédiger" }
+iso42001: ["A.2.2", "A.3.2", "A.4.2", "A.5.2", "A.6.2.4", "A.6.2.5", "A.6.2.6", "A.6.2.8", "A.7.4", "A.8.2", "A.9.4"]
+rag: { index: kb-procedures, corpus_docs: 1840, chunk_size: 800, chunk_overlap: 120, embedding: embed-default,
+       top_k: 6, hybrid_search: true, reranker: true }
+eval: { golden_set: "gs-procedures-v5", questions: 240, judge_alias: chat-small }
+kpis:
+  adoption_target: 0.6
+  adoption_actual: 0.54
+  value_metric: { en: "Document search time", fr: "Temps de recherche documentaire" }
+  value_eur_month: 4200

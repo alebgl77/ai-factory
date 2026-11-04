@@ -1,0 +1,12 @@
+models:
+  - { id: cloud-large, alias: chat-default, provider: { en: "cloud (fictional)", fr: "cloud (fictif)" }, hosting: cloud, license: proprietary,
+      params_b: null, context_k: 128, price_in_per_1k: 0.002, price_out_per_1k: 0.006, tier: premium,
+      allowed_classes: [C1, C2], eval: { faithfulness: 0.91, judge_score: 4.3 } }
+  - { id: vps-small, alias: chat-small, provider: { en: "VPS Ollama (fictional)", fr: "VPS Ollama (fictif)" }, hosting: vps, license: Apache-2.0,
+      params_b: 8, context_k: 32, price_in_per_1k: 0.0001, price_out_per_1k: 0.0002, tier: standard,
+      allowed_classes: [C1, C2], eval: { faithfulness: 0.84, judge_score: 3.9 } }
+  - { id: local-secure, alias: chat-sensitive, provider: { en: "Local GPU vLLM (fictional)", fr: "GPU local vLLM (fictif)" }, hosting: local, license: Apache-2.0,
+      params_b: 14, context_k: 32, price_in_per_1k: 0.0, price_out_per_1k: 0.0, tier: standard,
+      allowed_classes: [C1, C2, C3, C4], eval: { faithfulness: 0.88, judge_score: 4.0 } }
+  - { id: embed-local, alias: embed-default, provider: "local", hosting: local, license: MIT, params_b: 0.6,
+      context_k: 8, price_in_per_1k: 0.0, price_out_per_1k: 0.0, tier: standard, allowed_classes: [C1, C2, C3, C4] }

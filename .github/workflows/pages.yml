@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MIT
+# Live demo on GitHub Pages: the 3D dashboard in offline mode (embedded fictional snapshot,
+# Three.js from jsDelivr). No API, no secret, nothing else is published.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["dashboard/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Assemble the static demo
+        run: |
+          mkdir -p _site/assets
+          cp dashboard/index.html _site/index.html
+          cp dashboard/assets/assets.js _site/assets/assets.js
+          # Static hosting: tell the page not to look for the aggregation API
+          sed -i 's/<html /<html data-static-demo="1" /' _site/index.html
+          grep -q 'data-static-demo="1"' _site/index.html
+          grep -q 'DEMO_SNAPSHOT_START' _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

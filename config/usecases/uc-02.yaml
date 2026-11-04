@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MIT
+# Use case registry entry (CONTRACT section 2.3). FICTIONAL.
+# Human-readable values are bilingual {en, fr} (CONTRACT section 9); ids and enums are not.
+id: uc-02
+code: UC-02
+name: { en: "Multi-step customer support agent (fictional)", fr: "Agent support client multi-étapes (fictif)" }
+description:
+  en: >-
+    LangGraph multi-agent system (supervisor, research, drafting) that prepares replies to
+    customer requests and proposes goodwill credits subject to human approval. Heavy reliance
+    on a cloud GPAI model. The switch to model 2026-10 has not been reviewed yet: deployment is
+    blocked until the risk reassessment. Fictional data.
+  fr: >-
+    Système multi-agents LangGraph (superviseur, recherche, rédaction) qui prépare les réponses
+    aux demandes clients et propose des gestes commerciaux soumis à validation humaine. Forte
+    dépendance à un modèle GPAI cloud. Le passage au modèle 2026-10 n'est pas encore revu :
+    déploiement bloqué jusqu'à la réévaluation du risque. Données fictives.
+owner: p05
+cost_center: cc-relation
+stage: indus
+task_type: agent
+sensitivity: C2
+color: "#cc79a7"
+ai_act:
+  role: both
+  prohibited_practices: []
+  annex_iii_area: null
+  annex_iii_use: null
+  art6_3_exemption: false
+  annex_i_safety_component: false
+  transparency: [chatbot]
+  gpai_used: true
+model:
+  alias: chat-default
+  name: { en: "Premium cloud LLM (fictional)", fr: "LLM cloud premium (fictif)" }
+  version: "2026-10"
+  history:
+    - { version: "2026-03", from: 2026-04-14 }
+    - { version: "2026-10", from: 2026-10-28 }
+assessment:
+  reviewed_model_version: "2026-03"   # differs from model.version => re-evaluation required
+  last_reviewed: 2026-04-10
+  reviewer: p07
+  decision: approved_with_conditions
+  conditions:
+    - { en: "Human approval of every goodwill credit", fr: "Validation humaine de tout geste commercial" }
+    - { en: "Agent Ops kill switch tested every month", fr: "Coupe-circuit Agent Ops testé chaque mois" }
+nist:
+  govern:
+    status: done
+    evidence:
+      - { en: "Autonomous agents policy (fictional)", fr: "Politique agents autonomes (fictive)" }
+      - { en: "Tool permissions matrix", fr: "Matrice des permissions d'outils" }
+  map:
+    status: done
+    evidence:
+      - { en: "Map of the MCP tools and their permissions", fr: "Cartographie des outils MCP et de leurs droits" }
+  measure:
+    status: partial
+    evidence:
+      - { en: "Golden set of 180 conversations", fr: "Golden set 180 conversations" }
+    gaps:
+      - { en: "Red teaming of model 2026-10", fr: "Red team du modèle 2026-10" }
+  manage:
+    status: partial
+    evidence:
+      - { en: "Agent Ops kill switch", fr: "Coupe-circuit Agent Ops" }
+    gaps:
+      - { en: "Agent incident response plan", fr: "Plan de réponse aux incidents agents" }
+iso42001: ["A.2.2", "A.3.2", "A.5.2", "A.6.2.4", "A.6.2.5", "A.6.2.8", "A.8.2", "A.9.2", "A.10.3"]
+rag: { index: kb-support, corpus_docs: 3200, chunk_size: 600, chunk_overlap: 80, embedding: embed-default,
+       top_k: 8, hybrid_search: true, reranker: true }
+eval: { golden_set: "gs-support-v3", questions: 180, judge_alias: chat-small, redteam_suite: "rt-agents-v2" }
+kpis:
+  adoption_target: 0.7
+  adoption_actual: 0.48
+  value_metric: { en: "Tickets resolved without escalation", fr: "Tickets résolus sans escalade" }
+  value_eur_month: 9800
