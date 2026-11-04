@@ -5,14 +5,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..i18n import msg
+from ..security import SPACES_WRITE, Access, require
 from ..service import FactoryService
-from ..state import StateError, VersionConflict
-from .deps import response_lang, service
+from ..state import AuditError, StateError, VersionConflict
+from .deps import READ_ONLY, response_lang, service, state_unavailable
 
 router = APIRouter(prefix="/api/v1/spaces", tags=["spaces"])
 MAX_DEPTH = 8
@@ -40,18 +41,19 @@ class SpacesIn(BaseModel):
         return value
 
 
-@router.get("/state", summary="State of the 3D bookings")
+@router.get("/state", dependencies=READ_ONLY, summary="State of the 3D bookings")
 def get_state(svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
     # The bookings are user data stored as sent: ``?lang=`` is accepted but changes nothing.
     return svc.state.spaces_state()
 
 
-@router.put("/state", summary="Save the 3D bookings (expected version)")
-def put_state(body: SpacesIn, svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> Any:
+@router.put("/state", summary="Save the 3D bookings (expected version); role editor")
+def put_state(body: SpacesIn, access: Access = Depends(require(SPACES_WRITE, write=True)),
+              svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> Any:
     try:
-        return svc.state.put_spaces_state(body.version, body.state)
+        return svc.state.put_spaces_state(body.version, body.state, audit=access.audit_context())
     except VersionConflict as exc:
         return JSONResponse(status_code=409, content={"detail": msg(lang, "error.version_conflict"),
                                                       "current": exc.current})
-    except StateError:
-        raise HTTPException(status_code=503, detail=msg(lang, "error.state_unavailable")) from None
+    except StateError as exc:
+        raise state_unavailable(lang, isinstance(exc, AuditError)) from None

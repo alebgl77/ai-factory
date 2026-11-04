@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MIT
+# Unit tests of the security alerts (promtool test rules, run by CI job "compose"):
+#   docker run --rm -v "$PWD/compose/prometheus:/etc/prometheus:ro" --entrypoint promtool \
+#     prom/prometheus:v3.15.1 test rules /etc/prometheus/tests/security-alerts.test.yml
+rule_files:
+  - ../rules/factory-alerts.yml
+  - ../rules/factory-recording.yml
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      # Chain verifies for 1 minute, then breaks.
+      - series: 'factory_audit_chain_ok{instance="api:8000",job="factory-api"}'
+        values: '1x3 0x12'
+      # 2 denials per scrape (8 per minute): normal background, no spike.
+      - series: 'factory_security_denied_total{instance="api:8000",job="factory-api",reason="unauthenticated"}'
+        values: '0+2x40'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: FactoryAuditChainBroken
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: FactoryAuditChainBroken
+        exp_alerts:
+          - exp_labels: {severity: critical, pillar: governance, instance: "api:8000", job: factory-api}
+            exp_annotations:
+              summary: "Audit hash chain broken (api:8000)"
+              description: "The tamper-evident audit log no longer verifies. Run GET /api/v1/audit/verify (or python -m app.audit verify) to find the first broken record, keep the volume as evidence and follow the incident response guide (docs/SECURITY.md)."
+      - eval_time: 9m
+        alertname: FactorySecurityDenialsSpike
+        exp_alerts: []
+  - interval: 15s
+    input_series:
+      # 30 denials per scrape (120 per minute): a spike.
+      - series: 'factory_security_denied_total{instance="api:8000",job="factory-api",reason="forbidden"}'
+        values: '0+30x40'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: FactorySecurityDenialsSpike
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: FactorySecurityDenialsSpike
+        exp_alerts:
+          - exp_labels: {severity: warning, pillar: governance}
+            exp_annotations:
+              summary: "600 requests refused by the API in 5 minutes"
+              description: "Unusual number of 401/403/429 answers (untrusted source, unauthenticated, forbidden, separation of duties, rate limited). Check the factory.security JSON lines in Loki ({service=\"api\"} |= \"request.denied\") for the reasons and client addresses."

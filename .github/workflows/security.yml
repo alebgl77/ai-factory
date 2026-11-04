@@ -1,0 +1,260 @@
+# SPDX-License-Identifier: MIT
+# Supply-chain and vulnerability scanning, on every change and daily (new CVEs are published
+# without any code change):
+#   - pip-audit: every hash-pinned Python requirement lock (runtime, tests, simulators, CI tools);
+#   - Trivy (Apache-2.0) on the repository: vulnerable dependencies, Dockerfile misconfigurations,
+#     committed credentials (gitleaks also runs in ci.yml, on the full git history);
+#   - Trivy on every image built from this repository (the six images the release publishes);
+#   - SBOMs (syft via anchore/sbom-action, Apache-2.0) of the source tree and of every image, in
+#     CycloneDX and SPDX JSON, kept as workflow artifacts.
+# Gate policy (blocking): known vulnerabilities rated HIGH or CRITICAL that have a fixed version,
+# misconfigurations and secrets rated HIGH or CRITICAL (gitleaks in ci.yml blocks on any secret).
+# Everything else is reported in code scanning (Security tab). Accepted risks live in .github/trivy/trivyignore.yaml, each with a
+# statement and an expiry date.
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *" # daily, 03:17 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_VERSION: v0.76.1 # explicit: the trivy-action default (v0.70.0) is older
+  SYFT_VERSION: v1.55.0
+  # Code scanning uploads need a token that can write security events, which pull requests
+  # from forks never get: their findings stay in the job log and the gate.
+  CAN_UPLOAD_SARIF: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+jobs:
+  pip-audit:
+    name: Python dependencies (pip-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install pip-audit (hash-pinned wheels)
+        run: |
+          python -m venv "$RUNNER_TEMP/pip-audit"
+          "$RUNNER_TEMP/pip-audit/bin/pip" install --disable-pip-version-check --require-hashes --no-deps \
+            --only-binary :all: -r .github/tools/pip-audit/requirements.txt
+      - name: Every requirement is pinned with == and hash-locked
+        # The audit below reads the files as they are (--no-deps --disable-pip): nothing is
+        # installed or built, so it is only complete if every direct and transitive dependency
+        # is listed with an exact version. Each lock is compiled by pip-compile --generate-hashes
+        # and installed with --require-hashes (Dockerfiles and CI).
+        run: |
+          locks=(api/requirements*.txt scripts/requirements*.txt sim/*/requirements.txt
+                 compose/litellm/tests/requirements.txt)
+          unpinned=$(grep -HnvE '^[[:space:]]*(#|-r[[:space:]]|--hash|$)' "${locks[@]}" \
+            | grep -vE '^[^:]+:[0-9]+:[A-Za-z0-9._-]+(\[[A-Za-z0-9,._-]+\])?==[^[:space:]]+' || true)
+          if [ -n "$unpinned" ]; then
+            echo "::error::Requirements must be pinned with == (pip-audit --no-deps would miss them):"
+            echo "$unpinned"
+            exit 1
+          fi
+          unhashed=$(grep -L -e '--hash=sha256:' "${locks[@]}" || true)
+          if [ -n "$unhashed" ]; then
+            echo "::error::Requirement files must be hash-pinned locks (pip-compile --generate-hashes):"
+            echo "$unhashed"
+            exit 1
+          fi
+      - name: Audit
+        run: |
+          status=0
+          {
+            echo "## pip-audit"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          for f in api/requirements.txt api/requirements-dev.txt scripts/requirements-assets.txt \
+                   sim/mock-llm/requirements.txt sim/traffic/requirements.txt \
+                   compose/litellm/tests/requirements.txt \
+                   .github/tools/pip-audit/requirements.txt .github/tools/zizmor/requirements.txt; do
+            echo "::group::$f"
+            if "$RUNNER_TEMP/pip-audit/bin/pip-audit" --strict --no-deps --disable-pip \
+                 --progress-spinner off --desc on -r "$f" -f markdown -o "$RUNNER_TEMP/audit.md"; then
+              echo "- \`$f\`: no known vulnerability" >> "$GITHUB_STEP_SUMMARY"
+            else
+              status=1
+              { echo "### \`$f\`"; echo; cat "$RUNNER_TEMP/audit.md"; echo; } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            cat "$RUNNER_TEMP/audit.md" 2>/dev/null || true
+            echo "::endgroup::"
+          done
+          exit "$status"
+
+  trivy-repo:
+    name: Repository (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scan (SARIF, every severity)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          trivy-config: .github/trivy/trivy.yaml
+          format: sarif
+          output: trivy-repo.sarif
+      - name: Upload to code scanning
+        if: ${{ !cancelled() && env.CAN_UPLOAD_SARIF == 'true' && hashFiles('trivy-repo.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-repo.sarif
+          category: trivy-repository
+      - name: Gate (fixable HIGH/CRITICAL, misconfigurations, secrets)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          trivy-config: .github/trivy/trivy.yaml
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+  images:
+    name: Image ${{ matrix.image }} (Trivy, SBOM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write # upload the SARIF to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: api, context: api }
+          - { image: dashboard, context: dashboard }
+          - { image: mock-llm, context: sim/mock-llm }
+          - { image: traffic, context: sim/traffic }
+          - { image: gpu-sim, context: sim/gpu-sim }
+          - { image: grafana-bootstrap, context: compose/grafana-bootstrap }
+    env:
+      IMAGE_REF: ai-factory/${{ matrix.image }}:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        env:
+          CONTEXT: ${{ matrix.context }}
+        run: docker build --pull --tag "$IMAGE_REF" "$CONTEXT"
+      - name: Scan (SARIF, every severity)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          scanners: vuln,secret
+          trivy-config: .github/trivy/trivy.yaml
+          format: sarif
+          output: trivy-image.sarif
+      - name: Upload to code scanning
+        if: ${{ !cancelled() && env.CAN_UPLOAD_SARIF == 'true' && hashFiles('trivy-image.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image-${{ matrix.image }}
+      - name: SBOM output directory
+        run: mkdir -p "$RUNNER_TEMP/sbom"
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.IMAGE_REF }}
+          syft-version: ${{ env.SYFT_VERSION }}
+          format: cyclonedx-json
+          output-file: ${{ runner.temp }}/sbom/${{ matrix.image }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.IMAGE_REF }}
+          syft-version: ${{ env.SYFT_VERSION }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/sbom/${{ matrix.image }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-image-${{ matrix.image }}
+          path: ${{ runner.temp }}/sbom/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Gate (fixable HIGH/CRITICAL, secrets)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          scanners: vuln,secret
+          trivy-config: .github/trivy/trivy.yaml
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+  sbom-source:
+    name: SBOM (source tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Written outside the workspace: syft reads SBOM files it finds, the second scan must not
+      # ingest the first one.
+      - name: SBOM output directory
+        run: mkdir -p "$RUNNER_TEMP/sbom"
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          syft-version: ${{ env.SYFT_VERSION }}
+          format: cyclonedx-json
+          output-file: ${{ runner.temp }}/sbom/source.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          syft-version: ${{ env.SYFT_VERSION }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/sbom/source.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-source
+          path: ${{ runner.temp }}/sbom/
+          if-no-files-found: error
+          retention-days: 30

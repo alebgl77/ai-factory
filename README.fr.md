@@ -156,16 +156,37 @@ puis `python scripts/build_snapshot.py` pour régénérer les snapshots hors lig
 
 ## Sécurité
 
-- Aucun secret dans le dépôt (gitleaks dans le CI) et **aucun jeton dans le navigateur** : le
-  dashboard ne parle qu'à l'API d'agrégation, en même origine.
-- Proxy Grafana restreint (liste blanche de GET, requêtes PromQL nommées uniquement).
-- Seul `edge` publie des ports ; les services internes restent sur un réseau interne sans accès
-  Internet.
-- Les données C3/C4 ne vont que sur le GPU local, règle appliquée à la passerelle, et sont
-  masquées dans Langfuse.
+### Sécurité et confiance en un coup d'œil
 
-Détails et durcissement d'un VPS : [docs/fr/SECURITY.md](docs/fr/SECURITY.md). Pour signaler une
-vulnérabilité, ouvrez un *Security advisory* privé sur le dépôt.
+[![CodeQL](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alebgl77/ai-factory/badge)](https://scorecard.dev/viewer/?uri=github.com/alebgl77/ai-factory)
+[![Chaîne d'approvisionnement : Trivy, pip-audit, SBOM](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml)
+[![Images signées : cosign, provenance SLSA, SBOM](https://img.shields.io/badge/images-cosign%20%C2%B7%20SLSA%20provenance%20%C2%B7%20SBOM-2ea44f)](SECURITY.md#vérifier-une-release)
+
+Chaque ligne ci-dessous s'appuie sur un test, un job de CI ou une commande que vous pouvez lancer
+vous-même.
+
+| Domaine | Ce qui est en place | Comment vérifier |
+|---|---|---|
+| Identité et accès | SSO d'entreprise (OpenID Connect via oauth2-proxy : Entra ID, Okta, Google, Keycloak), identité acceptée uniquement depuis le proxy de bord, RBAC à 5 rôles, refus par défaut, configuration qui échoue fermée | `api/tests/test_security.py`, `compose/sso/test_sso_e2e.sh` |
+| Intégrité de la gouvernance | Règle des quatre yeux : personne n'approuve une version de modèle qu'il a enregistrée ; journal d'audit chaîné par SHA-256 de chaque écriture, vérificateur hors ligne | `GET /api/v1/audit/verify`, `python -m app.audit verify` |
+| Données sensibles | Données C3/C4 traitées uniquement sur le GPU local, échec fermé (aucun repli vers le cloud) ; données personnelles masquées avant tout modèle cloud ; aucun prompt dans les journaux | `scripts/smoke_stack.sh` |
+| Garde-fous LLM | Détection d'injection de prompt et de jailbreak (EN/FR), signalement ou blocage | `compose/litellm/tests` |
+| Aucun jeton dans le navigateur | Le dashboard ne parle qu'à l'API ; jeton Grafana, clés de la passerelle et des fournisseurs restent côté serveur | `scripts/smoke_stack.sh` |
+| Exécution durcie | Non-root, lecture seule, toutes les capacités retirées, no-new-privileges, limites de PID ; socket Docker derrière un proxy GET uniquement ; réseaux internes sans accès Internet | `scripts/smoke_stack.sh` (`docker inspect` de chaque conteneur) |
+| Chaîne d'approvisionnement | Workflows à moindre privilège épinglés par SHA, CodeQL, OpenSSF Scorecard, pip-audit, Trivy, gitleaks, SBOM CycloneDX et SPDX, Dependabot avec délai de carence | [`.github/workflows/`](.github/workflows/) |
+| Releases signées | Signatures cosign sans clé, provenance de build SLSA et attestations SBOM | `.github/scripts/verify_image.sh` |
+| Localisation des données | Auto-hébergé, aucune dépendance SaaS, télémétrie désactivée, aucun entraînement sur vos données | [docs/fr/SECURITY.md](docs/fr/SECURITY.md) |
+
+La configuration par défaut est une démo sans clé, authentification désactivée, et elle le dit :
+`GET /api/v1/health` renvoie `security.status: demo`. Les réglages de production (TLS, SSO,
+secrets, rotation, sauvegardes, rétention) sont dans le guide de durcissement de
+[docs/fr/SECURITY.md](docs/fr/SECURITY.md).
+
+- [docs/fr/SECURITY.md](docs/fr/SECURITY.md) : architecture de sécurité, guide de durcissement, réponse à incident
+- [docs/fr/THREAT_MODEL.md](docs/fr/THREAT_MODEL.md) : flux de données, STRIDE par composant, menaces LLM, risques résiduels
+- [docs/fr/SECURITY_CONTROLS.md](docs/fr/SECURITY_CONTROLS.md) : contrôles rapprochés de l'OWASP Top 10 LLM 2025, de l'OWASP ASVS 5.0, du NIST SSDF, du CIS Docker, de l'ISO/IEC 27001:2022, avec des repères NIS2 et DORA
+- [SECURITY.md](SECURITY.md) : signaler une vulnérabilité (signalement privé, accusé de réception sous 72 h) et vérifier une release
 
 ## Licences
 
@@ -216,7 +237,9 @@ Des pistes, pas des engagements ; vos retours sont les bienvenus dans les issues
   multi-agents LangGraph (les deux lacunes relevées dans
   [docs/fr/GITHUB_INTEGRATION.md](docs/fr/GITHUB_INTEGRATION.md)).
 - Pack visuel généré, publié avec sa provenance.
-- Recette d'authentification OIDC devant `edge` (oauth2-proxy ou Authelia).
+- Clés de passerelle par application avec budgets, fichiers de secrets au lieu de variables
+  d'environnement, chaîne d'audit à clé (voir [docs/fr/SECURITY_CONTROLS.md](docs/fr/SECURITY_CONTROLS.md),
+  section 3).
 - Confirmation au Journal officiel des points réglementaires marqués « à vérifier » dans
   [docs/fr/GOVERNANCE.md](docs/fr/GOVERNANCE.md).
 - D'autres langues : le catalogue de messages et les dictionnaires `{en, fr}` sont prévus pour.

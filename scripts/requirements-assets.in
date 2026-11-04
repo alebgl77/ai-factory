@@ -1,0 +1,5 @@
+# Optional: only needed to rebuild the visual pack (scripts/build_assets.py).
+# Pillow (MIT-CMU). requirements-assets.txt is the hash-pinned lock compiled from this file:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements-assets.txt requirements-assets.in
+Pillow==13.0.0

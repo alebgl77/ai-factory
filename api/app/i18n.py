@@ -418,6 +418,37 @@ MESSAGES: dict[str, dict[str, str]] = {
     "error.version_conflict": {"en": "version conflict", "fr": "conflit de version"},
     "error.body_too_large": {"en": "request body too large", "fr": "corps de requête trop volumineux"},
     "error.internal": {"en": "internal error", "fr": "erreur interne"},
+    "error.audit_unavailable": {
+        "en": "audit log unavailable: the change was not saved",
+        "fr": "journal d'audit indisponible : la modification n'a pas été enregistrée",
+    },
+    # ---- security: authentication, authorisation, separation of duties, rate limiting
+    "auth.unauthenticated": {
+        "en": "authentication required: sign in through the single sign-on proxy",
+        "fr": "authentification requise : connectez-vous via le proxy d'authentification unique (SSO)",
+    },
+    "auth.untrusted_source": {
+        "en": "request refused: identities are only accepted from the trusted SSO proxy",
+        "fr": "requête refusée : les identités ne sont acceptées que depuis le proxy SSO de confiance",
+    },
+    "auth.invalid_identity": {
+        "en": "request refused: malformed identity headers",
+        "fr": "requête refusée : en-têtes d'identité mal formés",
+    },
+    "auth.forbidden": {
+        "en": "access denied: the {permission} permission requires one of these roles: {roles}",
+        "fr": "accès refusé : la permission {permission} exige l'un de ces rôles : {roles}",
+    },
+    "auth.four_eyes": {
+        "en": ("separation of duties: the identity that recorded model version {version} cannot approve it; "
+               "another approver must review it"),
+        "fr": ("séparation des tâches : l'identité qui a enregistré la version de modèle {version} ne peut pas "
+               "l'approuver ; un autre approbateur doit la revoir"),
+    },
+    "auth.rate_limited": {
+        "en": "too many write requests: retry in {seconds} s",
+        "fr": "trop de requêtes d'écriture : réessayez dans {seconds} s",
+    },
     "registry.model_version_recorded": {
         "en": "New model version recorded: risk reassessment required before deployment",
         "fr": "Nouvelle version de modèle enregistrée : réévaluation du risque requise avant déploiement",

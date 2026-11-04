@@ -1,7 +1,8 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 # SPDX-License-Identifier: MIT
 # Synthetic traffic generator (fictional use cases uc-01..uc-08) for the key-less demo.
-FROM python:3.12.16-slim
+# Base image pinned by digest (multi-arch index); the tag stays for Dependabot, which updates both.
+FROM python:3.12.16-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -9,6 +10,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
+# Hash-pinned lock (direct + transitive) compiled from requirements.in: pip refuses any file
+# whose hash differs and any dependency missing from the lock.
 COPY requirements.txt .
 # Optional build secret "build_ca": extra CA certificates for TLS-intercepting proxies.
 RUN --mount=type=secret,id=build_ca,required=false \
@@ -17,7 +20,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
       cat /etc/ssl/certs/ca-certificates.crt /run/secrets/build_ca > /tmp/ca.pem; \
       export PIP_CERT=/tmp/ca.pem; \
     fi; \
-    pip install --no-compile -r requirements.txt; \
+    pip install --no-compile --require-hashes -r requirements.txt; \
     rm -f /tmp/ca.pem; \
     useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin traffic
 

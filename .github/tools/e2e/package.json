@@ -1,0 +1,11 @@
+{
+  "name": "ai-factory-e2e-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CI-only test tools of the 3D dashboard e2e test (tests/e2e/run.mjs), locked with integrity hashes. Never shipped.",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "1.64.1",
+    "three": "0.186.1"
+  }
+}

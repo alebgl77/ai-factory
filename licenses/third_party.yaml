@@ -27,7 +27,7 @@ policy:
 
 images:
   # ---------------------------------------------------------------- services (docker-compose.yml)
-  - service: edge
+  - service: "edge, volume-init (one-shot chown of the edge volumes, same image)"
     image: caddy
     tag: 2.11.7-alpine
     spdx: Apache-2.0
@@ -44,13 +44,14 @@ images:
     modified: false
     source: https://github.com/prometheus/prometheus
   - service: grafana
-    image: grafana/grafana-oss
-    tag: 13.0.2
+    image: grafana/grafana
+    tag: 13.0.12
     spdx: AGPL-3.0-only
-    license: "AGPL-3.0 (separate service, unmodified official image, queried through its HTTP API)"
+    license: "AGPL-3.0 (OSS edition: separate service, unmodified official image, queried through its HTTP API)"
     usage: separate-service
     modified: false
     source: https://github.com/grafana/grafana
+    note: "grafana/grafana is the OSS image (LICENSE file of the image: GNU AGPL v3); grafana/grafana-oss received no release after 13.0.2."
   - service: loki
     image: grafana/loki
     tag: 3.7.9
@@ -76,14 +77,32 @@ images:
     modified: false
     source: https://github.com/qdrant/qdrant
   - service: litellm
-    image: litellm/litellm
-    tag: v1.106.6
+    image: litellm/litellm-non_root
+    tag: v1.106.7
     spdx: MIT
     license: "MIT (enterprise/ excluded, no license key)"
     usage: separate-service
     modified: false
     source: https://github.com/BerriAI/litellm
-    note: "No LITELLM_LICENSE variable: the features of the enterprise/ directory (commercial license) stay inactive. The factory_callbacks.py callback is MIT code from this repository, mounted read-only."
+    note: "Official non-root variant (runs as nobody). No LITELLM_LICENSE variable: the features of the enterprise/ directory (commercial license) stay inactive. The factory_callbacks.py callback is MIT code from this repository, mounted read-only. LITELLM_IMAGE may select the root image litellm/litellm of the same release."
+  - service: docker-socket-proxy
+    image: wollomatic/socket-proxy
+    tag: 1.13.2
+    spdx: MIT
+    license: "MIT (image label: MIT AND Apache-2.0)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/wollomatic/socket-proxy
+    note: "Only container that mounts the Docker socket; GET allowlist for Alloy's log discovery."
+  - service: oauth2-proxy
+    image: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.15.5
+    spdx: MIT
+    license: MIT
+    usage: separate-service
+    modified: false
+    profile: sso
+    source: https://github.com/oauth2-proxy/oauth2-proxy
   - service: postgres
     image: postgres
     tag: 17.11-alpine
@@ -180,14 +199,16 @@ images:
     source: https://github.com/nodejs/docker-node
   - service: "dashboard (nginx base image)"
     image: nginxinc/nginx-unprivileged
-    tag: 1.30.6-alpine
+    tag: 1.30.6-alpine-slim
     spdx: BSD-2-Clause
     license: "BSD-2-Clause (nginx); Alpine packages of the image under their own licenses (aggregate)"
     usage: build-time
     modified: false
     source: https://github.com/nginx/docker-nginx-unprivileged
+    note: "alpine-slim variant: nginx without the optional dynamic modules and their libraries (none is loaded by dashboard/nginx.conf). Base images are pinned by digest in the Dockerfiles."
 
-# Third-party code embedded at build time (never committed to the repository).
+# Third-party code embedded at build time, or loaded by the browser from a pinned CDN URL with
+# Subresource Integrity (never committed to the repository).
 vendored:
   - name: three
     version: 0.186.1
@@ -197,9 +218,90 @@ vendored:
     where: "dashboard/Dockerfile (npm pack + SRI integrity check, copied to /vendor/three); jsDelivr CDN in file:// mode"
     source: https://github.com/mrdoob/three.js
     check: {file: dashboard/Dockerfile, pattern: "ARG THREE_VERSION=([0-9.]+)"}
+  - name: swagger-ui-dist
+    version: 5.34.0
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "OpenAPI page /api/v1/docs: loaded by the browser from jsDelivr, version pinned with Subresource Integrity and a per-answer CSP nonce (api/app/main.py); never distributed by this repository"
+    source: https://github.com/swagger-api/swagger-ui
+    check: {file: api/app/main.py, pattern: "SWAGGER_UI_VERSION = \"([0-9.]+)\""}
 
 # Verification tools (CI, scripts): never shipped in the stack images.
 tools:
+  - name: trivy
+    image: aquasec/trivy
+    tag: 0.76.1
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: ".github/workflows/security.yml and release.yml (aquasecurity/trivy-action, Apache-2.0; config in .github/trivy/); local scans with the aquasec/trivy image (compose/README.md, Image scan)"
+    source: https://github.com/aquasecurity/trivy
+    check: {file: .github/workflows/security.yml, pattern: "TRIVY_VERSION: v([0-9.]+)"}
+  - name: syft
+    version: 1.55.0
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "SBOMs: scripts/sbom.sh, .github/workflows/security.yml and release.yml (anchore/sbom-action, Apache-2.0)"
+    source: https://github.com/anchore/syft
+    check: {file: scripts/sbom.sh, pattern: "anchore/syft:v([0-9.]+)@"}
+  - name: cosign
+    version: 3.1.4
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "keyless signing of the release images and checksums: .github/workflows/release.yml (sigstore/cosign-installer, Apache-2.0), .github/scripts/verify_image.sh"
+    source: https://github.com/sigstore/cosign
+    check: {file: .github/workflows/release.yml, pattern: "COSIGN_VERSION: v([0-9.]+)"}
+  - name: actionlint
+    image: rhysd/actionlint
+    tag: 1.7.12
+    spdx: MIT
+    license: MIT
+    usage: build-time
+    where: ".github/workflows/ci.yml (job workflows), image pinned by digest"
+    source: https://github.com/rhysd/actionlint
+    check: {file: .github/workflows/ci.yml, pattern: "rhysd/actionlint:([0-9.]+)@"}
+  - name: zizmor
+    version: 1.31.1
+    spdx: MIT
+    license: MIT
+    usage: build-time
+    where: ".github/workflows/ci.yml (job workflows), hash-pinned in .github/tools/zizmor/"
+    source: https://github.com/zizmorcore/zizmor
+    check: {file: .github/tools/zizmor/requirements.in, pattern: "zizmor==([0-9.]+)"}
+  - name: pip-audit
+    version: 2.10.1
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: ".github/workflows/security.yml (every requirement lock), hash-pinned in .github/tools/pip-audit/"
+    source: https://github.com/pypa/pip-audit
+    check: {file: .github/tools/pip-audit/requirements.in, pattern: "pip-audit==([0-9.]+)"}
+  - name: pip-tools
+    version: 7.6.2
+    spdx: BSD-3-Clause
+    license: BSD-3-Clause
+    usage: build-time
+    where: "pip-compile --generate-hashes: compiles every requirements*.in into its hash-pinned requirements*.txt lock (maintainers and Dependabot; never installed in an image)"
+    source: https://github.com/jazzband/pip-tools
+  - name: scorecard-action
+    version: 2.5.0
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: ".github/workflows/scorecard.yml (OpenSSF Scorecard)"
+    source: https://github.com/ossf/scorecard-action
+    check: {file: .github/workflows/scorecard.yml, pattern: "ossf/scorecard-action@[0-9a-f]{40} # v([0-9.]+)"}
+  - name: dex
+    image: dexidp/dex
+    tag: v2.46.1
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "test OpenID Connect provider of compose/sso/test_sso_e2e.sh (CI job sso-e2e on manual dispatch; never part of the stack)"
+    source: https://github.com/dexidp/dex
   - name: gitleaks
     image: zricethezav/gitleaks
     tag: v8.30.1
@@ -213,8 +315,9 @@ tools:
     spdx: Apache-2.0
     license: Apache-2.0
     usage: build-time
-    where: "e2e tests (installed in CI with --no-save, not committed)"
+    where: "e2e tests (CI-only, locked with integrity hashes in .github/tools/e2e, never shipped)"
     source: https://github.com/microsoft/playwright
+    check: {file: .github/tools/e2e/package.json, pattern: "\"playwright\": \"([0-9.]+)\""}
 
 # Licenses checked by hand when the metadata of a Python package is missing or ambiguous.
 python_overrides: {}

@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from prometheus_client import CollectorRegistry, generate_latest
-from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily, Metric
 from prometheus_client.registry import Collector
 
+from .audit import ACTIONS
 from .engines.risk import TIERS
 
 
@@ -93,15 +94,36 @@ def families(snap: dict[str, Any]) -> list[GaugeMetricFamily]:
     return out
 
 
+def security_families(audit_status: dict[str, Any], audit_counts: dict[str, int],
+                      denials: dict[str, int]) -> list[Metric]:
+    """Audit trail and access-control metrics (no identity, no secret in any label)."""
+    events = CounterMetricFamily("factory_audit_events", "Records of the hash-chained audit log per action",
+                                 labels=["action"])
+    for action in sorted(set(ACTIONS) | set(audit_counts)):
+        events.add_metric([action], float(audit_counts.get(action, 0)))
+    chain = GaugeMetricFamily("factory_audit_chain_ok", "1 when the audit hash chain verifies, else 0")
+    chain.add_metric([], 1.0 if audit_status.get("chain_ok") else 0.0)
+    denied = CounterMetricFamily("factory_security_denied", "Requests refused by the API security controls",
+                                 labels=["reason"])
+    for reason in sorted(set(DENIAL_REASONS) | set(denials)):
+        denied.add_metric([reason], float(denials.get(reason, 0)))
+    return [events, chain, denied]
+
+
+DENIAL_REASONS = ("untrusted_source", "unauthenticated", "invalid_identity", "forbidden", "separation_of_duties",
+                  "rate_limited")
+
+
 class _SnapshotCollector(Collector):
-    def __init__(self, snap: dict[str, Any]) -> None:
+    def __init__(self, snap: dict[str, Any], extra: list[Metric] | None = None) -> None:
         self.snap = snap
+        self.extra = extra or []
 
-    def collect(self) -> Iterable[GaugeMetricFamily]:
-        return families(self.snap)
+    def collect(self) -> Iterable[Metric]:
+        return [*families(self.snap), *self.extra]
 
 
-def render(snap: dict[str, Any]) -> bytes:
+def render(snap: dict[str, Any], extra: list[Metric] | None = None) -> bytes:
     registry = CollectorRegistry(auto_describe=False)
-    registry.register(_SnapshotCollector(snap))
+    registry.register(_SnapshotCollector(snap, extra))
     return generate_latest(registry)

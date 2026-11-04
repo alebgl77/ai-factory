@@ -1,0 +1,9 @@
+# traffic generator runtime dependencies: direct dependencies only, permissive licences only
+# (httpx BSD-3-Clause, PyYAML MIT; transitive ones in the lock, certifi MPL-2.0 unmodified).
+#
+# requirements.txt is the hash-pinned lock compiled from this file with pip-tools under
+# Python 3.12; the Dockerfile installs it with --require-hashes:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements.txt requirements.in
+httpx==0.28.1
+PyYAML==6.0.3

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Accepted findings of Trivy. Every entry states why it is accepted and expires: an expired
+# entry is reported again and must be re-assessed. Vulnerabilities without a fixed version are
+# not listed here: CI gates use --ignore-unfixed and report them in code scanning instead.
+misconfigurations:
+  - id: DS-0026
+    paths:
+      - compose/grafana-bootstrap/Dockerfile
+    statement: >-
+      One-shot job (restart "no") that writes the Grafana Viewer token and exits; docker compose
+      waits for its exit code, so a HEALTHCHECK has nothing to probe.
+    expired_at: 2027-11-01

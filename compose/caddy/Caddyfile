@@ -9,12 +9,29 @@
 #
 # Local mode : FACTORY_SCHEME=http,  FACTORY_HOST=localhost  -> plain HTTP, no certificate.
 # VPS mode   : FACTORY_SCHEME=https, FACTORY_HOST=factory.example.org -> automatic TLS (ACME)
-#              for the three names (DNS A/AAAA records required for each of them).
+#              for the three names (DNS A/AAAA records required for each of them), and HSTS.
 # LiteLLM, Prometheus, Qdrant, ClickHouse, Postgres, Loki are never exposed.
-# Optional basic auth on the dashboard and the API: FACTORY_AUTH=basic (see .env.example).
-# CSP: Three.js is vendored by the dashboard image (DASHBOARD_THREE_SOURCE=vendored); only
-# with DASHBOARD_THREE_SOURCE=cdn does the policy allow https://cdn.jsdelivr.net.
-
+#
+# Authentication in front of the dashboard and the API (FACTORY_AUTH):
+#   none   demo default; identity headers sent by clients are always removed.
+#   basic  HTTP basic auth (bcrypt hash in FACTORY_BASIC_AUTH_HASH, see .env.example); the user
+#          name is passed to the API as X-Forwarded-User.
+#   sso    OpenID Connect through oauth2-proxy (profile "sso" of docker-compose.yml): Caddy asks
+#          oauth2-proxy (forward_auth) and passes X-Forwarded-User / -Email / -Groups to the API.
+#          Caddy deletes any client-supplied copy of those headers before setting them.
+# The edge reaches the API and oauth2-proxy over the dedicated "edge-identity" network, from a
+# fixed address (FACTORY_EDGE_IDENTITY_IP): only that address may assert an identity to the API
+# (FACTORY_TRUSTED_PROXIES) and forwarded headers to oauth2-proxy (--trusted-proxy-ip).
+#
+# Client-supplied X-Forwarded-User / -Email / -Groups never pass the edge, on any route and in
+# any mode: none removes them, basic replaces X-Forwarded-User with the authenticated user and
+# removes the others, sso sets them only from the oauth2-proxy answer (forward_auth copy_headers)
+# and removes them on the /oauth2/* routes. Tested by compose/caddy/tests/test_identity_headers.sh.
+#
+# CSP: the dashboard policy applies to the dashboard only. /api/* keeps the API's own headers
+# (strict policy on JSON, nonce + Subresource Integrity policy on the OpenAPI page /api/v1/docs).
+# Three.js is vendored by the dashboard image (DASHBOARD_THREE_SOURCE=vendored); only with
+# DASHBOARD_THREE_SOURCE=cdn does the dashboard policy allow https://cdn.jsdelivr.net.
 {
 	admin localhost:2019
 	log {
@@ -22,86 +39,221 @@
 		format json
 		level INFO
 	}
-}
-
-(security_headers) {
-	header {
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-		Cross-Origin-Opener-Policy "same-origin"
-		# Ignored by browsers over plain HTTP; effective in VPS (HTTPS) mode.
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		-Server
-		-X-Powered-By
+	servers {
+		# Slow-client protection; no write timeout (long Grafana / Langfuse responses).
+		timeouts {
+			read_header 10s
+			read_body 60s
+			idle 2m
+		}
+		max_header_size 64KB
 	}
 }
 
+# ------------------------------------------------------------------------ response headers
+# ">" overrides whatever the upstream sent (after proxying); "?" is a default that keeps a
+# stricter value set by the upstream itself (the API sends its own CSP, Grafana "DENY").
+(security_headers) {
+	header {
+		?X-Content-Type-Options "nosniff"
+		?Referrer-Policy "strict-origin-when-cross-origin"
+		>Permissions-Policy "accelerometer=(), autoplay=(), browsing-topics=(), camera=(), clipboard-read=(), clipboard-write=(self), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), hid=(), idle-detection=(), magnetometer=(), microphone=(), midi=(), otp-credentials=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), serial=(), usb=(), web-share=(), xr-spatial-tracking=()"
+		>Cross-Origin-Opener-Policy "same-origin"
+		>Cross-Origin-Resource-Policy "same-origin"
+		>X-Permitted-Cross-Domain-Policies "none"
+		>Origin-Agent-Cluster "?1"
+		-Server
+		-X-Powered-By
+		-Via
+	}
+	import hsts-{$FACTORY_SCHEME:http}
+}
+
+# HSTS only over HTTPS: a browser must never pin a plain-HTTP demo host to TLS. Any other
+# FACTORY_SCHEME value fails the configuration (no such snippet).
+(hsts-https) {
+	header >Strict-Transport-Security "max-age=31536000; includeSubDomains"
+}
+
+(hsts-http) {
+}
+
+# Dashboard CSP: applied to the dashboard (and the oauth2-proxy pages) only, never to /api/*.
 (csp-vendored) {
-	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	header ?Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 }
 
 (csp-cdn) {
-	header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	header ?Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+}
+
+# API CSP: the API sets its own policy on every answer (strict on JSON; on /api/v1/docs a
+# per-answer nonce and the pinned, SRI-checked Swagger UI). This default only covers an answer
+# that would come without one, and allows nothing.
+(csp-api) {
+	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+}
+
+# RFC 9116 security.txt, served on every host name, outside any authentication.
+(security_txt) {
+	handle /.well-known/security.txt {
+		header Content-Type "text/plain; charset=utf-8"
+		header Cache-Control "public, max-age=86400"
+		respond <<TXT
+			# Virtual AI Factory - security contact (RFC 9116)
+			Contact: {$FACTORY_SECURITY_CONTACT:https://github.com/alebgl77/ai-factory/security/advisories/new}
+			Expires: {$FACTORY_SECURITY_TXT_EXPIRES:2027-11-01T00:00:00Z}
+			Preferred-Languages: en, fr
+			Policy: {$FACTORY_SECURITY_POLICY:https://github.com/alebgl77/ai-factory/security/policy}
+			Canonical: {$FACTORY_SCHEME:http}://{$FACTORY_HOST:localhost}/.well-known/security.txt
+
+			TXT 200
+	}
+}
+
+# ------------------------------------------------------------------------- authentication
+# Identity headers are only ever set by the edge itself. (Caddy sorts request_header
+# directives that have a matcher before those without one: never mix both kinds here.)
+(strip_auth_request) {
+	request_header -X-Auth-Request-User
+	request_header -X-Auth-Request-Email
+	request_header -X-Auth-Request-Groups
+	request_header -X-Auth-Request-Preferred-Username
+}
+
+(strip_identity) {
+	request_header -X-Forwarded-User
+	request_header -X-Forwarded-Email
+	request_header -X-Forwarded-Groups
+	request_header -X-Forwarded-Preferred-Username
+	import strip_auth_request
 }
 
 (auth-none) {
+	import strip_identity
 }
 
 (auth-basic) {
+	@protected not path /healthz /.well-known/security.txt
 	# FACTORY_BASIC_AUTH_HASH is a bcrypt hash: caddy hash-password --plaintext '...'
 	basic_auth @protected {
 		{$FACTORY_BASIC_AUTH_USER:factory} {$FACTORY_BASIC_AUTH_HASH:invalid}
 	}
+	# The authenticated user name replaces any client-supplied value; no e-mail, no groups.
+	request_header X-Forwarded-User {http.auth.user.id}
+	request_header -X-Forwarded-Email
+	request_header -X-Forwarded-Groups
+	request_header -X-Forwarded-Preferred-Username
+	import strip_auth_request
 }
 
+(sso_forward_auth) {
+	uri /oauth2/auth
+	header_up X-Real-IP {remote_host}
+	copy_headers {
+		X-Auth-Request-User>X-Forwarded-User
+		X-Auth-Request-Email>X-Forwarded-Email
+		X-Auth-Request-Groups>X-Forwarded-Groups
+		X-Auth-Request-Preferred-Username>X-Forwarded-Preferred-Username
+	}
+}
+
+(auth-sso) {
+	# forward_auth deletes the client copies of X-Forwarded-User / -Email / -Groups before it
+	# sets them from the oauth2-proxy answer; the raw X-Auth-Request-* names are dropped too.
+	import strip_auth_request
+	# oauth2-proxy endpoints: sign-in, OIDC callback, sign-out. No forward_auth runs here, so the
+	# client copies of the identity headers are removed explicitly.
+	handle /oauth2/* {
+		import csp-{$DASHBOARD_THREE_SOURCE:vendored}
+		reverse_proxy {$SSO_UPSTREAM:oauth2-proxy:4180} {
+			header_up X-Real-IP {remote_host}
+			header_up -X-Forwarded-User
+			header_up -X-Forwarded-Email
+			header_up -X-Forwarded-Groups
+			header_up -X-Forwarded-Preferred-Username
+		}
+	}
+	# API calls: an expired session gets a plain 401 (no redirect a fetch() could not follow).
+	@sso_api path /api/*
+	forward_auth @sso_api {$SSO_UPSTREAM:oauth2-proxy:4180} {
+		import sso_forward_auth
+	}
+	# Pages: redirect to the identity provider.
+	@sso_pages not path /api/* /oauth2/* /healthz /.well-known/security.txt
+	forward_auth @sso_pages {$SSO_UPSTREAM:oauth2-proxy:4180} {
+		import sso_forward_auth
+		@unauthenticated status 401
+		handle_response @unauthenticated {
+			redir * /oauth2/sign_in?rd={scheme}://{host}{uri} 302
+		}
+	}
+}
+
+# ---------------------------------------------------------------------------------- sites
 (app) {
 	import security_headers
-	import csp-{$DASHBOARD_THREE_SOURCE:vendored}
-	header X-Frame-Options "DENY"
+	header ?X-Frame-Options "DENY"
 	encode zstd gzip
-
-	@protected not path /healthz
-	import auth-{$FACTORY_AUTH:none}
 
 	request_body {
 		max_size 1MB
 	}
+
+	import auth-{$FACTORY_AUTH:none}
+	import security_txt
 
 	handle /healthz {
 		respond "ok" 200
 	}
 
 	handle /api/* {
-		reverse_proxy api:8000 {
+		# The API's own security headers apply here, not the dashboard CSP (see csp-api).
+		import csp-api
+		# api-identity: alias of the API on the edge-identity network (fixed edge address).
+		reverse_proxy {$API_UPSTREAM:api-identity:8000} {
 			header_up X-Real-IP {remote_host}
 		}
 	}
 
 	# The API exposes /metrics for Prometheus only; it is not routed to the outside.
 	handle {
-		reverse_proxy dashboard:80
+		import csp-{$DASHBOARD_THREE_SOURCE:vendored}
+		reverse_proxy dashboard:80 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 }
 
 (grafana) {
 	import security_headers
-	header X-Frame-Options "SAMEORIGIN"
+	import strip_identity
+	header ?X-Frame-Options "SAMEORIGIN"
 	encode zstd gzip
-	reverse_proxy grafana:3000 {
-		header_up X-Real-IP {remote_host}
+	request_body {
+		max_size 10MB
+	}
+	import security_txt
+	handle {
+		reverse_proxy grafana:3000 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 }
 
 (langfuse) {
 	import security_headers
-	header X-Frame-Options "SAMEORIGIN"
+	import strip_identity
+	header ?X-Frame-Options "SAMEORIGIN"
 	encode zstd gzip
 	request_body {
 		max_size 20MB
 	}
-	reverse_proxy langfuse-web:3000 {
-		header_up X-Real-IP {remote_host}
+	import security_txt
+	handle {
+		reverse_proxy langfuse-web:3000 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 }
 

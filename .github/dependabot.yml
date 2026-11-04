@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: MIT
+# Dependabot: weekly grouped version updates, immediate security updates.
+# A cooldown delays version updates until a release is a few days old, so that a compromised or
+# broken release is usually withdrawn before it reaches a pull request; security updates are
+# never delayed. Every update still has to pass CI: tests, licence policy
+# (scripts/check_licenses.py and licenses/third_party.yaml), pip-audit, Trivy and CodeQL.
+version: 2
+
+updates:
+  # Actions are pinned by commit SHA; Dependabot updates the SHA and the version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Python: API runtime and tests, visual-pack script, simulators, guardrail tests, CI tools.
+  # Every directory holds requirements*.in files and the hash-pinned requirements*.txt locks
+  # that pip-compile generates from them: Dependabot updates both.
+  - package-ecosystem: pip
+    directories:
+      - /api
+      - /scripts
+      - /sim/mock-llm
+      - /sim/traffic
+      - /compose/litellm/tests
+      - /.github/tools/pip-audit
+      - /.github/tools/zizmor
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    commit-message:
+      prefix: deps
+    groups:
+      python-security:
+        applies-to: security-updates
+        patterns: ["*"]
+      python:
+        applies-to: version-updates
+        update-types: [minor, patch]
+        patterns: ["*"]
+
+  # CI-only e2e tools (Playwright). Three.js is pinned by hand: it must stay the version that
+  # dashboard/Dockerfile vendors and dashboard/index.html imports.
+  - package-ecosystem: npm
+    directory: /.github/tools/e2e
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+    ignore:
+      - dependency-name: three
+    groups:
+      e2e-tools:
+        patterns: ["*"]
+
+  # Base images of the images built from this repository, pinned as tag@digest: Dependabot
+  # updates the tag and the digest together (and proposes rebuilt digests of the same tag).
+  - package-ecosystem: docker
+    directories:
+      - /api
+      - /dashboard
+      - /sim/mock-llm
+      - /sim/traffic
+      - /sim/gpu-sim
+      - /compose/grafana-bootstrap
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: deps
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  # Images of the separate services in docker-compose.yml (Grafana, Postgres, LiteLLM...).
+  # A bump must also update licenses/third_party.yaml, which CI checks.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: Europe/Paris
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: deps
+    groups:
+      service-images:
+        patterns: ["*"]

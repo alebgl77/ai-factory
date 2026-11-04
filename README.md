@@ -153,15 +153,36 @@ unset). After a change: `python scripts/validate_config.py`, then
 
 ## Security
 
-- No secret in the repository (gitleaks in CI) and **no token in the browser**: the dashboard
-  only talks to the aggregation API, same origin.
-- Restricted Grafana proxy (GET allowlist, named PromQL queries only).
-- Only `edge` publishes ports; internal services stay on an internal network without Internet
-  access.
-- C3/C4 data is routed to the local GPU only, enforced at the gateway, and masked in Langfuse.
+### Security & trust at a glance
 
-Details and VPS hardening checklist: [docs/SECURITY.md](docs/SECURITY.md). To report a
-vulnerability, open a private *Security advisory* on the repository.
+[![CodeQL](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alebgl77/ai-factory/badge)](https://scorecard.dev/viewer/?uri=github.com/alebgl77/ai-factory)
+[![Supply chain: Trivy, pip-audit, SBOM](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml)
+[![Signed images: cosign, SLSA provenance, SBOM](https://img.shields.io/badge/images-cosign%20%C2%B7%20SLSA%20provenance%20%C2%B7%20SBOM-2ea44f)](SECURITY.md#verify-a-release)
+
+Every line below is backed by a test, a CI job or a command you can run yourself.
+
+| Area | What is in place | How to verify |
+|---|---|---|
+| Identity and access | Enterprise SSO (OpenID Connect via oauth2-proxy: Entra ID, Okta, Google, Keycloak), identity accepted from the edge only, 5-role RBAC, deny by default, fail-closed configuration | `api/tests/test_security.py`, `compose/sso/test_sso_e2e.sh` |
+| Governance integrity | Four-eyes rule: nobody approves a model version they recorded; SHA-256 hash-chained audit trail of every write, offline verifier | `GET /api/v1/audit/verify`, `python -m app.audit verify` |
+| Sensitive data | C3/C4 data processed on the local GPU only, fail closed (no cloud fallback); PII redacted before any cloud model; no prompt in logs | `scripts/smoke_stack.sh` |
+| LLM guardrails | Prompt-injection and jailbreak detection (EN/FR), flag or block | `compose/litellm/tests` |
+| No token in the browser | The dashboard only talks to the API; Grafana token, gateway and provider keys stay server side | `scripts/smoke_stack.sh` |
+| Hardened runtime | Non-root, read-only, all capabilities dropped, no-new-privileges, PID limits; Docker socket behind a GET-only proxy; internal networks without Internet access | `scripts/smoke_stack.sh` (`docker inspect` of every container) |
+| Supply chain | SHA-pinned least-privilege workflows, CodeQL, OpenSSF Scorecard, pip-audit, Trivy, gitleaks, CycloneDX and SPDX SBOMs, Dependabot with cooldown | [`.github/workflows/`](.github/workflows/) |
+| Signed releases | Keyless cosign signatures, SLSA build provenance and SBOM attestations | `.github/scripts/verify_image.sh` |
+| Data residency | Self-hosted, no SaaS dependency, telemetry off, no training on your data | [docs/SECURITY.md](docs/SECURITY.md#13-data-residency-and-privacy) |
+
+The default configuration is a key-less demo with authentication off, and it says so:
+`GET /api/v1/health` reports `security.status: demo`. Production settings (TLS, SSO, secrets,
+rotation, backups, retention) are in the
+[hardening guide](docs/SECURITY.md#14-production-hardening-guide).
+
+- [docs/SECURITY.md](docs/SECURITY.md): security architecture, hardening guide, incident response
+- [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md): data flows, STRIDE per component, LLM threats, residual risks
+- [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md): controls mapped to OWASP LLM Top 10 2025, OWASP ASVS 5.0, NIST SSDF, CIS Docker, ISO/IEC 27001:2022, with NIS2 and DORA pointers
+- [SECURITY.md](SECURITY.md): report a vulnerability (private reporting, acknowledgement within 72 h) and verify a release
 
 ## Licenses
 
@@ -213,7 +234,8 @@ Ideas, not commitments; feedback is welcome in the issues.
   multi-agent example (the two gaps identified in
   [docs/GITHUB_INTEGRATION.md](docs/GITHUB_INTEGRATION.md)).
 - Generated visual pack published with its provenance.
-- OIDC authentication recipe in front of `edge` (oauth2-proxy or Authelia).
+- Per-application gateway keys with budgets, secret files instead of environment variables,
+  keyed audit chain (see [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md), section 3).
 - Confirmation in the Official Journal of the regulatory points flagged "to verify" in
   [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
 - More languages: the message catalog and the `{en, fr}` mappings are designed to grow.

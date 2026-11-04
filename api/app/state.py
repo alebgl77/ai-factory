@@ -5,6 +5,11 @@ Two documents are stored:
 - ``registry_overrides.json``: model-version and assessment changes made through the API,
   applied on top of ``config/usecases/*.yaml`` (the Git definition stays the baseline).
 - ``spaces_state.json``: optional persistence of the 3D bookings with an optimistic ``version``.
+
+Every write made through the API passes an :class:`app.audit.AuditContext`: the state change and
+its hash-chained audit record (``audit.jsonl``) are written under the same lock, and the state
+change is rolled back if the audit record cannot be written (no unaudited write). The four-eyes
+rule of the risk assessments is checked under that lock too, so it cannot race a new version.
 """
 
 from __future__ import annotations
@@ -17,7 +22,9 @@ import os
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
+
+from .audit import AuditContext, AuditLog, digest
 
 try:  # POSIX only; on other platforms the in-process lock is the only guard.
     import fcntl
@@ -26,10 +33,24 @@ except ImportError:  # pragma: no cover
 
 REGISTRY_FILE = "registry_overrides.json"
 SPACES_FILE = "spaces_state.json"
+APPROVING_DECISIONS = frozenset({"approved", "approved_with_conditions"})
+EMPTY_SPACES: dict[str, Any] = {"version": 0, "updated_at": None, "state": {}}
 
 
 class StateError(RuntimeError):
     """The state directory is not usable (not writable, corrupted file...)."""
+
+
+class AuditError(StateError):
+    """The audit record could not be written: the change was rolled back."""
+
+
+class SeparationOfDuties(RuntimeError):
+    """Four-eyes rule: the identity that recorded a model version cannot approve it."""
+
+    def __init__(self, version: str | None) -> None:
+        super().__init__("separation of duties")
+        self.version = version
 
 
 class VersionConflict(RuntimeError):
@@ -61,6 +82,7 @@ class StateStore:
     def __init__(self, state_dir: str) -> None:
         self.dir = Path(state_dir)
         self._mutex = threading.RLock()
+        self.audit = AuditLog(self.dir)
 
     # -- low level ---------------------------------------------------------------------------
     def _ensure_dir(self) -> None:
@@ -100,12 +122,15 @@ class StateStore:
             return copy.deepcopy(default)
 
     def _write_atomic(self, name: str, data: Any) -> None:
+        self._write_bytes_atomic(name, json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8"))
+
+    def _write_bytes_atomic(self, name: str, payload: bytes) -> None:
         path = self.dir / name
         tmp: str | None = None
         try:
             fd, tmp = tempfile.mkstemp(prefix=f".{name}.", suffix=".tmp", dir=self.dir)
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                json.dump(data, fh, ensure_ascii=False, indent=2, sort_keys=True)
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(payload)
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(tmp, path)
@@ -115,20 +140,110 @@ class StateStore:
                     os.unlink(tmp)
             raise StateError("state write failed") from exc
 
+    def _raw(self, name: str) -> bytes | None:
+        try:
+            return (self.dir / name).read_bytes()
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise StateError("state read failed") from exc
+
+    def _commit(self, name: str, data: Any, previous: bytes | None, record: Callable[[], Any] | None) -> None:
+        """Write ``data`` then its audit record; restore ``previous`` when the record fails."""
+        self._write_atomic(name, data)
+        if record is None:
+            return
+        try:
+            record()
+        except Exception as exc:
+            with contextlib.suppress(OSError, StateError):
+                if previous is None:
+                    (self.dir / name).unlink()
+                else:
+                    self._write_bytes_atomic(name, previous)
+            raise AuditError("audit write failed") from exc
+
+    def _append(self, ctx: AuditContext, **kwargs: Any) -> dict[str, Any]:
+        try:
+            return self.audit.append(ctx, **kwargs)
+        except OSError as exc:
+            raise AuditError("audit write failed") from exc
+
+    # -- audit -----------------------------------------------------------------------------------
+    def append_audit(self, ctx: AuditContext, *, action: str, target: str, before: Any = None, after: Any = None,
+                     details: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Audit a write that keeps no state (e.g. a placement decision)."""
+        with self._locked():
+            return self._append(ctx, action=action, target=target, before=before, after=after, details=details)
+
+    def audit_status(self) -> dict[str, Any]:
+        """Cheap chain status for the posture (cached on the file's inode, size and mtime)."""
+        try:
+            with self._mutex:
+                return {"available": True, **self.audit.status().public()}
+        except OSError:
+            return {"available": False, "chain_ok": None, "records": None, "head_hash": None, "first_broken": None}
+
+    def audit_counts(self) -> dict[str, int]:
+        """Audit records per action (for ``factory_audit_events_total``)."""
+        try:
+            with self._mutex:
+                return dict(self.audit.status().counts)
+        except OSError:
+            return {}
+
+    def audit_records(self) -> list[dict[str, Any]]:
+        if not self.audit.path.exists():
+            return []
+        try:
+            with self._locked():
+                return self.audit.records()
+        except OSError as exc:
+            raise StateError("audit read failed") from exc
+
+    def verify_audit(self) -> dict[str, Any]:
+        """Recompute the whole chain and reconcile it with the stored state documents."""
+        try:
+            if self.audit.path.exists():
+                with self._locked():
+                    status = self.audit.verify()
+                    registry = self._read(REGISTRY_FILE, {})
+                    spaces = self._read(SPACES_FILE, None) if (self.dir / SPACES_FILE).exists() else None
+            else:
+                status = self.audit.verify()
+                registry = self._read(REGISTRY_FILE, {}) if self.dir.exists() else {}
+                spaces = self._read(SPACES_FILE, None) if (self.dir / SPACES_FILE).exists() else None
+        except OSError as exc:
+            raise StateError("audit read failed") from exc
+        current: dict[str, str | None] = {}
+        if isinstance(registry, dict):
+            current.update({f"usecase:{k}": digest(v) for k, v in registry.items()})
+        if spaces is not None:
+            current["spaces:state"] = digest(spaces)
+        drift = sorted(t for t, h in status.last_after.items()
+                       if t.startswith(("usecase:", "spaces:")) and current.get(t) != h)
+        unaudited = sorted(t for t in current if t not in status.last_after)
+        return {"ok": status.ok and not drift, **status.public(), "counts": status.counts,
+                "state": {"consistent": not drift, "drift": drift, "unaudited": unaudited}}
+
     # -- registry overlay -------------------------------------------------------------------
     def registry_overrides(self) -> dict[str, Any]:
         with self._mutex:
             data = self._read(REGISTRY_FILE, {})
         return data if isinstance(data, dict) else {}
 
-    def set_model_version(self, uc: dict[str, Any], version: str, name: str | None, today: dt.date) -> dict[str, Any]:
+    def set_model_version(self, uc: dict[str, Any], version: str, name: str | None, today: dt.date,
+                          audit: AuditContext | None = None) -> dict[str, Any]:
         """Append a model version for a use case (uc = current effective use case)."""
         uc_id = str(uc["id"])
         with self._locked():
+            previous_raw = self._raw(REGISTRY_FILE)
             data = self._read(REGISTRY_FILE, {})
             if not isinstance(data, dict):
                 data = {}
+            before = copy.deepcopy(data.get(uc_id)) if isinstance(data.get(uc_id), dict) else None
             entry = data.get(uc_id) if isinstance(data.get(uc_id), dict) else {}
+            previous_version = (uc.get("model") or {}).get("version")
             model = copy.deepcopy(uc.get("model") or {})
             history = [h for h in (model.get("history") or []) if isinstance(h, dict)]
             history.append({"version": version, "from": today.isoformat()})
@@ -146,16 +261,34 @@ class StateStore:
                 assessment["previous_decision"] = previous
             entry["assessment"] = assessment
             entry["updated_at"] = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+            if audit is not None:
+                # Who recorded this version (state only, never in the snapshot): the four-eyes rule
+                # compares it with the identity of the approver.
+                entry["model_recorded_by"] = {"actor": audit.actor, "ids": sorted(audit.ids), "role": audit.role,
+                                              "authenticated": audit.authenticated, "version": version,
+                                              "at": entry["updated_at"]}
             data[uc_id] = entry
-            self._write_atomic(REGISTRY_FILE, data)
+            record = None if audit is None else (lambda: self._append(
+                audit, action="registry.model_version", target=f"usecase:{uc_id}", before=before, after=entry,
+                details={"version": version, "previous_version": previous_version}))
+            self._commit(REGISTRY_FILE, data, previous_raw, record)
             return copy.deepcopy(entry)
 
-    def record_assessment(self, uc: dict[str, Any], decision: str, reviewer: str, today: dt.date) -> dict[str, Any]:
+    def record_assessment(self, uc: dict[str, Any], decision: str, reviewer: str, today: dt.date,
+                          audit: AuditContext | None = None, enforce_four_eyes: bool = False) -> dict[str, Any]:
+        """Record a review of the current model version.
+
+        With ``enforce_four_eyes`` an approving decision is refused (:class:`SeparationOfDuties`, and
+        a ``denied`` audit record) when the approver shares an identity key with the authenticated
+        identity that recorded the current model version through the API.
+        """
         uc_id = str(uc["id"])
         with self._locked():
+            previous_raw = self._raw(REGISTRY_FILE)
             data = self._read(REGISTRY_FILE, {})
             if not isinstance(data, dict):
                 data = {}
+            before = copy.deepcopy(data.get(uc_id)) if isinstance(data.get(uc_id), dict) else None
             entry = data.get(uc_id) if isinstance(data.get(uc_id), dict) else {}
             version = (uc.get("model") or {}).get("version")
             assessment = {
@@ -164,11 +297,40 @@ class StateStore:
                 "reviewer": reviewer,
                 "decision": decision,
             }
+            if audit is not None:
+                sod = self._separation_of_duties(entry, version, decision, audit, enforce_four_eyes)
+                if sod == "violated":
+                    self._append(audit, action="registry.assessment", target=f"usecase:{uc_id}", outcome="denied",
+                                 before=before, after=before,
+                                 details={"decision": decision, "reviewed_model_version": version,
+                                          "reason": "separation_of_duties"})
+                    raise SeparationOfDuties(version)
+                assessment.update({"reviewed_by": audit.actor, "reviewed_by_role": audit.role,
+                                   "separation_of_duties": sod})
             entry["assessment"] = assessment
             entry["updated_at"] = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
             data[uc_id] = entry
-            self._write_atomic(REGISTRY_FILE, data)
+            record = None if audit is None else (lambda: self._append(
+                audit, action="registry.assessment", target=f"usecase:{uc_id}", before=before, after=entry,
+                details={"decision": decision, "reviewer": reviewer, "reviewed_model_version": version,
+                         "separation_of_duties": assessment.get("separation_of_duties")}))
+            self._commit(REGISTRY_FILE, data, previous_raw, record)
             return copy.deepcopy(entry)
+
+    @staticmethod
+    def _separation_of_duties(entry: dict[str, Any], version: Any, decision: str, audit: AuditContext,
+                              enforce: bool) -> str:
+        """``verified`` | ``violated`` | ``unknown_recorder`` | ``not_required`` | ``not_enforced``."""
+        if decision not in APPROVING_DECISIONS:
+            return "not_required"  # pending / rejected keep the deployment gate closed
+        if not enforce:
+            return "not_enforced"
+        recorder = entry.get("model_recorded_by")
+        if not isinstance(recorder, dict) or not recorder.get("authenticated") \
+                or str(recorder.get("version")) != str(version):
+            return "unknown_recorder"  # version from Git (reviewed there) or recorded without SSO
+        recorded_ids = {str(i) for i in recorder.get("ids") or []}
+        return "violated" if recorded_ids & set(audit.ids) else "verified"
 
     # -- spaces (3D bookings) -------------------------------------------------------------------
     def spaces_state(self) -> dict[str, Any]:
@@ -178,11 +340,13 @@ class StateStore:
             return {"version": 0, "updated_at": None, "state": {}}
         return data
 
-    def put_spaces_state(self, expected_version: int, state: dict[str, Any]) -> dict[str, Any]:
+    def put_spaces_state(self, expected_version: int, state: dict[str, Any],
+                         audit: AuditContext | None = None) -> dict[str, Any]:
         with self._locked():
-            current = self._read(SPACES_FILE, {"version": 0, "updated_at": None, "state": {}})
+            previous_raw = self._raw(SPACES_FILE)
+            current = self._read(SPACES_FILE, EMPTY_SPACES)
             if not isinstance(current, dict) or not isinstance(current.get("version"), int):
-                current = {"version": 0, "updated_at": None, "state": {}}
+                current = copy.deepcopy(EMPTY_SPACES)
             if expected_version != current["version"]:
                 raise VersionConflict(current)
             new = {
@@ -190,5 +354,9 @@ class StateStore:
                 "updated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
                 "state": state,
             }
-            self._write_atomic(SPACES_FILE, new)
+            before = current if previous_raw is not None else None
+            record = None if audit is None else (lambda: self._append(
+                audit, action="spaces.put", target="spaces:state", before=before, after=new,
+                details={"version": new["version"]}))
+            self._commit(SPACES_FILE, new, previous_raw, record)
             return new

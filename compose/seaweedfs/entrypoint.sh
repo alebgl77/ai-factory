@@ -1,9 +1,11 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
 # Renders the S3 identity file of SeaweedFS from the environment (S3_ACCESS_KEY,
-# S3_SECRET_KEY, S3_BUCKET), then hands over to the image entrypoint, which drops root privileges
-# (su-exec seaweed). The rendered file lives in a private tmpfs, never in an image layer
-# or in the repository.
+# S3_SECRET_KEY, S3_BUCKET), then hands over to the image entrypoint. docker-compose.yml runs
+# the container as the seaweed user (uid 1000) with no capability, so neither this script nor
+# the image entrypoint has a root step; started as root, the image entrypoint still drops to
+# seaweed (su-exec). The rendered file lives in a private tmpfs, never in an image layer or in
+# the repository.
 set -eu
 
 : "${S3_ACCESS_KEY:?S3_ACCESS_KEY is required}"
@@ -22,7 +24,9 @@ sed -e "s|\${S3_ACCESS_KEY}|${S3_ACCESS_KEY}|g" \
     -e "s|\${S3_SECRET_KEY}|${S3_SECRET_KEY}|g" \
     -e "s|\${S3_BUCKET}|${S3_BUCKET}|g" \
     /etc/seaweedfs/s3.json.tmpl > "$out_dir/s3.json"
-chown -R seaweed:seaweed "$out_dir"
+if [ "$(id -u)" = "0" ]; then
+  chown -R seaweed:seaweed "$out_dir"
+fi
 chmod 0500 "$out_dir"
 chmod 0400 "$out_dir/s3.json"
 

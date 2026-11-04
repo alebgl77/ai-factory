@@ -1,0 +1,9 @@
+# Test dependencies of the API (MIT): pytest and its own requirements, on top of the runtime
+# dependencies, at the exact versions of the runtime lock (-c requirements.txt).
+#
+# requirements-dev.txt is the hash-pinned lock (runtime + test) compiled from this file:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements-dev.txt requirements-dev.in
+-c requirements.txt
+-r requirements.in
+pytest==9.2.0               # MIT

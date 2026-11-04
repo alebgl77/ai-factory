@@ -18,14 +18,16 @@ Principles:
 
 | Path | Content |
 |---|---|
-| `api/` | FastAPI aggregation API (Python 3.12), engines, connectors, demo generator, pytest suite |
+| `api/` | FastAPI aggregation API (Python 3.12), engines, connectors, demo generator, security controls, pytest suite; `requirements*.in` and their hash-pinned locks `requirements*.txt` |
 | `config/` | GitOps definition of the factory: `factory.yaml`, `profiles.yaml`, `skills.yaml`, `usecases/*.yaml`, `catalog/*.yaml`, `catalog/github/*.yaml`, `frameworks/*.yaml` |
 | `dashboard/` | Static 3D dashboard (`index.html`), nginx Dockerfile that vendors Three.js 0.186.1 |
-| `compose/` | Configuration of every service in `docker-compose.yml` |
+| `compose/` | Configuration of every service in `docker-compose.yml` (including `compose/litellm/tests/`, the SSO end-to-end test `compose/sso/`, the edge identity-header and CSP test `compose/caddy/tests/` and the alert unit tests `compose/prometheus/tests/`) |
 | `sim/` | Simulators for a key-less demo: `mock-llm` (OpenAI-compatible), `traffic` (load generator), `gpu-sim` (DCGM-compatible exporter) |
 | `integrations/` | Git submodules of external projects (no copied code) |
-| `scripts/` | `build_snapshot.py`, `check_licenses.py`, `scan_secrets.sh`, `smoke_stack.sh`, `inventory_github.py` |
-| `docs/` | Architecture, governance crosswalk, FinOps, LLMOps, licences, security, GitHub integration report |
+| `scripts/` | `build_snapshot.py`, `check_licenses.py`, `validate_config.py`, `build_assets.py`, `scan_secrets.sh`, `smoke_stack.sh`, `inventory_github.py`, `sbom.sh` |
+| `.github/` | CI/CD and supply chain: workflows `ci`, `codeql`, `scorecard`, `security`, `release`, `pages`; `dependabot.yml`; hash-pinned CI tools (`tools/`), Trivy policy and accepted risks (`trivy/`), release scripts (`scripts/`) |
+| `docs/` | Architecture, governance crosswalk, FinOps, LLMOps, licences, security (`SECURITY.md`, `THREAT_MODEL.md`, `SECURITY_CONTROLS.md`), GitHub integration report |
+| `SECURITY.md` (root) | Security policy: supported versions, private vulnerability reporting, response targets (72 h / 7 days), scope, safe harbour, release verification (English then French) |
 | `tests/e2e/` | Playwright tests of the dashboard |
 
 ## 2. Configuration schemas (`config/`)
@@ -169,6 +171,10 @@ kpis: { adoption_target: 0.6, value_metric: "Temps de recherche documentaire", v
   version, and therefore flips `reevaluation_required` to true (the response says so).
 - `POST /api/v1/registry/{id}/assessment {decision, reviewer}` records a review of the current
   version (clears the flag when `decision` is `approved*`).
+- With authentication on, an approving `POST /assessment` by the identity that recorded the
+  current model version through the API is refused with 403 `separation_of_duties` (four-eyes).
+  The assessment records `reviewed_by`, `reviewed_by_role` and `separation_of_duties`
+  (`verified | unknown_recorder | not_required | not_enforced`).
 
 ### 2.5 `config/catalog/{models,agents,tools}.yaml`
 
@@ -262,13 +268,18 @@ Environment (all optional, see `.env.example`):
 | `FACTORY_DEMO_DATE` | fixed anchor date of the demo (`YYYY-MM-DD`, default: today Europe/Paris) |
 | `FACTORY_CORS_ORIGINS` | comma-separated allowed origins (default: none, same origin only) |
 | `FACTORY_MAX_BODY_BYTES` | request body limit (default 65536) |
+| `FACTORY_AUTH_MODE` | `none` (default, demo: no authentication, every request acts as role `admin`, flagged in `/health` and `meta.security`) or `proxy` (identity from `X-Forwarded-User`, `X-Forwarded-Email`, `X-Forwarded-Groups`, set only by the edge and read only from `FACTORY_TRUSTED_PROXIES`); any other value fails closed as `proxy` |
+| `FACTORY_TRUSTED_PROXIES` | comma-separated CIDRs allowed to assert an identity and `X-Forwarded-For` (`0.0.0.0/0` and `::/0` refused); docker-compose.yml default: the fixed edge address `${FACTORY_EDGE_IDENTITY_IP:-10.89.255.2}/32` on the `edge-identity` network |
+| `FACTORY_ROLE_MAP` | comma-separated `group:role` items; roles `viewer`, `editor`, `maintainer`, `approver`, `admin` |
+| `FACTORY_DEFAULT_ROLE` | role of an authenticated user without mapped group (default: none, so 403) |
+| `FACTORY_RATE_LIMIT_PER_MIN`, `FACTORY_RATE_LIMIT_BURST` | write rate limit per actor, or per client IP without authentication (default 60 and 20; 0 disables) |
 | `FACTORY_CONNECTOR_TIMEOUT_S`, `FACTORY_CACHE_TTL_S` | connector timeout and snapshot cache TTL |
 
 Endpoints (JSON, read endpoints are GET):
 
 | Path | Content |
 |---|---|
-| `/api/v1/health` | `{status, mode, sources:{prometheus,grafana,langfuse,litellm,qdrant}: bool}` |
+| `/api/v1/health` | `{status, mode, sources:{prometheus,grafana,langfuse,litellm,qdrant}: bool, security:{...} (same object as meta.security)}`; public (probes) |
 | `/api/v1/snapshot` | everything the dashboard needs, schema in section 4 |
 | `/api/v1/registry` and `/api/v1/registry/{id}` | evaluated use cases (risk tier, flags, controls) |
 | `POST /api/v1/registry/{id}/model-version` | see 2.4 |
@@ -284,11 +295,28 @@ Endpoints (JSON, read endpoints are GET):
 | `/api/v1/grafana/dashboards` | provisioned dashboards (title, uid, url) through the server-side token |
 | `/api/v1/grafana/metric/{name}` | named, allow-listed PromQL queries executed through Grafana's datasource proxy |
 | `GET/PUT /api/v1/spaces/state` | optional server persistence of the 3D bookings: GET `{version, updated_at, state}`, PUT `{version, state}`; a stale `version` returns 409 `{detail, current}` |
+| `/api/v1/audit?offset=0&limit=100&action=` | hash-chained audit records, newest first: `{total, offset, limit, order, records}` (permission `audit.read`: approver, admin) |
+| `/api/v1/audit/verify` | `{ok, chain_ok, records, head_hash, first_broken: {line, seq, reason}\|null, counts, state: {consistent, drift, unaudited}, algorithm: "sha256-chain", verified_at}` (`audit.read`) |
+| `/api/v1/whoami` | `{actor, authenticated, auth_mode, roles, permissions, groups, request_id}` (any authenticated identity) |
+| `/api/v1/docs`, `/api/v1/openapi.json` | OpenAPI page (Swagger UI 5.34.0 loaded from jsDelivr with Subresource Integrity and a per-answer CSP nonce) and schema (permission `read`) |
 | `/metrics` | Prometheus exposition of factory KPIs (section 5) |
 
 Security rules: no endpoint returns a secret; the Grafana proxy only issues GET to an
 allow-list of Grafana paths and only runs named queries; request bodies are size-limited;
 CORS is closed by default (same origin through the edge proxy).
+Permissions: `read` (viewer and above, every GET except `/health`, which stays public),
+`spaces.write` and `placement.decide` (editor), `registry.model_version` (maintainer),
+`registry.assessment` and `audit.read` (approver); `admin` has all. Refusals are `{detail, code}`
+with `code` in `untrusted_source | unauthenticated | invalid_identity | forbidden |
+separation_of_duties | rate_limited` (401/403/429, 429 with `Retry-After`). Every write appends a
+SHA-256-chained record to `FACTORY_STATE_DIR/audit.jsonl` (fields v, seq, ts, actor, role,
+auth_mode, action, target, outcome, before_hash, after_hash, request_id, client_ip, details,
+prev_hash, hash); a write whose record cannot be stored is rolled back (503). Answers carry
+`X-Request-ID`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none';
+frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `Referrer-Policy: no-referrer`,
+`Cross-Origin-Resource-Policy: same-origin` and, under `/api/`, `Cache-Control: no-store`.
+The edge never applies the dashboard CSP to `/api/*` (the API's own policy is the only one) and
+removes client-supplied identity headers on every route (section 6).
 
 ## 4. Snapshot schema (`GET /api/v1/snapshot`)
 
@@ -296,7 +324,16 @@ CORS is closed by default (same origin through the edge proxy).
 {
   "meta": { "mode": "demo|live|mixed", "generated_at": "2026-11-03T10:12:00+01:00", "seed": 42,
             "sources": { "prometheus": false, "grafana": false, "langfuse": false, "litellm": false, "qdrant": false },
-            "fine_tuning": false, "version": "1.0.0" },
+            "fine_tuning": false, "version": "1.0.0",
+            "security": { "status": "demo|enforced|degraded", "auth_mode": "none|proxy",
+                          "authentication": "disabled|sso_proxy", "rbac": "not_enforced|enforced",
+                          "roles": ["viewer","editor","maintainer","approver","admin"], "trusted_proxies": 0,
+                          "separation_of_duties": "not_enforced|enforced",
+                          "audit": { "enabled": true, "algorithm": "sha256-chain", "available": true, "chain_ok": true,
+                                     "records": 0, "head_hash": "<64 hex>", "first_broken": null },
+                          "rate_limit": { "enabled": true, "writes_per_minute": 60, "burst": 20 },
+                          "body_limit_bytes": 65536, "cors": "closed|allow_list", "security_headers": true,
+                          "warnings": ["auth_disabled"] } },
   "factory": { "name": "...", "tagline": "...", "currency": "EUR", "regulatory": { /* 2.1 */ } },
   "profiles": { "roles": [ ... ], "people": [ ... ] },
   "registry": [ { "id": "uc-01", "code": "UC-01", "name": "...", "stage": "mvp", "sensitivity": "C3",
@@ -377,6 +414,8 @@ Exported by the API on `/metrics`:
 - `factory_skills_coverage_ratio{role}`
 - `factory_agent_ttft_seconds{agent,quantile}`, `factory_agent_tokens_per_task{agent,quantile}`,
   `factory_vector_latency_seconds{quantile}` (demo mode: from the generator)
+- `factory_audit_events_total{action}`, `factory_audit_chain_ok` (0/1),
+  `factory_security_denied_total{reason}` (labels carry no identity)
 
 Exported by the LiteLLM custom callback (`compose/litellm/factory_callbacks.py`, MIT, port 9464):
 
@@ -392,16 +431,19 @@ GPU: DCGM exporter names (`DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_GPU_TEMP`, `DCGM_
 
 | Service | Image (licence) | Port (internal) | Profile |
 |---|---|---|---|
+| `volume-init` | caddy:2 (one-shot: gives the edge volumes to uid 10001) | - | default |
 | `edge` | caddy:2 (Apache-2.0) | 80/443 -> host | default |
 | `dashboard` | built from `dashboard/` (nginx, BSD-2) | 80 | default |
 | `api` | built from `api/` | 8000 | default |
 | `prometheus` | prom/prometheus (Apache-2.0) | 9090 | default |
-| `grafana` | grafana/grafana-oss (AGPLv3, separate service) | 3000 | default |
+| `grafana` | grafana/grafana (AGPLv3 OSS edition, separate service; grafana/grafana-oss is no longer published after 13.0.2) | 3000 | default |
 | `grafana-bootstrap` | built from `compose/grafana-bootstrap` (python:3.12-slim, standard library only; one-shot, writes the Viewer SA token) | - | default |
 | `loki` | grafana/loki (AGPLv3, separate service) | 3100 | default |
 | `alloy` | grafana/alloy (Apache-2.0) | 12345 | default |
+| `docker-socket-proxy` | wollomatic/socket-proxy (MIT): GET allowlist of the Docker API for Alloy, only container mounting the Docker socket | 2375 | default |
+| `oauth2-proxy` | quay.io/oauth2-proxy/oauth2-proxy (MIT), OIDC single sign-on behind Caddy forward_auth | 4180 | `sso` |
 | `qdrant` | qdrant/qdrant (Apache-2.0) | 6333 | default |
-| `litellm` | litellm/litellm on Docker Hub (same release as ghcr.io/berriai/litellm, switch with `LITELLM_IMAGE`; MIT outside `enterprise/`, no licence key) | 4000, 9464 | default |
+| `litellm` | litellm/litellm-non_root on Docker Hub (official non-root variant of the same release as ghcr.io/berriai/litellm-non_root, switch with `LITELLM_IMAGE`; MIT outside `enterprise/`, no licence key) | 4000, 9464 | default |
 | `postgres` | postgres:17 (PostgreSQL) | 5432 | default |
 | `langfuse-web`, `langfuse-worker` | langfuse/langfuse:3, langfuse/langfuse-worker:3 (MIT core, no EE key) | 3000, 3030 | default |
 | `clickhouse` | clickhouse/clickhouse-server (Apache-2.0) | 8123, 9000 | default |
@@ -413,6 +455,17 @@ GPU: DCGM exporter names (`DCGM_FI_DEV_GPU_UTIL`, `DCGM_FI_DEV_GPU_TEMP`, `DCGM_
 
 Edge routes: `{$FACTORY_HOST}` -> dashboard, `/api/*` -> api; `grafana.{$FACTORY_HOST}` -> grafana;
 `langfuse.{$FACTORY_HOST}` -> langfuse-web. LiteLLM, Prometheus, Qdrant, ClickHouse, Postgres are not exposed.
+With `FACTORY_AUTH=sso`, `/oauth2/*` -> oauth2-proxy and every other path except `/healthz` and
+`/.well-known/security.txt` goes through forward_auth (pages redirect to the identity provider,
+`/api/*` gets 401). `/.well-known/security.txt` (RFC 9116) is served on every host. Networks:
+`edge-identity` (internal) = edge at the fixed address `FACTORY_EDGE_IDENTITY_IP`, api (alias
+`api-identity`), oauth2-proxy; `docker-api` (internal) = alloy and docker-socket-proxy.
+Client-supplied `X-Forwarded-User`, `-Email`, `-Groups`, `-Preferred-Username` and
+`X-Auth-Request-*` never pass the edge, on any route and in any mode: `none` removes them,
+`basic` sets `X-Forwarded-User` to the authenticated user and removes the others, `sso` sets them
+only from the oauth2-proxy answer (`forward_auth copy_headers`) and removes them on `/oauth2/*`
+(test: `compose/caddy/tests/test_identity_headers.sh`). The dashboard CSP applies to the
+dashboard only; `/api/*` keeps the API's own headers.
 
 LiteLLM model aliases: `chat-default` (cloud, fallbacks VPS then local), `chat-small` (VPS first),
 `chat-sensitive` (local only, no fallback outside the local GPU), `embed-default` (local only:
@@ -450,6 +503,25 @@ Requests carry `metadata.usecase` (and `metadata.agent`) for cost attribution.
   `factory_gpu_sim_source_up`.
 - Dashboard: visit mode (first-person walk, `window.__twin.pov` test hook) and the optional visual
   pack `dashboard/assets/assets.js` (`window.__AF_ASSETS`, see `docs/ASSETS.md`).
+- Gateway guardrails (compose/litellm/factory_callbacks.py): `factory_llm_guardrail_events_total{type,action,usecase}`
+  with type `prompt_injection|pii_email|pii_phone|pii_iban|pii_card|pii_nir` and action
+  `flagged|blocked|redacted` (one event per request and type); env `FACTORY_GUARDRAIL_MODE=flag|block|off`
+  (unknown = block) and `FACTORY_PII_REDACTION=true|false`; request metadata `factory_guardrail`
+  holds rule ids and counts only, and Langfuse tags `guardrail:prompt_injection` /
+  `guardrail:pii_redacted` are added. C3/C4 requests also carry `turn_off_message_logging`, and
+  the reroute to `chat-sensitive` covers the Responses and Messages APIs.
+- Security alerts (`compose/prometheus/rules/factory-alerts.yml`, group `factory-security`, unit
+  tests in `compose/prometheus/tests/`): `FactoryAuditChainBroken` (`factory_audit_chain_ok == 0`
+  for 1 min, critical) and `FactorySecurityDenialsSpike` (more than 50 refusals in 5 min, warning).
+- Grafana session cookie: `GRAFANA_COOKIE_SECURE=auto` (default) sets the `Secure` flag when
+  `FACTORY_SCHEME=https`; `true` or `false` force it.
+- Supply chain: every Python dependency installs from a hash-pinned lock (`requirements*.txt`
+  compiled from `requirements*.in` by pip-compile, `pip install --require-hashes`); Dockerfile
+  base images and the Dockerfile frontend are pinned as `tag@sha256:digest`.
+- Releases (tag `v*`): images built from this repository are published as
+  `ghcr.io/<owner>/<name>` (api, dashboard, mock-llm, traffic, gpu-sim, grafana-bootstrap;
+  linux/amd64), signed keyless with cosign, with SLSA build provenance and SBOM attestations
+  (SPDX 2.3, CycloneDX); verify with `.github/scripts/verify_image.sh`.
 
 ## 9. Internationalisation (English first, French second)
 

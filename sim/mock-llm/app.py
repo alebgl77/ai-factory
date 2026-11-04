@@ -14,7 +14,9 @@ POST /embeddings. Un-prefixed /v1/... maps to the cloud profile.
 
 The failure rate of each profile is set by environment variables and can be changed at
 runtime through POST /admin/failure (internal network only) to exercise the gateway
-fallbacks. GET /stats exposes per-profile counters that the GPU simulator follows.
+fallbacks. GET /stats exposes per-profile counters that the GPU simulator follows, plus two
+privacy probes used by scripts/smoke_stack.sh: redaction placeholders of the gateway seen in
+prompts, and e-mail addresses received in clear text (counts only, prompts are never stored).
 
 No real model is involved: the generated text is synthetic French filler.
 """
@@ -27,6 +29,7 @@ import json
 import math
 import os
 import random
+import re
 import threading
 import time
 import uuid
@@ -67,6 +70,10 @@ class Stats:
     tokens_in: int = 0
     embeddings: int = 0
     by_model: dict[str, int] = field(default_factory=dict)
+    # Privacy probes for the smoke test (counts only, the prompt itself is never kept): gateway
+    # redaction placeholders seen, and e-mail addresses that reached this target in clear text.
+    redaction_markers: int = 0
+    raw_emails: int = 0
 
 
 def _load_profiles() -> dict[str, Profile]:
@@ -145,6 +152,10 @@ def _messages_text(messages: Any) -> str:
     return "\n".join(parts)
 
 
+_REDACTION_MARKER_RE = re.compile(r"\[REDACTED_[A-Z]+\]")
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+
+
 def _profile_or_404(name: str) -> Profile:
     profile = PROFILE_MAP.get(name)
     if profile is None:
@@ -215,6 +226,8 @@ async def _chat(profile: Profile, request: Request) -> Any:
         st.requests += 1
         st.tokens_in += prompt_tokens
         st.by_model[model] = st.by_model.get(model, 0) + 1
+        st.redaction_markers += len(_REDACTION_MARKER_RE.findall(prompt_text))
+        st.raw_emails += len(_EMAIL_RE.findall(prompt_text))
 
     failure = _maybe_fail(profile)
     if failure is not None:
@@ -348,6 +361,7 @@ async def stats() -> dict[str, Any]:
         data = {name: {"requests": s.requests, "failures": s.failures, "in_flight": s.in_flight,
                        "tokens_in": s.tokens_in, "tokens_out": s.tokens_out,
                        "embeddings": s.embeddings, "by_model": dict(s.by_model),
+                       "redaction_markers": s.redaction_markers, "raw_emails": s.raw_emails,
                        "failure_rate": PROFILE_MAP[name].failure_rate}
                 for name, s in STATS.items()}
     return {"uptime_s": round(time.time() - STARTED_AT, 1), "profiles": data}

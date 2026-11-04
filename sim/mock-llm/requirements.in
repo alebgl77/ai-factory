@@ -1,0 +1,10 @@
+# mock-llm runtime dependencies: direct dependencies only, permissive licences only
+# (fastapi MIT, uvicorn BSD-3-Clause, pydantic MIT; transitive ones in the lock).
+#
+# requirements.txt is the hash-pinned lock compiled from this file with pip-tools under
+# Python 3.12; the Dockerfile installs it with --require-hashes:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements.txt requirements.in
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.2

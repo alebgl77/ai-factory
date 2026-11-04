@@ -2,6 +2,11 @@
 
 Secrets (Langfuse secret key, LiteLLM master key, Grafana token file content) are kept on
 this object only. The object is never serialised into a response.
+
+Security settings (see ``app/security.py`` and the API README): ``FACTORY_AUTH_MODE``,
+``FACTORY_TRUSTED_PROXIES``, ``FACTORY_ROLE_MAP``, ``FACTORY_DEFAULT_ROLE``,
+``FACTORY_RATE_LIMIT_PER_MIN`` and ``FACTORY_RATE_LIMIT_BURST``. They are parsed and validated
+by :class:`app.security.SecurityConfig`; invalid values fail closed and are reported as warnings.
 """
 
 from __future__ import annotations
@@ -31,6 +36,11 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def _env_list(name: str) -> tuple[str, ...]:
+    """Comma-separated list (blank items dropped)."""
+    return tuple(item.strip() for item in (_env(name, "") or "").split(",") if item.strip())
 
 
 def _env_float(name: str, default: float) -> float:
@@ -66,6 +76,13 @@ class Settings:
     connector_timeout_s: float = 2.0
     cache_ttl_s: float = 10.0
     default_lang: str = DEFAULT_LANG  # FACTORY_DEFAULT_LANG: en | fr (CONTRACT section 9)
+    # -- security (app/security.py) -------------------------------------------------------------
+    auth_mode: str = "none"                  # FACTORY_AUTH_MODE: none (demo) | proxy (SSO in front)
+    trusted_proxies: tuple[str, ...] = ()    # FACTORY_TRUSTED_PROXIES: CIDRs allowed to assert identity
+    role_map: tuple[str, ...] = ()           # FACTORY_ROLE_MAP: "group:role" items
+    default_role: str | None = None          # FACTORY_DEFAULT_ROLE: role of an authenticated user without mapped group
+    rate_limit_per_min: int = 60             # FACTORY_RATE_LIMIT_PER_MIN: write requests per actor/IP (0 = off)
+    rate_limit_burst: int = 20               # FACTORY_RATE_LIMIT_BURST: bucket size
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_lang", normalize_lang(self.default_lang, DEFAULT_LANG))
@@ -98,4 +115,10 @@ class Settings:
             connector_timeout_s=min(10.0, max(0.2, _env_float("FACTORY_CONNECTOR_TIMEOUT_S", 2.0))),
             cache_ttl_s=max(0.0, _env_float("FACTORY_CACHE_TTL_S", 10.0)),
             default_lang=normalize_lang(_env("FACTORY_DEFAULT_LANG"), DEFAULT_LANG),
+            auth_mode=(_env("FACTORY_AUTH_MODE", "none") or "none").lower(),
+            trusted_proxies=_env_list("FACTORY_TRUSTED_PROXIES"),
+            role_map=_env_list("FACTORY_ROLE_MAP"),
+            default_role=(_env("FACTORY_DEFAULT_ROLE") or "").lower() or None,
+            rate_limit_per_min=max(0, _env_int("FACTORY_RATE_LIMIT_PER_MIN", 60)),
+            rate_limit_burst=max(1, _env_int("FACTORY_RATE_LIMIT_BURST", 20)),
         )

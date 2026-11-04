@@ -1,0 +1,9 @@
+# Test dependencies of the LiteLLM callback (all permissive). LiteLLM itself is not needed:
+# conftest.py provides a minimal stand-in for litellm.integrations.custom_logger.
+#
+# requirements.txt is the hash-pinned lock compiled from this file with pip-tools under
+# Python 3.12; CI installs it with --require-hashes:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements.txt requirements.in
+pytest==9.2.0               # MIT
+prometheus-client==0.26.0   # Apache-2.0 AND BSD-2-Clause

@@ -10,12 +10,12 @@ from ..connectors import NAMED_QUERIES, SourceError
 from ..connectors.grafana import describe_queries
 from ..i18n import msg
 from ..service import FactoryService
-from .deps import response_lang, service
+from .deps import READ_ONLY, response_lang, service
 
 router = APIRouter(prefix="/api/v1/grafana", tags=["grafana"])
 
 
-@router.get("/dashboards", summary="Provisioned Grafana dashboards and named queries")
+@router.get("/dashboards", dependencies=READ_ONLY, summary="Provisioned Grafana dashboards and named queries")
 def dashboards(svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
     client = svc.connectors.grafana
     queries = describe_queries(lang)
@@ -27,7 +27,8 @@ def dashboards(svc: FactoryService = Depends(service), lang: str = Depends(respo
         return {"available": False, "dashboards": [], "queries": queries}
 
 
-@router.get("/metric/{name}", summary="Named PromQL query run through Grafana's datasource proxy")
+@router.get("/metric/{name}", dependencies=READ_ONLY,
+            summary="Named PromQL query run through Grafana's datasource proxy")
 def metric(name: str = Path(pattern=r"^[a-z0-9_]{1,64}$"), svc: FactoryService = Depends(service),
            lang: str = Depends(response_lang)) -> dict[str, Any]:
     if name not in NAMED_QUERIES:

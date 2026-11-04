@@ -10,8 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..engines.placement import decide
 from ..i18n import msg
+from ..security import PLACEMENT_DECIDE, Access, require
 from ..service import FactoryService
-from .deps import ID_PATTERN, not_found, response_lang, service
+from ..state import StateError
+from .deps import ID_PATTERN, READ_ONLY, not_found, response_lang, service, state_unavailable
 
 router = APIRouter(prefix="/api/v1/placement", tags=["placement"])
 
@@ -36,15 +38,16 @@ class PlacementIn(BaseModel):
     targets: TargetsOverride | None = None
 
 
-@router.get("", summary="Hybrid placement: cloud / VPS / local")
+@router.get("", dependencies=READ_ONLY, summary="Hybrid placement: cloud / VPS / local")
 def get_placement(svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
     return svc.snapshot(lang=lang)["placement"]
 
 
-@router.post("/decide", summary="Placement decision (outages can be simulated)")
-def post_decide(body: PlacementIn, svc: FactoryService = Depends(service),
-                lang: str = Depends(response_lang)) -> dict[str, Any]:
-    """What-if decision; ``?lang=`` only selects the language of the reasons (no state is written)."""
+@router.post("/decide", summary="Placement decision (outages can be simulated); role editor")
+def post_decide(body: PlacementIn, access: Access = Depends(require(PLACEMENT_DECIDE, write=True)),
+                svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
+    """What-if decision; ``?lang=`` only selects the language of the reasons. No state is written,
+    but the decision is audited (inputs and decision hashes, target, sensitivity)."""
     snap = svc.snapshot(lang=lang)
     placement = snap["placement"]
     workload: dict[str, Any] = {"id": "wl-what-if"}
@@ -69,5 +72,17 @@ def post_decide(body: PlacementIn, svc: FactoryService = Depends(service),
                 t["status"] = overrides[t["id"]]
     policy = svc.localized_config(lang).get("factory", {}).get("placement") or {}
     decision = decide(workload, targets, policy, lang)
+    inputs = {"workload": {k: workload.get(k) for k in ("usecase", "sensitivity", "task_type", "params_b",
+                                                         "model_alias")},
+              "targets": {t["id"]: t["status"] for t in targets}}
+    try:
+        svc.state.append_audit(access.audit_context(), action="placement.decide",
+                               target=f"placement:{workload.get('usecase') or 'what-if'}", before=inputs,
+                               after={"target": decision.get("target"), "status": decision.get("status"),
+                                      "model_alias": decision.get("model_alias")},
+                               details={"usecase": workload.get("usecase"), "sensitivity": workload.get("sensitivity"),
+                                        "target": decision.get("target"), "simulated": bool(body.targets)})
+    except StateError:
+        raise state_unavailable(lang, audit=True) from None
     return {"decision": decision, "targets": [{"id": t["id"], "status": t["status"]} for t in targets],
             "simulated": bool(body.targets)}

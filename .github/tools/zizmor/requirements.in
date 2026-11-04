@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+# CI-only tool, never shipped in an image: zizmor (MIT), static analysis of GitHub Actions workflows.
+# Compile with hashes (Python 3.12), Dependabot keeps both files in step:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements.txt requirements.in
+zizmor==1.31.1

@@ -21,6 +21,7 @@ from .demo import generate_demo
 from .engines.risk import evaluate_registry
 from .i18n import LANGUAGES, localize_tree, normalize_lang
 from .live import collect_live
+from .security import Guard, SecurityConfig, posture
 from .settings import Settings
 from .snapshot import assemble_snapshot
 from .state import StateStore, apply_registry_overrides
@@ -34,6 +35,7 @@ class FactoryService:
         self.config = ConfigStore(settings.config_dir)
         self.state = StateStore(settings.state_dir)
         self.connectors = Connectors(settings, transport=transport)
+        self.guard = Guard(SecurityConfig.from_settings(settings))
         self._clock = clock or (lambda: dt.datetime.now(dt.timezone.utc))
         self._lock = threading.Lock()
         self._cache: dict[Any, tuple[float, dict[str, Any]]] = {}
@@ -86,6 +88,10 @@ class FactoryService:
                                  people, self.today(cfg), lang)[0]
         return localize_tree(item, lang)
 
+    def security_posture(self) -> dict[str, Any]:
+        """Security posture (no secret, language-independent): ``/health`` and ``meta.security``."""
+        return posture(self.guard.config, self.state.audit_status())
+
     def sources(self, force: bool = False) -> dict[str, bool]:
         if self.settings.demo_mode == "always":
             return {name: False for name in SOURCE_NAMES}
@@ -129,6 +135,8 @@ class FactoryService:
         live: dict[str, Any] = {}
         if mode in ("auto", "never") and any(sources.values()):
             live = collect_live(self.connectors, sources, today=today, now=now, days=days, tz=self.tz(cfg))
-        return assemble_snapshot(lcfg, usecases, demo, live, demo_mode=mode, seed=self.settings.demo_seed,
+        snap = assemble_snapshot(lcfg, usecases, demo, live, demo_mode=mode, seed=self.settings.demo_seed,
                                  today=today, now=now, days=days, cost_mode=cost_mode, sources=sources,
                                  lang=lang, languages=LANGUAGES)
+        snap["meta"]["security"] = self.security_posture()  # trust badge of the dashboard
+        return snap

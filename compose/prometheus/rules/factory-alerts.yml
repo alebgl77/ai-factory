@@ -113,6 +113,29 @@ groups:
           summary: "{{ $value }} use case(s) to re-assess (new model version)"
           description: "The deployment gate stays blocked (risk_reassessment) until the risk review is done."
 
+  - name: factory-security
+    rules:
+      # The API recomputes the SHA-256 chain of FACTORY_STATE_DIR/audit.jsonl (0 = a record was
+      # edited, removed, reordered or truncated, or the log cannot be read).
+      - alert: FactoryAuditChainBroken
+        expr: factory_audit_chain_ok == 0
+        for: 1m
+        labels:
+          severity: critical
+          pillar: governance
+        annotations:
+          summary: "Audit hash chain broken ({{ $labels.instance }})"
+          description: "The tamper-evident audit log no longer verifies. Run GET /api/v1/audit/verify (or python -m app.audit verify) to find the first broken record, keep the volume as evidence and follow the incident response guide (docs/SECURITY.md)."
+      - alert: FactorySecurityDenialsSpike
+        expr: sum(increase(factory_security_denied_total[5m])) > 50
+        for: 1m
+        labels:
+          severity: warning
+          pillar: governance
+        annotations:
+          summary: "{{ $value | humanize }} requests refused by the API in 5 minutes"
+          description: "Unusual number of 401/403/429 answers (untrusted source, unauthenticated, forbidden, separation of duties, rate limited). Check the factory.security JSON lines in Loki ({service=\"api\"} |= \"request.denied\") for the reasons and client addresses."
+
   - name: factory-platform
     rules:
       - alert: FactoryTargetDown

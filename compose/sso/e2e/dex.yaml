@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+# Test identity provider for compose/sso/test_sso_e2e.sh only (Dex, Apache-2.0, never shipped
+# in the stack). The mockCallback connector signs in a fixed fictional user without a password:
+# Kilgore Trout <kilgore@kilgore.trout>, groups [authors].
+issuer: http://dex.test:5556/dex
+storage: {type: memory}
+web: {http: 0.0.0.0:5556}
+oauth2: {skipApprovalScreen: true}
+enablePasswordDB: false
+staticClients:
+  - id: factory-e2e
+    secret: e2e-client-secret-not-a-secret
+    name: factory-e2e
+    redirectURIs: ["http://factory.test/oauth2/callback"]
+connectors:
+  - type: mockCallback
+    id: mock
+    name: Mock

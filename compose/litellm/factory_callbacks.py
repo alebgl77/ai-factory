@@ -24,7 +24,25 @@ Loaded by the LiteLLM proxy through ``litellm_settings.callbacks`` in config.yam
 2. enforces the placement rule of the factory at the gateway (pre-call hook): a request
    whose ``metadata.sensitivity`` is a sensitive data class (C3, C4 by default) is
    rerouted to ``chat-sensitive`` (local GPU only), and the prompt and completion of every
-   sensitive request are masked in Langfuse (``mask_input`` / ``mask_output``).
+   sensitive request are masked in Langfuse (``mask_input`` / ``mask_output``) and excluded
+   from every LiteLLM logging integration (``turn_off_message_logging``).
+
+3. runs the factory LLM guardrails (pre-call, before the request leaves the gateway):
+
+   - prompt injection / jailbreak detection (English and French patterns, chat-template
+     delimiters, hidden Unicode tag and bidi characters). ``FACTORY_GUARDRAIL_MODE``:
+     ``flag`` (default: request forwarded, rule ids in ``metadata.factory_guardrail`` and a
+     ``guardrail:prompt_injection`` tag), ``block`` (HTTP 400, nothing forwarded) or ``off``.
+     An unknown value fails closed to ``block``.
+   - PII redaction (e-mail addresses, phone numbers, IBAN with mod-97 check, payment card
+     numbers with Luhn check, French NIR with its key) on every request routed to an alias
+     that may leave the local GPU (C1/C2 data; C3/C4 never do while sensitive routing is
+     enforced). ``FACTORY_PII_REDACTION=true`` (default) | ``false``.
+   - neither the detectors nor the metrics ever record prompt text: only rule ids and counts.
+
+   Metric: factory_llm_guardrail_events_total{type,action,usecase} with type in
+   prompt_injection | pii_email | pii_phone | pii_iban | pii_card | pii_nir and action in
+   flagged | blocked | redacted (one event per request and type).
 
 Cost attribution reads ``metadata.usecase`` and ``metadata.agent`` from the request. Label
 values are validated and capped to keep the Prometheus cardinality bounded.
@@ -32,16 +50,29 @@ values are validated and capped to keep the Prometheus cardinality bounded.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import sys
 import threading
 import types
+import unicodedata
+from collections import Counter as Tally
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
 from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_server
+
+try:  # the LiteLLM proxy runs on FastAPI: an HTTPException becomes the HTTP status of the reply
+    from fastapi import HTTPException
+except ImportError:  # unit tests without FastAPI
+    class HTTPException(Exception):  # type: ignore[no-redef]
+        def __init__(self, status_code: int, detail: Any = None) -> None:
+            super().__init__(status_code, detail)
+            self.status_code = status_code
+            self.detail = detail
 
 _LABEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$")
 _MAX_VALUES_PER_LABEL = int(os.environ.get("FACTORY_METRICS_MAX_LABEL_VALUES", "200"))
@@ -55,6 +86,29 @@ _ENFORCE = os.environ.get("FACTORY_ENFORCE_SENSITIVE_ROUTING", "true").lower() i
 _COST_FX = float(os.environ.get("FACTORY_COST_FX", "1.0") or 1.0)
 _PORT = int(os.environ.get("FACTORY_METRICS_PORT", "9464"))
 _DEPLOYMENTS = {"cloud", "vps", "local"}
+_GUARDRAIL_MODES = ("off", "flag", "block")
+
+
+def _guardrail_mode(raw: str | None) -> str:
+    value = (raw or "flag").strip().lower()
+    return value if value in _GUARDRAIL_MODES else "block"  # unknown value: fail closed
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+GUARDRAIL_MODE = _guardrail_mode(os.environ.get("FACTORY_GUARDRAIL_MODE"))
+PII_REDACTION = _env_bool("FACTORY_PII_REDACTION", True)
+# Aliases served by the local GPU only: prompts sent to them never leave the factory.
+LOCAL_ALIASES = frozenset(a.strip() for a in os.environ.get(
+    "FACTORY_LOCAL_ALIASES", f"{_SENSITIVE_ALIAS},embed-default").split(",") if a.strip())
+MAX_SCAN_CHARS = max(1024, int(os.environ.get("FACTORY_GUARDRAIL_MAX_SCAN_CHARS", "500000") or 500000))
+# Above this size the detectors run in a worker thread, off the event loop of the proxy.
+_THREAD_THRESHOLD_CHARS = 20_000
 
 TTFT_BUCKETS = (0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0)
 LATENCY_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0, 30.0, 60.0, 120.0)
@@ -89,6 +143,9 @@ def _runtime() -> types.ModuleType:
                               ["agent", "usecase", "direction"], registry=reg)
     rt.reroutes = Counter("factory_llm_sensitive_reroutes", "Requests rerouted to the local-only alias.",
                           ["from_model", "usecase"], registry=reg)
+    rt.guardrail = Counter("factory_llm_guardrail_events",
+                           "Guardrail events by type (prompt_injection, pii_*), action and use case.",
+                           ["type", "action", "usecase"], registry=reg)
     rt.seen = {}
     rt.lock = threading.Lock()
     try:
@@ -171,6 +228,332 @@ def _usage(kwargs: dict, response_obj: Any) -> tuple[int, int]:
         return 0, 0
 
 
+# ================================================================== guardrails: detectors
+# Pure functions (unit tested in compose/litellm/tests/). They return rule ids and counts
+# only: no matched text is ever stored, logged or exported.
+
+# Invisible characters removed before matching (soft hyphen, zero-width space / joiners,
+# word joiner, BOM): they are used to split keywords ("ig<U+200B>nore").
+_INVISIBLE_RE = re.compile("[\u00ad\u200b\u200c\u200d\u2060\ufeff]")
+# Unicode "tag" characters (ASCII smuggling) and bidirectional overrides (Trojan Source):
+# no legitimate business prompt needs them.
+_HIDDEN_RE = re.compile("[\U000e0000-\U000e007f\u202a-\u202e\u2066-\u2069]")
+_SPACES_RE = re.compile(r"\s+")
+
+_W = r"(?:\W+\w+)"  # one more word (bounded repetitions below keep matching linear)
+_INJECTION_RULES: tuple[tuple[str, re.Pattern[str]], ...] = tuple((rule, re.compile(rx)) for rule, rx in (
+    # "ignore all previous instructions", "disregard your system prompt", "bypass the guardrails"
+    ("override_instructions", r"\b(?:ignore|disregard|forget|override|bypass)\b" + _W + r"{0,4}?\W+"
+     r"(?:previous|prior|above|earlier|preceding|former|initial|original|system|developer|your|these|those|all)\b"
+     + _W + r"{0,3}?\W+(?:instructions?|rules|guidelines|prompts?|directives?|directions|constraints|"
+     r"polic(?:y|ies)|guardrails?|safeguards?)\b"),
+    ("override_instructions", r"\b(?:bypass|disable|circumvent|turn off)\W+(?:\w+\W+){0,2}?(?:guardrails?|"
+     r"safeguards?|safety filters?|content filters?|moderation)\b"),
+    # "ignore the instructions above", "forget the rules given before"
+    ("override_instructions", r"\b(?:ignore|disregard|forget)\b" + _W + r"{0,3}?\W+"
+     r"(?:instructions?|rules|guidelines|prompts?)\W+(?:above|before|so far|given (?:to you )?(?:earlier|before))\b"),
+    # FR: "ignore toutes les instructions précédentes", "oublie tes consignes"
+    ("override_instructions", r"\b(?:ignore[rsz]?|oublie[rsz]?|neglige[rsz]?|contourne[rsz]?|outrepasse[rsz]?)\b"
+     + _W + r"{0,4}?\W+(?:precedent(?:e|es|s)?|anterieur(?:e|es|s)?|ci-dessus|initia(?:l|le|les|ux)|systeme|"
+     r"toutes?|tes|vos)\b" + _W + r"{0,3}?\W+(?:instructions?|consignes?|regles?|directives?|contraintes?)\b"),
+    # FR: "oublie les consignes précédentes"
+    ("override_instructions", r"\b(?:ignore[rsz]?|oublie[rsz]?|neglige[rsz]?|ne tiens? pas compte des?)\b"
+     + _W + r"{0,3}?\W+(?:instructions?|consignes?|regles?|directives?)\W+"
+     r"(?:precedent\w*|anterieur\w*|ci-dessus|initia\w*|(?:du )?systeme)\b"),
+    # "reveal your system prompt", "print the hidden instructions", "repeat the text above"
+    ("prompt_exfiltration", r"\b(?:reveal|show|print|repeat|output|display|dump|leak|disclose|tell me|give me|"
+     r"write out|spell out)\b" + _W + r"{0,4}?\W+(?:system|initial|hidden|secret|original|developer|internal)\W+"
+     r"(?:prompt|instructions?|message|rules|configuration)\b"),
+    ("prompt_exfiltration", r"\brepeat\b" + _W + r"{0,3}?\W+(?:text|words|everything)\W+(?:above|before)\b"),
+    ("prompt_exfiltration", r"\bwhat\W+(?:is|are|were)\W+your\W+(?:system\W+prompt|initial\W+instructions|"
+     r"hidden\W+instructions)\b"),
+    # FR: "révèle ton prompt système", "affiche les instructions cachées"
+    ("prompt_exfiltration", r"\b(?:revele|affiche|montre|repete|imprime|donne|ecris|divulgue|recopie)[rsz]?\b"
+     + _W + r"{0,4}?\W+(?:prompt|instructions?|message|consignes?)\W+"
+     r"(?:systeme|initia\w*|cache\w*|secret\w*|interne\w*)\b"),
+    # "you are now DAN", "act as an unrestricted AI", "pretend you have no restrictions"
+    ("role_jailbreak", r"\b(?:you are now|you're now|from now on,? you are|act as|pretend (?:to be|you are)|"
+     r"roleplay as|behave like)\b" + _W + r"{0,5}?\W+(?:dan|jailbroken|unrestricted|unfiltered|uncensored|"
+     r"without (?:any )?(?:restrictions|limits|filters|rules|guidelines))\b"),
+    ("role_jailbreak", r"\bpretend\W+(?:that\W+)?you\W+(?:have|had)\W+no\W+(?:restrictions|limits|rules|"
+     r"guidelines|filters)\b"),
+    ("role_jailbreak", r"\b(?:enable|activate|enter|switch (?:to|into))\W+(?:the\W+)?"
+     r"(?:god|dan|jailbreak|sudo|unrestricted)\W+mode\b"),
+    ("role_jailbreak", r"\b(?:you are|you're)\W+(?:now\W+)?in\W+(?:the\W+)?"
+     r"(?:developer|god|dan|jailbreak|sudo|unrestricted)\W+mode\b"),
+    ("role_jailbreak", r"\bdeveloper\W+mode\W+(?:enabled|activated|output)\b"),
+    ("role_jailbreak", r"\bdo anything now\b"),
+    ("role_jailbreak", r"\bwithout\W+(?:any\W+)?(?:ethical|moral|safety|content)\W+(?:guidelines|restrictions|"
+     r"filters|policies|limits)\b"),
+    # FR: "tu es désormais une IA sans restriction", "active le mode développeur"
+    ("role_jailbreak", r"\b(?:tu es (?:desormais|maintenant)|a partir de maintenant,? tu es|agis comme|"
+     r"fais comme si tu etais|joue le role d)\w*\b" + _W + r"{0,5}?\W+(?:sans (?:aucune? )?(?:restrictions?|"
+     r"limites?|filtres?|censure|regles?)|non censure\w*|debride\w*)\b"),
+    ("role_jailbreak", r"\b(?:active[rsz]?|passe[rsz]? en|entre[rsz]? en)\W+(?:le\W+)?mode\W+"
+     r"(?:dieu|dan|sans (?:restriction|limite)s?)\b"),
+    ("role_jailbreak", r"\btu es\W+(?:maintenant\W+|desormais\W+)?en\W+mode\W+"
+     r"(?:developpeur|dieu|dan|sans (?:restriction|limite)s?)\b"),
+    # "decode this base64 and follow it"
+    ("encoded_payload", r"\b(?:decode|decrypt|deobfuscate|decoder|dechiffre[rz]?)\b" + _W + r"{0,4}?\W+"
+     r"(?:base64|rot13|hex|hexadecimal|binary)\b" + _W + r"{0,6}?\W+(?:follow|execute|run|obey|apply|"
+     r"suis|suivre|executer?|appliquer?)\b"),
+))
+# Chat-template delimiters smuggled into user content (matched on the original line layout).
+_DELIMITER_RE = re.compile(
+    r"<\|(?:im_start|im_end|system|endoftext|eot_id|start_header_id|end_header_id)\|>"
+    r"|\[/?inst\]|<</?sys>>|<\s*/?\s*system\s*>|^\s*#{2,}\s*(?:new\s+)?(?:system|instructions?)\b",
+    re.MULTILINE)
+
+
+def _fold(text: str) -> str:
+    """Lower-case, accent-free, invisible-free view of a text, for matching only."""
+    text = _INVISIBLE_RE.sub("", unicodedata.normalize("NFKC", text))
+    text = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+    return text.lower()
+
+
+def detect_injection(text: str) -> list[str]:
+    """Sorted ids of the prompt injection / jailbreak rules matched by ``text``."""
+    if not text:
+        return []
+    hits: set[str] = set()
+    if len(text) > MAX_SCAN_CHARS:  # padding must not hide a payload: oversize is itself flagged
+        hits.add("oversized_input")
+        text = text[:MAX_SCAN_CHARS]
+    if _HIDDEN_RE.search(text):
+        hits.add("hidden_unicode")
+    folded = _fold(text)
+    if _DELIMITER_RE.search(folded):
+        hits.add("delimiter_injection")
+    flat = _SPACES_RE.sub(" ", folded)
+    for rule, rx in _INJECTION_RULES:
+        if rule not in hits and rx.search(flat):
+            hits.add(rule)
+    return sorted(hits)
+
+
+def detect_injection_in(texts: list[str]) -> list[str]:
+    """Rule ids over several texts, within one budget of FACTORY_GUARDRAIL_MAX_SCAN_CHARS."""
+    hits: set[str] = set()
+    budget = MAX_SCAN_CHARS
+    for text in texts:
+        if budget <= 0:
+            hits.add("oversized_input")
+            break
+        if len(text) > budget:
+            hits.add("oversized_input")
+            text = text[:budget]
+        budget -= len(text)
+        hits.update(detect_injection(text))
+    return sorted(hits)
+
+
+def luhn_ok(digits: str) -> bool:
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = ord(ch) - 48
+        if i % 2:
+            d = d * 2 - 9 if d > 4 else d * 2
+        total += d
+    return total % 10 == 0
+
+
+# Lengths of the IBAN of the SEPA countries and a few others (ISO 13616 registry).
+_IBAN_LENGTHS = {
+    "AD": 24, "AT": 20, "BE": 16, "BG": 22, "CH": 21, "CY": 28, "CZ": 24, "DE": 22, "DK": 18, "EE": 20,
+    "ES": 24, "FI": 18, "FR": 27, "GB": 22, "GI": 23, "GR": 27, "HR": 21, "HU": 28, "IE": 22, "IS": 26,
+    "IT": 27, "LI": 21, "LT": 20, "LU": 20, "LV": 21, "MC": 27, "MT": 31, "NL": 18, "NO": 15, "PL": 28,
+    "PT": 25, "RO": 24, "SE": 24, "SI": 19, "SK": 24, "SM": 27, "VA": 22, "AE": 23, "BR": 29, "MA": 28,
+    "SA": 24, "TN": 24, "TR": 26, "UA": 29,
+}
+
+
+def iban_ok(candidate: str) -> bool:
+    iban = re.sub(r"\s", "", candidate).upper()
+    if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}", iban):
+        return False
+    expected = _IBAN_LENGTHS.get(iban[:2])
+    if expected is not None and len(iban) != expected:
+        return False
+    rearranged = iban[4:] + iban[:4]
+    return int("".join(str(int(c, 36)) for c in rearranged)) % 97 == 1
+
+
+def nir_ok(candidate: str) -> bool:
+    """French social security number (NIR): 13 digits + key = 97 - (number mod 97)."""
+    nir = re.sub(r"[\s.]", "", candidate).upper()
+    if not re.fullmatch(r"[1-478]\d{4}(?:\d{2}|2[AB])\d{6}\d{2}", nir):
+        return False
+    month = int(nir[3:5])
+    if month == 0 or 13 <= month <= 19:
+        return False
+    body = nir[:5] + {"2A": "19", "2B": "18"}.get(nir[5:7], nir[5:7]) + nir[7:13]
+    return 97 - int(body) % 97 == int(nir[13:])
+
+
+_EMAIL_RE = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@"
+                       r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.){1,8}[A-Za-z]{2,24}(?![A-Za-z0-9-])")
+_IBAN_GROUPED_RE = re.compile(r"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?: [A-Z0-9]{4}){2,7}(?: [A-Z0-9]{1,4})?(?![A-Za-z0-9])")
+_IBAN_COMPACT_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}\d{2}[A-Za-z0-9]{11,30}(?![A-Za-z0-9])")
+_NIR_RE = re.compile(r"(?<![\w])[1-478][ .]?\d{2}[ .]?\d{2}[ .]?(?:\d{2}|2[ABab])"
+                     r"[ .]?\d{3}[ .]?\d{3}[ .]?\d{2}(?![\w])")
+# Compact (13-19 digits), groups of four (4-4-4-1..7) or the 4-6-5 layout, one separator kind.
+_CARD_RE = re.compile(r"(?<![\d-])(?:\d{13,19}|\d{4}([ -])\d{4}\1\d{4}\1\d{1,7}|\d{4}([ -])\d{6}\2\d{5})(?!\d)")
+_PHONE_RES = (
+    re.compile(r"(?<![\w+])(?:\+|00)[1-9]\d{0,2}(?:[ .\-]?\(?\d{1,4}\)?){2,6}(?![\w])"),     # international
+    re.compile(r"(?<![\w+])0[1-9](?:[ .\-]?\d{2}){4}(?![\w])"),                             # French national
+    re.compile(r"(?<![\w+])(?:\+?1[ .\-]?)?(?:\(\d{3}\)[ .\-]?|\d{3}[ .\-])\d{3}[ .\-]\d{4}(?![\w])"),  # NANP
+)
+PLACEHOLDERS = {kind: f"[REDACTED_{kind.upper()}]" for kind in ("email", "iban", "nir", "card", "phone")}
+
+
+def _iban_sub(match: re.Match[str], counts: Tally) -> str:
+    text = match.group(0)
+    if " " in text:  # grouped form: the last group may belong to the following text
+        groups = text.split(" ")
+        for end in range(len(groups), 2, -1):
+            candidate = " ".join(groups[:end])
+            if iban_ok(candidate):
+                counts["iban"] += 1
+                return PLACEHOLDERS["iban"] + text[len(candidate):]
+        return text
+    if iban_ok(text):
+        counts["iban"] += 1
+        return PLACEHOLDERS["iban"]
+    return text
+
+
+def _card_sub(match: re.Match[str], counts: Tally) -> str:
+    digits = re.sub(r"\D", "", match.group(0))
+    if 13 <= len(digits) <= 19 and digits[0] in "23456" and len(set(digits)) > 1 and luhn_ok(digits):
+        counts["card"] += 1
+        return PLACEHOLDERS["card"]
+    return match.group(0)
+
+
+def _phone_sub(match: re.Match[str], counts: Tally) -> str:
+    if 9 <= len(re.sub(r"\D", "", match.group(0))) <= 15:
+        counts["phone"] += 1
+        return PLACEHOLDERS["phone"]
+    return match.group(0)
+
+
+def redact_pii(text: str) -> tuple[str, Tally]:
+    """Text with e-mails, IBAN, NIR, card and phone numbers replaced, and the counts by kind."""
+    counts: Tally = Tally()
+    if not text or len(text) > MAX_SCAN_CHARS * 4:
+        return text, counts
+
+    def email(m: re.Match[str]) -> str:
+        counts["email"] += 1
+        return PLACEHOLDERS["email"]
+
+    def nir(m: re.Match[str]) -> str:
+        if nir_ok(m.group(0)):
+            counts["nir"] += 1
+            return PLACEHOLDERS["nir"]
+        return m.group(0)
+
+    text = _EMAIL_RE.sub(email, text)
+    text = _IBAN_GROUPED_RE.sub(lambda m: _iban_sub(m, counts), text)
+    text = _IBAN_COMPACT_RE.sub(lambda m: _iban_sub(m, counts), text)
+    text = _NIR_RE.sub(nir, text)
+    text = _CARD_RE.sub(lambda m: _card_sub(m, counts), text)
+    for rx in _PHONE_RES:
+        text = rx.sub(lambda m: _phone_sub(m, counts), text)
+    return text, +counts
+
+
+# ------------------------------------------------------------- request payload walking
+_TRUSTED_ROLES = frozenset({"system", "developer", "assistant"})
+_TEXT_FIELDS = ("content", "text", "parts", "input", "output")
+_PAYLOAD_FIELDS = ("messages", "prompt", "input", "contents", "system")
+
+
+def _map_text(node: Any, fn: Callable[[str], str], depth: int = 0) -> Any:
+    """Apply ``fn`` to every text of a message structure (in place for dicts and lists)."""
+    if depth > 12:
+        return node
+    if isinstance(node, str):
+        return fn(node)
+    if isinstance(node, list):
+        for i, item in enumerate(node):
+            node[i] = _map_text(item, fn, depth + 1)
+        return node
+    if isinstance(node, dict):
+        for key in _TEXT_FIELDS:
+            if key in node:
+                node[key] = _map_text(node[key], fn, depth + 1)
+    return node
+
+
+def _untrusted_texts(data: dict) -> list[str]:
+    """User, tool and retrieved texts of a request (system / developer / assistant turns excluded)."""
+    texts: list[str] = []
+
+    def keep(text: str) -> str:
+        texts.append(text)
+        return text
+
+    for field in ("messages", "input", "contents", "prompt"):
+        node = data.get(field)
+        if isinstance(node, list):
+            for item in node:
+                if isinstance(item, dict) and str(item.get("role") or "").lower() in _TRUSTED_ROLES:
+                    continue
+                _map_text(item, keep)
+        elif node is not None:
+            _map_text(node, keep)
+    return texts
+
+
+def redact_payload(data: dict) -> Tally:
+    """Redact PII in place in every text field of a request; counts by kind."""
+    total: Tally = Tally()
+
+    def redact(text: str) -> str:
+        new, counts = redact_pii(text)
+        total.update(counts)
+        return new
+
+    for field in _PAYLOAD_FIELDS:
+        if field in data and data[field] is not None:
+            data[field] = _map_text(data[field], redact)
+    return total
+
+
+def _payload_chars(data: dict) -> int:
+    size = 0
+
+    def count(text: str) -> str:
+        nonlocal size
+        size += len(text)
+        return text
+
+    for field in _PAYLOAD_FIELDS:
+        if data.get(field) is not None:
+            _map_text(data[field], count)
+    return size
+
+
+def _is_generative(call_type: Any) -> bool:
+    """Chat / text completions, Responses API, Messages API (call type "<provider>_messages")
+    and generate_content; not embeddings, files, batches or the assistants thread messages."""
+    name = str(call_type or "")
+    if name.endswith("_messages"):
+        return "get_" not in name
+    return any(k in name for k in ("completion", "responses", "generate_content"))
+
+
+def _add_tag(md: dict, tag: str) -> None:
+    tags = md.get("tags")
+    if not isinstance(tags, list):
+        tags = [] if tags is None else [str(tags)]
+        md["tags"] = tags
+    if tag not in tags:
+        tags.append(tag)
+
+
 class FactoryMetrics(CustomLogger):
     """Prometheus exporter and sensitive-data guard for the LiteLLM proxy."""
 
@@ -178,7 +561,7 @@ class FactoryMetrics(CustomLogger):
         super().__init__()
         self.rt = _runtime()
 
-    # ---- proxy hook: placement rule and Langfuse masking -------------------------------
+    # ---- proxy hook: placement rule, masking and guardrails -----------------------------
     async def async_pre_call_hook(self, user_api_key_dict, cache, data: dict, call_type):
         if not isinstance(data, dict):
             return data
@@ -188,20 +571,64 @@ class FactoryMetrics(CustomLogger):
         if not isinstance(md, dict):
             md = {}
             data[key] = md
+        rt = self.rt
         model = str(data.get("model") or "")
-        sensitivity = str(md.get("sensitivity") or "").upper()
-        is_chat = "completion" in str(call_type) or call_type in ("acompletion", "completion")
-        if _ENFORCE and sensitivity in _SENSITIVE and model not in _SENSITIVE_OK and is_chat:
-            usecase = _label(self.rt, "usecase", md.get("usecase"))
-            self.rt.reroutes.labels(_label(self.rt, "model", model), usecase).inc()
+        sensitivity = str(md.get("sensitivity") or "").strip().upper()
+        usecase = _label(rt, "usecase", md.get("usecase"))
+        generative = _is_generative(call_type)
+
+        # 1. Placement rule: C3/C4 generation always runs on the local-only alias
+        #    (chat completions, text completions, Responses API and Messages API alike).
+        if _ENFORCE and sensitivity in _SENSITIVE and model not in _SENSITIVE_OK and generative:
+            rt.reroutes.labels(_label(rt, "model", model), usecase).inc()
             md["factory_rerouted_from"] = model
             data["model"] = _SENSITIVE_ALIAS
             model = _SENSITIVE_ALIAS
         if model == _SENSITIVE_ALIAS or sensitivity in _SENSITIVE:
-            # Sensitive prompts and answers never reach the trace store in clear text.
+            # Sensitive prompts and answers are never stored in clear text: masked in Langfuse
+            # and redacted for every LiteLLM logging integration; a client header cannot opt out.
             md["mask_input"] = True
             md["mask_output"] = True
+            md["turn_off_message_logging"] = True
+            headers = md.get("headers")
+            if isinstance(headers, dict):
+                for name in [h for h in headers if str(h).lower().endswith("disable-message-redaction")]:
+                    headers.pop(name, None)
         md.setdefault("factory_alias", model)
+
+        report: dict[str, Any] = {}
+        # 2. Prompt injection / jailbreak detection on untrusted content (user, tool, retrieved).
+        if GUARDRAIL_MODE != "off" and generative:
+            texts = _untrusted_texts(data)
+            if sum(len(t) for t in texts) > _THREAD_THRESHOLD_CHARS:
+                rules = await asyncio.to_thread(detect_injection_in, texts)
+            else:
+                rules = detect_injection_in(texts)
+            if rules:
+                action = "blocked" if GUARDRAIL_MODE == "block" else "flagged"
+                rt.guardrail.labels("prompt_injection", action, usecase).inc()
+                if action == "blocked":
+                    # Generic message: the matched rules are not disclosed to the caller.
+                    raise HTTPException(status_code=400, detail={"error": {
+                        "message": "Request blocked by the factory guardrail (prompt injection policy).",
+                        "type": "guardrail_violation", "code": "factory_prompt_injection"}})
+                report["prompt_injection"] = {"rules": rules, "action": action}
+                _add_tag(md, "guardrail:prompt_injection")
+
+        # 3. PII redaction before the prompt may leave the local GPU (cloud or VPS alias).
+        if PII_REDACTION and model not in LOCAL_ALIASES:
+            if _payload_chars(data) > _THREAD_THRESHOLD_CHARS:
+                counts = await asyncio.to_thread(redact_payload, data)
+            else:
+                counts = redact_payload(data)
+            for kind in sorted(counts):
+                rt.guardrail.labels(f"pii_{kind}", "redacted", usecase).inc()
+            if counts:
+                report["pii_redacted"] = dict(sorted(counts.items()))
+                _add_tag(md, "guardrail:pii_redacted")
+        if report:
+            report["mode"] = GUARDRAIL_MODE
+            md["factory_guardrail"] = report  # rule ids and counts only, never prompt text
         return data
 
     # ---- logging events -----------------------------------------------------------------

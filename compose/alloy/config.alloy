@@ -2,9 +2,12 @@
 // Grafana Alloy (Apache-2.0): Docker log discovery -> Loki.
 // (Promtail reached end of life on 2026-03-02 and is not used.)
 // Only the containers of this compose project are collected.
+// Alloy never touches the Docker socket: it talks to docker-socket-proxy, which only lets
+// through GET requests for the container list, container inspect, container logs, networks
+// and version (FACTORY_DOCKER_HOST, see docker-compose.yml).
 
 discovery.docker "containers" {
-  host             = "unix:///var/run/docker.sock"
+  host             = sys.env("FACTORY_DOCKER_HOST")
   refresh_interval = "15s"
 
   filter {
@@ -39,7 +42,7 @@ discovery.relabel "containers" {
 }
 
 loki.source.docker "containers" {
-  host             = "unix:///var/run/docker.sock"
+  host             = sys.env("FACTORY_DOCKER_HOST")
   targets          = discovery.relabel.containers.output
   relabel_rules    = discovery.relabel.containers.rules
   refresh_interval = "15s"

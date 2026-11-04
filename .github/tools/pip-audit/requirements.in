@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+# CI-only tool, never shipped in an image: pip-audit (Apache-2.0).
+# Compile with hashes (Python 3.12), Dependabot keeps both files in step:
+#   pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url \
+#     --output-file requirements.txt requirements.in
+pip-audit==2.10.1

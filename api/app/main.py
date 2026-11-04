@@ -6,20 +6,23 @@ Run: ``uvicorn app.main:app --host 0.0.0.0 --port 8000``
 from __future__ import annotations
 
 import datetime as dt
+import html
 import json
 import logging
-from typing import Any, Callable
+import secrets
+from typing import Callable
 from urllib.parse import parse_qs
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import metrics as metrics_mod
 from .i18n import DEFAULT_LANG, msg, normalize_lang
-from .routers import core, grafana, placement, registry, spaces
+from .routers import audit, core, grafana, placement, registry, spaces
+from .security import READ, Access, SecurityDenied, SecurityMiddleware, require
 from .service import FactoryService
 from .settings import API_VERSION, Settings
 
@@ -91,6 +94,35 @@ class BodySizeLimit:
         await send({"type": "http.response.body", "body": body})
 
 
+# OpenAPI page: Swagger UI (Apache-2.0) loaded by the browser from a pinned version with Subresource
+# Integrity (hashes of the files of the npm tarball swagger-ui-dist@5.34.0, whose sha512 matches the
+# registry), and a per-request CSP nonce for the only inline script. Nothing else can load.
+SWAGGER_UI_VERSION = "5.34.0"
+SWAGGER_UI_BASE = f"https://cdn.jsdelivr.net/npm/swagger-ui-dist@{SWAGGER_UI_VERSION}"
+SWAGGER_UI_JS_SRI = "sha384-9Td7MKiIr2S83E1kZyyVi8KdJw/S8CpAvu0llLyMeg0xq/hDGiZJfVn0fV4llCmK"
+SWAGGER_UI_CSS_SRI = "sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF"
+
+
+def docs_page(title: str, openapi_url: str, nonce: str) -> tuple[str, str]:
+    """HTML of the OpenAPI page and its Content-Security-Policy."""
+    page = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+<link rel="stylesheet" href="{SWAGGER_UI_BASE}/swagger-ui.css" integrity="{SWAGGER_UI_CSS_SRI}" crossorigin="anonymous">
+</head><body><div id="swagger-ui"></div>
+<script src="{SWAGGER_UI_BASE}/swagger-ui-bundle.js" integrity="{SWAGGER_UI_JS_SRI}"
+  crossorigin="anonymous" nonce="{nonce}"></script>
+<script nonce="{nonce}">
+window.ui = SwaggerUIBundle({{url: {json.dumps(openapi_url)}, dom_id: "#swagger-ui", layout: "BaseLayout",
+  deepLinking: true, showExtensions: true, showCommonExtensions: true, validatorUrl: null,
+  presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset]}});
+</script></body></html>"""
+    csp = (f"default-src 'none'; script-src 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+           "style-src https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; "
+           "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+    return page, csp
+
+
 def create_app(settings: Settings | None = None, transport: httpx.BaseTransport | None = None,
                clock: Callable[[], dt.datetime] | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
@@ -100,29 +132,27 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
                      "Agent Ops, catalog, Skills Lab. Fictional demo data. Every read endpoint accepts "
                      "`?lang=en|fr` (default: `FACTORY_DEFAULT_LANG`, itself `en`)."),
         version=API_VERSION,
-        docs_url="/api/v1/docs",
+        docs_url=None,       # served below, behind the read permission, with SRI and a CSP nonce
         redoc_url=None,
-        openapi_url="/api/v1/openapi.json",
+        openapi_url=None,    # served below, behind the read permission
         license_info={"name": "MIT", "identifier": "MIT"},
     )
-    app.state.service = FactoryService(settings, transport=transport, clock=clock)
+    service = FactoryService(settings, transport=transport, clock=clock)
+    app.state.service = service
     app.state.settings = settings
 
     if settings.cors_origins:  # closed by default (same origin through the edge proxy)
         app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=False,
-                           allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type"])
-
-    @app.middleware("http")
-    async def security_headers(request: Request, call_next: Callable[[Request], Any]) -> Response:
-        response = await call_next(request)
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("Referrer-Policy", "no-referrer")
-        response.headers.setdefault("X-Frame-Options", "DENY")
-        if request.url.path.startswith("/api/v1/") and not request.url.path.startswith("/api/v1/docs"):
-            response.headers.setdefault("Cache-Control", "no-store")
-        return response
-
+                           allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type", "X-Request-ID"],
+                           expose_headers=["X-Request-ID", "Retry-After"])
     app.add_middleware(BodySizeLimit, max_bytes=settings.max_body_bytes, default_lang=settings.default_lang)
+    # Outermost: request id, client address, authentication of /api/* before any body is read,
+    # security headers on every answer (413 and 401 included).
+    app.add_middleware(SecurityMiddleware, guard=service.guard, default_lang=settings.default_lang)
+
+    @app.exception_handler(SecurityDenied)
+    async def denied(request: Request, exc: SecurityDenied) -> JSONResponse:
+        return exc.response(normalize_lang(request.query_params.get("lang"), settings.default_lang))
 
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:
@@ -130,13 +160,25 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
         lang = normalize_lang(request.query_params.get("lang"), settings.default_lang)
         return JSONResponse(status_code=500, content={"detail": msg(lang, "error.internal")})
 
-    for r in (core.router, registry.router, placement.router, grafana.router, spaces.router):
+    for r in (core.router, registry.router, placement.router, grafana.router, spaces.router, audit.router):
         app.include_router(r)
+
+    @app.get("/api/v1/openapi.json", include_in_schema=False)
+    def openapi_schema(_: Access = Depends(require(READ))) -> JSONResponse:
+        return JSONResponse(app.openapi())
+
+    @app.get("/api/v1/docs", include_in_schema=False)
+    def openapi_docs(_: Access = Depends(require(READ))) -> HTMLResponse:
+        page, csp = docs_page(f"{app.title} — OpenAPI", "./openapi.json", secrets.token_urlsafe(18))
+        return HTMLResponse(page, headers={"Content-Security-Policy": csp})
 
     @app.get("/metrics", include_in_schema=False)
     def prometheus_metrics() -> Response:
         snap = app.state.service.snapshot()
-        return Response(content=metrics_mod.render(snap), media_type="text/plain; version=0.0.4; charset=utf-8")
+        extra = metrics_mod.security_families(service.state.audit_status(), service.state.audit_counts(),
+                                              service.guard.denials())
+        return Response(content=metrics_mod.render(snap, extra),
+                        media_type="text/plain; version=0.0.4; charset=utf-8")
 
     return app
 

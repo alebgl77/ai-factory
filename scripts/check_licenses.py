@@ -376,8 +376,12 @@ def pypi_license(name: str, version: str | None) -> str | None:
 
 
 def check_python(report: Report, policy: Policy, offline: bool, overrides: dict[str, str]) -> None:
+    # Hash-pinned locks (requirements*.txt compiled from requirements*.in). Runtime manifests come
+    # first: a test lock also lists the runtime packages, which must still be reported as runtime.
     manifests = sorted({*ROOT.glob("api/requirements*.txt"), *ROOT.glob("api/pyproject.toml"),
-                        *ROOT.glob("sim/*/requirements*.txt"), *ROOT.glob("compose/*/requirements*.txt")})
+                        *ROOT.glob("sim/*/requirements*.txt"), *ROOT.glob("compose/*/requirements*.txt"),
+                        *ROOT.glob("compose/*/tests/requirements*.txt")},
+                       key=lambda p: ("dev" in p.name or "test" in p.as_posix(), p.as_posix()))
     if not manifests:
         report.add("python", "(aucun manifeste)", "-", "-", "warn", "api/requirements*.txt introuvable")
         return

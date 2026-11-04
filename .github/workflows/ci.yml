@@ -1,4 +1,13 @@
 # SPDX-License-Identifier: MIT
+# Continuous integration. Supply-chain rules applied to every workflow of this repository:
+#   - third-party actions pinned by full commit SHA (version in the trailing comment, updated by
+#     Dependabot), Docker tool images pinned by digest (job "compose" validates the configuration
+#     with the service images exactly as docker-compose.yml pins them);
+#   - least privilege: no permission at workflow level, each job asks only for what it uses;
+#   - actions/checkout never leaves the token in .git/config (persist-credentials: false);
+#   - Python packages install from hash-pinned locks only (pip --require-hashes; each
+#     requirements*.txt is compiled from its requirements*.in by pip-compile --generate-hashes).
+# The workflows themselves are linted on every change (job "workflows": actionlint + zizmor).
 name: ci
 
 on:
@@ -11,9 +20,12 @@ on:
         description: "Also run the full-stack smoke test (sim profile)"
         type: boolean
         default: false
+      sso_e2e:
+        description: "Also run the single sign-on end-to-end test (oauth2-proxy and a test OIDC provider)"
+        type: boolean
+        default: false
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,26 +35,54 @@ jobs:
   api-tests:
     name: API (pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: api/requirements*.txt
-      - run: pip install -r api/requirements-dev.txt
+      - run: pip install --require-hashes -r api/requirements-dev.txt
       - run: python -m pytest
         working-directory: api
+
+  guardrails:
+    name: LLM guardrails (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # LiteLLM itself is not installed: conftest.py stands in for its callback base class.
+      - run: pip install --require-hashes -r compose/litellm/tests/requirements.txt
+      - name: Prompt-injection detectors, PII redaction, gateway hook
+        run: python -m pytest -q compose/litellm/tests
 
   config:
     name: Configuration, snapshot and visual pack
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install -r api/requirements.txt -r scripts/requirements-assets.txt pytest
+      - run: pip install --require-hashes -r api/requirements-dev.txt -r scripts/requirements-assets.txt
       - name: Validate config/
         run: python scripts/validate_config.py
       - name: Embedded demo snapshot is up to date
@@ -53,55 +93,128 @@ jobs:
   licenses:
     name: Licenses (MIT compatibility)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
-      - uses: actions/setup-python@v6
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: pip install -r api/requirements.txt
+      - run: pip install --require-hashes -r api/requirements.txt
       - run: python scripts/check_licenses.py
 
   secrets:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Working tree
         run: scripts/scan_secrets.sh .
       - name: Git history
         run: scripts/scan_secrets.sh . --git
 
+  workflows:
+    name: Workflows (actionlint, zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # rhysd/actionlint (MIT) 1.7.12, multi-arch index digest; bundles shellcheck and pyflakes.
+      ACTIONLINT_IMAGE: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint (syntax, expressions, shellcheck of run steps)
+        run: docker run --rm --network none -v "$PWD:/repo:ro" --workdir /repo "$ACTIONLINT_IMAGE" -color
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install zizmor (hash-pinned wheel)
+        run: |
+          python -m venv "$RUNNER_TEMP/zizmor"
+          "$RUNNER_TEMP/zizmor/bin/pip" install --disable-pip-version-check --require-hashes --no-deps \
+            --only-binary :all: -r .github/tools/zizmor/requirements.txt
+      - name: zizmor (template injection, excessive permissions, unpinned or impostor actions...)
+        env:
+          # Read-only token: lets zizmor check that every pinned SHA belongs to its repository.
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/zizmor/bin/zizmor" --no-progress --format=github .github/workflows .github/dependabot.yml'
+
   compose:
     name: Stack (configuration validation)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: cp .env.example .env
-      - name: docker compose config (every profile)
+      # The checks below run the exact images that docker-compose.yml pins (read from its
+      # resolved configuration), so a Dependabot bump is validated with the new version.
+      - name: docker compose config (every combination of the optional profiles)
         run: |
-          docker compose config -q
-          docker compose --profile sim --profile vps --profile local-gpu config -q
-      - name: Prometheus rules
-        run: >
-          docker run --rm -v "$PWD/compose/prometheus:/etc/prometheus:ro" --entrypoint promtool
-          prom/prometheus:v3.15.1 check config /etc/prometheus/prometheus.yml
-      - name: Caddyfile
-        run: >
-          docker run --rm -v "$PWD/compose/caddy:/etc/caddy:ro" caddy:2.11.7-alpine
-          caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          set -euo pipefail
+          profiles=(sim vps local-gpu sso)
+          for mask in $(seq 0 15); do
+            args=()
+            for i in 0 1 2 3; do
+              if (( mask & (1 << i) )); then args+=(--profile "${profiles[$i]}"); fi
+            done
+            echo "docker compose ${args[*]} config -q"
+            docker compose "${args[@]}" config -q
+          done
+      - name: Prometheus configuration, rules and alert unit tests (promtool)
+        run: |
+          set -euo pipefail
+          image="$(docker compose config --format json | jq -r .services.prometheus.image)"
+          promtool() {
+            docker run --rm --network none -v "$PWD/compose/prometheus:/etc/prometheus:ro" \
+              --entrypoint promtool "$image" "$@"
+          }
+          promtool check config /etc/prometheus/prometheus.yml
+          promtool check rules /etc/prometheus/rules/factory-alerts.yml /etc/prometheus/rules/factory-recording.yml
+          promtool test rules /etc/prometheus/tests/security-alerts.test.yml
+      - name: Caddyfile (every FACTORY_AUTH mode, http and https)
+        run: |
+          set -euo pipefail
+          image="$(docker compose config --format json | jq -r .services.edge.image)"
+          # basic mode refuses to load without a bcrypt hash: a throwaway one, generated here.
+          hash="$(docker run --rm --network none "$image" caddy hash-password --plaintext "ci-$RANDOM-$RANDOM")"
+          for scheme in http https; do
+            for auth in none basic sso; do
+              echo "FACTORY_SCHEME=$scheme FACTORY_AUTH=$auth"
+              docker run --rm --network none -e FACTORY_SCHEME="$scheme" -e FACTORY_AUTH="$auth" \
+                -e FACTORY_BASIC_AUTH_HASH="$hash" -v "$PWD/compose/caddy:/etc/caddy:ro" "$image" \
+                caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+            done
+          done
+      - name: Edge identity headers and CSP (forged headers on every route, none, basic and sso)
+        run: compose/caddy/tests/test_identity_headers.sh
       - name: Loki
-        run: >
-          docker run --rm -v "$PWD/compose/loki/loki.yml:/etc/loki/loki.yml:ro" grafana/loki:3.7.9
-          -config.file=/etc/loki/loki.yml -verify-config
+        run: |
+          image="$(docker compose config --format json | jq -r .services.loki.image)"
+          docker run --rm --network none -v "$PWD/compose/loki/loki.yml:/etc/loki/loki.yml:ro" "$image" \
+            -config.file=/etc/loki/loki.yml -verify-config
       - name: Alloy
-        run: >
-          docker run --rm -e FACTORY_COMPOSE_PROJECT=ai-factory
-          -v "$PWD/compose/alloy/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.21.3
-          validate /etc/alloy/config.alloy
+        run: |
+          image="$(docker compose config --format json | jq -r .services.alloy.image)"
+          docker run --rm --network none -e FACTORY_COMPOSE_PROJECT=ai-factory \
+            -v "$PWD/compose/alloy/config.alloy:/etc/alloy/config.alloy:ro" "$image" \
+            validate /etc/alloy/config.alloy
       - name: Grafana dashboards (JSON)
         run: |
           for f in compose/grafana/dashboards/*.json; do
@@ -113,15 +226,22 @@ jobs:
   e2e:
     name: 3D dashboard (e2e)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
-      - name: Playwright and Three.js (test only, not committed)
+      - name: Playwright and Three.js (test only, locked with integrity hashes, never shipped)
         run: |
-          npm install --no-save --no-package-lock --no-audit --no-fund playwright@1.64.1 three@0.186.1
-          npx playwright install --with-deps chromium
+          npm ci --prefix .github/tools/e2e --ignore-scripts --no-audit --no-fund
+          # tests/e2e/run.mjs resolves its imports from the repository root
+          mv .github/tools/e2e/node_modules node_modules
+          node_modules/.bin/playwright install --with-deps chromium
       - name: file:// mode with the embedded demo snapshot
         env:
           THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three
@@ -133,7 +253,28 @@ jobs:
     needs: [compose]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: cp .env.example .env
       - run: scripts/smoke_stack.sh --down
+
+  sso-e2e:
+    name: Single sign-on (end-to-end, sso profile)
+    if: github.event_name == 'workflow_dispatch' && inputs.sso_e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cp .env.example .env
+      # Isolated network, no published port: shipped Caddyfile in sso mode, oauth2-proxy with the
+      # environment rendered by docker compose, Dex (Apache-2.0) as test provider.
+      - name: OIDC sign-in, forged headers, fixed edge address, group gate
+        run: compose/sso/test_sso_e2e.sh

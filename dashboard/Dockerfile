@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 # SPDX-License-Identifier: MIT
 # Static 3D dashboard served by nginx (BSD-2-Clause), with Three.js (MIT) vendored at build
 # time so that the browser loads nothing from a CDN.
@@ -11,7 +11,8 @@ ARG THREE_VERSION=0.186.1
 # Subresource integrity of three-0.186.1.tgz as published by the npm registry.
 ARG THREE_INTEGRITY=sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==
 
-FROM node:24.22.2-alpine AS vendor
+# Base images pinned by digest (multi-arch index); the tags stay for Dependabot, which updates both.
+FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS vendor
 ARG THREE_VERSION
 ARG THREE_INTEGRITY
 ARG DASHBOARD_THREE_SOURCE=vendored
@@ -56,7 +57,10 @@ RUN set -eu; \
       mkdir -p /build/site/vendor && cp -r /vendor/three /build/site/vendor/three; \
     fi
 
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+# alpine-slim: nginx without the optional dynamic modules and their libraries (curl, libexpat,
+# brotli...), none of which nginx.conf loads; it removes every fixable HIGH/CRITICAL finding
+# of the full alpine variant (Trivy gate in .github/workflows/security.yml).
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine-slim@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --from=vendor --chown=root:root /build/site/ /usr/share/nginx/html/
 # Listens on port 80 as uid 101: docker-compose.yml sets

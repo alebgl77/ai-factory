@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Trivy (Apache-2.0) configuration shared by .github/workflows/security.yml, release.yml and
+# local runs:  trivy fs --config .github/trivy/trivy.yaml .
+# Scope: dependencies (vuln), Dockerfiles (misconfig) and committed credentials (secret).
+scan:
+  skip-dirs:
+    # Git submodules: each one is inventoried and secret-scanned on its full history by
+    # scripts/inventory_github.py (triage in integrations/secrets-triage.yaml).
+    - integrations
+    - node_modules
+    - dashboard/vendor
+  skip-files:
+    # Optional visual pack: base64 image data, no code and no credentials.
+    - dashboard/assets/assets.js
+# Accepted risks, each with a statement and an expiry date (reviewed on expiry).
+ignorefile: .github/trivy/trivyignore.yaml
