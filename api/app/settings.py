@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from .i18n import DEFAULT_LANG, normalize_lang
 
@@ -85,11 +86,36 @@ class Settings:
     rate_limit_per_min: int = 60             # FACTORY_RATE_LIMIT_PER_MIN: write requests per actor/IP (0 = off)
     rate_limit_burst: int = 20               # FACTORY_RATE_LIMIT_BURST: bucket size
     cost_fx: float = 1.0                     # FACTORY_COST_FX: native gateway unit to EUR
+    workbench_mode: str = "off"              # off | demo | protected_demo
+    workbench_chat_mode: str = "simulation"  # simulation | local
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_lang", normalize_lang(self.default_lang, DEFAULT_LANG))
         if not math.isfinite(self.cost_fx) or self.cost_fx <= 0:
             raise ValueError("FACTORY_COST_FX must be a finite positive rate")
+        if self.workbench_mode not in {"off", "demo", "protected_demo"}:
+            raise ValueError("invalid FACTORY_WORKBENCH_MODE")
+        if self.workbench_chat_mode not in {"simulation", "local"}:
+            raise ValueError("invalid FACTORY_WORKBENCH_CHAT_MODE")
+        if self.workbench_chat_mode == "local" and (
+            self.workbench_mode != "protected_demo" or self.auth_mode != "proxy"
+            or not self.litellm_url or not self.litellm_master_key
+        ):
+            raise ValueError("local workbench chat requires protected_demo, proxy auth and LiteLLM")
+        if self.workbench_chat_mode == "local":
+            try:
+                gateway = urlsplit(self.litellm_url or "")
+                valid = (
+                    gateway.scheme in {"http", "https"}
+                    and gateway.hostname in {"litellm", "localhost", "127.0.0.1", "::1"}
+                    and gateway.username is None and not gateway.path.rstrip("/")
+                    and not gateway.query and not gateway.fragment
+                    and (gateway.port is None or gateway.port > 0)
+                )
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError("local workbench chat requires the internal litellm or loopback gateway URL")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -130,4 +156,6 @@ class Settings:
             rate_limit_per_min=max(0, _env_int("FACTORY_RATE_LIMIT_PER_MIN", 60)),
             rate_limit_burst=max(1, _env_int("FACTORY_RATE_LIMIT_BURST", 20)),
             cost_fx=cost_fx,
+            workbench_mode=(_env("FACTORY_WORKBENCH_MODE", "off") or "off").lower(),
+            workbench_chat_mode=(_env("FACTORY_WORKBENCH_CHAT_MODE", "simulation") or "simulation").lower(),
         )

@@ -250,6 +250,8 @@ jobs:
         env:
           THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three
         run: node tests/e2e/exercise.mjs
+      - name: Mobile Companion and QR handoff
+        run: node tests/e2e/companion.mjs
 
   smoke:
     name: Full stack (smoke test, sim profile)

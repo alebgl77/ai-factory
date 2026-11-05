@@ -10,6 +10,7 @@ import html
 import json
 import logging
 import secrets
+from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs
 
@@ -21,10 +22,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import metrics as metrics_mod
 from .i18n import DEFAULT_LANG, msg, normalize_lang
-from .routers import audit, core, grafana, placement, registry, spaces
+from .routers import audit, core, grafana, placement, registry, spaces, workbench
 from .security import READ, Access, SecurityDenied, SecurityMiddleware, require
 from .service import FactoryService
 from .settings import API_VERSION, Settings
+from .workbench.service import Workbench, local_advisor
 
 log = logging.getLogger("factory.api")
 
@@ -162,6 +164,16 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
 
     for r in (core.router, registry.router, placement.router, grafana.router, spaces.router, audit.router):
         app.include_router(r)
+    if settings.workbench_mode != "off":
+        advisor = None
+        if settings.workbench_chat_mode == "local":
+            assert settings.litellm_url and settings.litellm_master_key  # validated by Settings
+            advisor = local_advisor(settings.litellm_url, settings.litellm_master_key, transport=transport)
+        app.state.workbench = Workbench(
+            Path(settings.state_dir) / f"workbench-{settings.workbench_mode}.sqlite3",
+            settings.workbench_mode, clock=clock, advisor=advisor,
+        )
+        app.include_router(workbench.router)
 
     @app.get("/api/v1/openapi.json", include_in_schema=False)
     def openapi_schema(_: Access = Depends(require(READ))) -> JSONResponse:

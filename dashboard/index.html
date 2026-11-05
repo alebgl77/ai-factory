@@ -6,7 +6,9 @@
 <title>Virtual AI Factory</title>
 <meta name="description" content="Jumeau numérique 3D d'une AI Factory en travail hybride : présence des squads, use cases, War Room, focus pods, co-localisation et conformité données sensibles.">
 <link rel="stylesheet" href="exercise/uc04.css">
+<link rel="stylesheet" href="companion/handoff.css">
 <script defer src="exercise/uc04.js"></script>
+<script defer src="companion/handoff.js"></script>
 <script>
   try { var p = JSON.parse(localStorage.getItem('aiFactoryRef.prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.setAttribute('data-theme', p.theme); } catch (e) {}
 </script>
@@ -604,6 +606,10 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
         </select>
         <button class="btn primary" id="exerciseLaunch" type="button" data-exercise-open>Atelier UC-04</button>
         <a class="btn ghost" id="exercise2d" href="exercise/index.html">Atelier 2D</a>
+        <div class="companion-entry">
+          <a class="btn ghost" data-companion-link href="companion/index.html">Compagnon de décision</a>
+          <button class="btn ghost" type="button" data-companion-qr aria-haspopup="dialog">Code QR</button>
+        </div>
         <span class="pill-demo" id="demoBadge" hidden title="Planning de démonstration : il est régénéré chaque matin tant qu'aucune réservation n'est modifiée" style="align-self:center">démo</span>
         <span class="pill-demo pill-warn" id="saveWarn" hidden title="Stockage local indisponible : les modifications seront perdues à la fermeture de la page" style="align-self:center">non sauvegardé</span>
         <button class="icon-btn" id="helpBtn" type="button" aria-label="Raccourcis clavier" title="Raccourcis clavier (?)" aria-haspopup="dialog"><b aria-hidden="true">?</b></button>

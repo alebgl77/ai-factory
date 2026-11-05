@@ -207,8 +207,7 @@ images:
     source: https://github.com/nginx/docker-nginx-unprivileged
     note: "alpine-slim variant: nginx without the optional dynamic modules and their libraries (none is loaded by dashboard/nginx.conf). Base images are pinned by digest in the Dockerfiles."
 
-# Third-party code embedded at build time, or loaded by the browser from a pinned CDN URL with
-# Subresource Integrity (never committed to the repository).
+# Third-party code embedded at build time, loaded from a pinned CDN, or vendored with provenance.
 vendored:
   - name: three
     version: 0.186.1
@@ -218,6 +217,14 @@ vendored:
     where: "dashboard/Dockerfile (npm pack + SRI integrity check, copied to /vendor/three); jsDelivr CDN in file:// mode"
     source: https://github.com/mrdoob/three.js
     check: {file: dashboard/Dockerfile, pattern: "ARG THREE_VERSION=([0-9.]+)"}
+  - name: qrcode-generator
+    version: 2.0.4
+    spdx: MIT
+    license: MIT
+    usage: runtime
+    where: "dashboard/companion/vendor/qrcode.js (pinned local copy and integrity verification)"
+    source: https://github.com/kazuhikoarase/qrcode-generator
+    check: {file: dashboard/companion/vendor/PROVENANCE.md, pattern: "Version: ([0-9.]+)"}
   - name: swagger-ui-dist
     version: 5.34.0
     spdx: Apache-2.0
