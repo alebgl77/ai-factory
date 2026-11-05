@@ -16,6 +16,10 @@ en euros ; les messages et actions des alertes sont rendus dans la langue demand
 - Le callback MIT `compose/litellm/factory_callbacks.py` expose dans Prometheus
   `factory_llm_tokens_total{model,usecase,direction}`, `factory_llm_cost_eur_total{model,usecase}`
   et `factory_llm_requests_total{…,status}` ; Langfuse conserve les traces (prompt, version).
+- Si Prometheus ne fournit aucune donnée de coût ou d'usage exploitable, l'API peut lire les
+  journaux de dépenses LiteLLM. `FACTORY_COST_FX` définit le taux de conversion en EUR de
+  l'unité de prix de la passerelle. Les deux sources appliquent ce taux une seule fois.
+  La valeur par défaut `1.0` correspond aux tarifs fictifs fournis en EUR.
 - La télémétrie du GPU local (DCGM ou `gpu-sim`) donne utilisation et puissance.
 - L'API republie les agrégats : `factory_usecase_cost_eur{usecase,cost_center,kind}`,
   `factory_usecase_tokens_total`, `factory_waste_alerts{rule,severity}`.

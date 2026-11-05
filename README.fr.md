@@ -35,6 +35,9 @@ Ensuite, dans le dashboard : touche `M` (ou bouton **Visite**) pour parcourir l'
 subjective, `U` pour ouvrir la console de l'usine (registre, FinOps, pipeline, boucle de données,
 placement, catalogue), `?` pour l'aide. Changez de langue avec le bouton **EN/FR** de l'en-tête.
 
+Ouvrez **Atelier UC-04** depuis la scène 3D ou lancez [l’atelier autonome en 2D](https://alebgl77.github.io/ai-factory/exercise/?lang=fr).
+Le métier, le risque et la plateforme examinent une mise en service fictive, simulent une panne GPU et exportent un dossier de décision. Les données et les décisions de l’atelier sont simulées dans le navigateur.
+
 ### Démarrage local (sans aucune clé)
 
 Prérequis : Docker 24+ avec Compose v2, 4 vCPU, 8 Go de RAM libres, ports 80 et 443 disponibles.

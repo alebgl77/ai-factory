@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from .connectors import Connectors, SourceError
 from .util import UNATTRIBUTED
 
 log = logging.getLogger("factory.live")
+
+# Requests for different date ranges still share a fixed worker budget for this API process.
+_LIVE_POOL = ThreadPoolExecutor(max_workers=12, thread_name_prefix="factory-live")
 
 DCGM = {
     "util_pct": "DCGM_FI_DEV_GPU_UTIL",
@@ -144,28 +149,40 @@ def usage_from_prometheus(conns: Connectors, today: dt.date, days: int, tz: dt.t
 
 
 def collect_live(conns: Connectors, sources: dict[str, bool], *, today: dt.date, now: dt.datetime, days: int,
-                 tz: dt.tzinfo) -> dict[str, Any]:
-    live: dict[str, Any] = {}
+                 tz: dt.tzinfo, cost_fx: float = 1.0) -> dict[str, Any]:
+    tasks: dict[str, Callable[[], Any]] = {}
     if sources.get("prometheus"):
-        live["gpu"] = _soft(lambda: gpu_from_prometheus(conns, now), "gpu")
-        live["usage"] = _soft(lambda: usage_from_prometheus(conns, today, days, tz), "usage")
-        live["targets"] = _soft(lambda: targets_from_prometheus(conns), "targets")
+        tasks["gpu"] = lambda: gpu_from_prometheus(conns, now)
+        tasks["usage"] = lambda: usage_from_prometheus(conns, today, days, tz)
+        tasks["targets"] = lambda: targets_from_prometheus(conns)
     if sources.get("langfuse"):
-        samples = _soft(lambda: conns.langfuse.agent_samples(now - dt.timedelta(hours=1)), "langfuse")
-        live["agent_samples"] = samples or None
+        tasks["agent_samples"] = lambda: conns.langfuse.agent_samples(now - dt.timedelta(hours=1)) or None
     if sources.get("qdrant"):
-        live["qdrant_collections"] = _soft(lambda: conns.qdrant.collections(), "qdrant")
+        tasks["qdrant_collections"] = conns.qdrant.collections
     if sources.get("grafana"):
-        live["grafana_dashboards"] = _soft(lambda: conns.grafana.dashboards(), "grafana")
+        tasks["grafana_dashboards"] = conns.grafana.dashboards
     if sources.get("litellm"):
-        live["litellm_models"] = _soft(lambda: conns.litellm.models(), "litellm")
-        if not live.get("usage"):
-            # Fallback: DB-backed spend logs of the gateway (amounts in the gateway's price unit).
-            start = today - dt.timedelta(days=days - 1)
-            spend = _soft(lambda: conns.litellm.spend_daily(start, today), "litellm-spend")
-            if spend:
-                live["usage"] = [{"date": r["date"], "usecase": r["usecase"], "requests": r["requests"],
-                                  "tokens_in": r["tokens_in"], "tokens_out": r["tokens_out"],
-                                  "llm_eur": r["spend"]} for r in spend]
-                live["usage_origin"] = "litellm_spend_logs"
+        tasks["litellm_models"] = conns.litellm.models
+    if not tasks:
+        return {}
+
+    # Independent sections overlap. Only spend logs depend on a Prometheus result.
+    pending = {name: _LIVE_POOL.submit(_soft, task, name) for name, task in tasks.items()}
+    usage = pending["usage"].result() if "usage" in pending else None
+    spend_job = None
+    if sources.get("litellm") and not usage:
+        start = today - dt.timedelta(days=days - 1)
+        spend_job = _LIVE_POOL.submit(_soft, lambda: conns.litellm.spend_daily(start, today), "litellm-spend")
+    live = {name: job.result() for name, job in pending.items()}
+    spend = spend_job.result() if spend_job else None
+    if spend:
+        # The gateway callback already converts the Prometheus costs. Convert only the raw fallback.
+        converted = [{"date": r["date"], "usecase": r["usecase"], "requests": r["requests"],
+                      "tokens_in": r["tokens_in"], "tokens_out": r["tokens_out"],
+                      "llm_eur": r["spend"] * cost_fx} for r in spend]
+        if all(math.isfinite(r["llm_eur"]) for r in converted):
+            live["usage"] = converted
+            live["usage_origin"] = "litellm_spend_logs"
+        else:
+            log.warning("live source litellm-spend returned a non-finite amount")
     return {k: v for k, v in live.items() if v is not None}

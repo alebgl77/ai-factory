@@ -15,6 +15,9 @@ in euros (EUR); alert messages and actions are returned in the requested languag
 - The MIT callback `compose/litellm/factory_callbacks.py` exposes in Prometheus
   `factory_llm_tokens_total{model,usecase,direction}`, `factory_llm_cost_eur_total{model,usecase}`
   and `factory_llm_requests_total{…,status}`; Langfuse keeps the traces (prompt, version).
+- When Prometheus provides no usable cost and usage data, the API can read LiteLLM spend logs.
+  Set `FACTORY_COST_FX` to the EUR multiplier for the gateway's price unit. Both paths apply
+  the same configured rate once. The default `1.0` matches the supplied fictional EUR prices.
 - Local GPU telemetry (DCGM or `gpu-sim`) provides utilization and power.
 - The API republishes the aggregates: `factory_usecase_cost_eur{usecase,cost_center,kind}`,
   `factory_usecase_tokens_total`, `factory_waste_alerts{rule,severity}`.

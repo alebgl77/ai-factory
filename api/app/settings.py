@@ -11,6 +11,7 @@ by :class:`app.security.SecurityConfig`; invalid values fail closed and are repo
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass, field
 
@@ -83,9 +84,12 @@ class Settings:
     default_role: str | None = None          # FACTORY_DEFAULT_ROLE: role of an authenticated user without mapped group
     rate_limit_per_min: int = 60             # FACTORY_RATE_LIMIT_PER_MIN: write requests per actor/IP (0 = off)
     rate_limit_burst: int = 20               # FACTORY_RATE_LIMIT_BURST: bucket size
+    cost_fx: float = 1.0                     # FACTORY_COST_FX: native gateway unit to EUR
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_lang", normalize_lang(self.default_lang, DEFAULT_LANG))
+        if not math.isfinite(self.cost_fx) or self.cost_fx <= 0:
+            raise ValueError("FACTORY_COST_FX must be a finite positive rate")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -93,6 +97,10 @@ class Settings:
         if mode not in DEMO_MODES:
             mode = "auto"
         cors = tuple(o.strip() for o in (_env("FACTORY_CORS_ORIGINS", "") or "").split(",") if o.strip())
+        try:
+            cost_fx = float(_env("FACTORY_COST_FX", "1.0") or "1.0")
+        except ValueError:
+            raise ValueError("FACTORY_COST_FX must be a finite positive rate") from None
         return cls(
             config_dir=_env("FACTORY_CONFIG_DIR", "/config") or "/config",
             demo_mode=mode,
@@ -121,4 +129,5 @@ class Settings:
             default_role=(_env("FACTORY_DEFAULT_ROLE") or "").lower() or None,
             rate_limit_per_min=max(0, _env_int("FACTORY_RATE_LIMIT_PER_MIN", 60)),
             rate_limit_burst=max(1, _env_int("FACTORY_RATE_LIMIT_BURST", 20)),
+            cost_fx=cost_fx,
         )

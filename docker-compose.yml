@@ -218,6 +218,7 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:?set LANGFUSE_INIT_PROJECT_SECRET_KEY in .env}
       LITELLM_URL: http://litellm:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      FACTORY_COST_FX: ${FACTORY_COST_FX:-1.0}
       QDRANT_URL: http://qdrant:6333
     volumes:
       - ./config:/config:ro

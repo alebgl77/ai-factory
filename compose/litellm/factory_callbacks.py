@@ -51,6 +51,7 @@ values are validated and capped to keep the Prometheus cardinality bounded.
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import re
 import sys
@@ -83,7 +84,12 @@ _SENSITIVE_ALIAS = os.environ.get("FACTORY_SENSITIVE_ALIAS", "chat-sensitive")
 _SENSITIVE_OK = {_SENSITIVE_ALIAS, *[a.strip() for a in os.environ.get(
     "FACTORY_SENSITIVE_OK_ALIASES", "embed-default").split(",") if a.strip()]}
 _ENFORCE = os.environ.get("FACTORY_ENFORCE_SENSITIVE_ROUTING", "true").lower() in ("1", "true", "yes")
-_COST_FX = float(os.environ.get("FACTORY_COST_FX", "1.0") or 1.0)
+try:
+    _COST_FX = float((os.environ.get("FACTORY_COST_FX") or "").strip() or "1.0")
+except ValueError:
+    raise ValueError("FACTORY_COST_FX must be a finite positive rate") from None
+if not math.isfinite(_COST_FX) or _COST_FX <= 0:
+    raise ValueError("FACTORY_COST_FX must be a finite positive rate")
 _PORT = int(os.environ.get("FACTORY_METRICS_PORT", "9464"))
 _DEPLOYMENTS = {"cloud", "vps", "local"}
 _GUARDRAIL_MODES = ("off", "flag", "block")
