@@ -92,6 +92,10 @@ updates:
       default-days: 7
     commit-message:
       prefix: deps
+    # Keep runtime images on the Python version exercised in CI (currently 3.12).
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
     groups:
       base-images:
         patterns: ["*"]

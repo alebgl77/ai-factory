@@ -12,7 +12,7 @@ ARG THREE_VERSION=0.186.1
 ARG THREE_INTEGRITY=sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==
 
 # Base images pinned by digest (multi-arch index); the tags stay for Dependabot, which updates both.
-FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS vendor
+FROM node:26.13.0-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS vendor
 ARG THREE_VERSION
 ARG THREE_INTEGRITY
 ARG DASHBOARD_THREE_SOURCE=vendored
@@ -61,7 +61,7 @@ RUN set -eu; \
 
 # The stable nginx/alpine-slim image keeps UID 101 and carries the patched Alpine packages.
 # Upstream publishes stable images under nginx/ from nginx 1.30.6 onwards.
-FROM nginx/nginx-unprivileged:1.30.6-alpine-slim@sha256:016193c18ef1ce19dc2229d3305f69af1b05e0bc0e8fe6ee724a58bd305f3855
+FROM nginx/nginx-unprivileged:1.31.7-alpine-slim@sha256:9f239061cbd9cc83fa684c653a5e825a0726410364aa3401f9490d7dc8c35e77
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --from=vendor --chown=root:root /build/site/ /usr/share/nginx/html/
 # Listens on port 80 as uid 101: docker-compose.yml sets
