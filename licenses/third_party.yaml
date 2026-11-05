@@ -225,6 +225,14 @@ vendored:
     where: "dashboard/companion/vendor/qrcode.js (pinned local copy and integrity verification)"
     source: https://github.com/kazuhikoarase/qrcode-generator
     check: {file: dashboard/companion/vendor/PROVENANCE.md, pattern: "Version: ([0-9.]+)"}
+  - name: geist
+    version: 1.9.1
+    spdx: OFL-1.1
+    license: SIL Open Font License 1.1
+    usage: runtime
+    where: "dashboard/companion/fonts/ (unmodified Geist and Geist Mono variable WOFF2 files with license and provenance)"
+    source: https://github.com/vercel/geist-font
+    check: {file: dashboard/companion/fonts/PROVENANCE.md, pattern: "Version: ([0-9.]+)"}
   - name: swagger-ui-dist
     version: 5.34.0
     spdx: Apache-2.0

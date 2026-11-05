@@ -3,13 +3,13 @@
   'use strict';
   const scriptUrl = document.currentScript.src;
   const labels = {
-    en: { title: 'Open on your phone', link: 'Decision Companion', qr: 'QR code',
+    en: { title: 'Open on your phone', link: 'Decision Companion', qr: 'QR code', address: 'WORKSPACE LINK',
       note: 'Scan this code to open the Companion. Sign in separately if the workspace requires it.',
       loopback: 'This address points to this device. Use a reachable workspace address to open it on another device.',
       local: 'The local file opens on this device. Use a reachable workspace address to open it on another device.',
       failed: 'The QR code could not be drawn. Use the link below.',
       copied: 'Link copied.', copyFailed: 'Select the link to copy it manually.', copy: 'Copy link', close: 'Close' },
-    fr: { title: 'Ouvrir sur votre téléphone', link: 'Compagnon de décision', qr: 'Code QR',
+    fr: { title: 'Ouvrir sur votre téléphone', link: 'Compagnon de décision', qr: 'Code QR', address: 'LIEN DE L’ESPACE',
       note: 'Scannez ce code pour ouvrir le Compagnon. Connectez-vous séparément si l’espace l’exige.',
       loopback: 'Cette adresse désigne cet appareil. Utilisez une adresse accessible depuis votre téléphone.',
       local: 'Le fichier local s’ouvre sur cet appareil. Utilisez une adresse accessible depuis votre téléphone.',
@@ -52,6 +52,8 @@
     const url = target();
     const dialog = node('dialog');
     dialog.className = 'companion-handoff';
+    const brand = node('p', 'AI Factory / Companion');
+    brand.className = 'companion-dialog-kicker';
     const heading = node('h2', strings.title);
     heading.id = 'companion-handoff-title';
     dialog.setAttribute('aria-labelledby', heading.id);
@@ -59,20 +61,28 @@
     const onLoopback = url.hostname === 'localhost' || url.hostname.endsWith('.localhost') ||
       url.hostname.startsWith('127.') || url.hostname === '[::1]';
     const note = node('p', localFile ? strings.local : onLoopback ? strings.loopback : strings.note);
+    note.id = 'companion-handoff-note';
+    dialog.setAttribute('aria-describedby', note.id);
     const canvas = node('canvas');
     canvas.hidden = true;
     canvas.setAttribute('aria-hidden', 'true');
     const link = node('a', url.href);
     link.href = url.href;
     link.referrerPolicy = 'no-referrer';
+    const address = node('div');
+    address.className = 'companion-address';
+    address.append(node('p', strings.address), link);
     const buttons = node('div');
     buttons.className = 'companion-buttons';
     const copy = node('button', strings.copy);
+    copy.className = 'companion-copy';
     const close = node('button', strings.close);
+    copy.type = close.type = 'button';
     const status = node('p', '');
+    status.className = 'companion-handoff-status';
     status.setAttribute('role', 'status');
     buttons.append(copy, close);
-    dialog.append(heading, note, canvas, link, buttons, status);
+    dialog.append(brand, heading, note, canvas, address, buttons, status);
     dialog.addEventListener('keydown', event => event.stopPropagation());
     dialog.addEventListener('close', () => {
       dialog.remove();
