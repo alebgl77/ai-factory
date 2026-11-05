@@ -93,8 +93,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     # ---- snapshot assembly
     "warning.litellm_spend_logs": {
-        "en": "costs taken from the LiteLLM spend logs (in the gateway's price unit)",
-        "fr": "coûts issus des journaux de dépenses LiteLLM (unité de prix de la passerelle)",
+        "en": "costs taken from the LiteLLM spend logs and converted to EUR at the configured rate",
+        "fr": "coûts issus des journaux de dépenses LiteLLM et convertis en EUR au taux configuré",
     },
     "warning.fine_tuning_ignored": {
         "en": "factory.fine_tuning=true ignored: the Virtual AI Factory never trains or fine-tunes a model",

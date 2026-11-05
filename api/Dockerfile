@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 # Aggregation API of the Virtual AI Factory.
 # Base image pinned by digest (multi-arch index); the tag stays for Dependabot, which updates both.
-FROM python:3.12.16-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30
+FROM python:3.12.16-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

@@ -246,6 +246,10 @@ jobs:
         env:
           THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three
         run: node tests/e2e/run.mjs
+      - name: UC-04 workshop in 2D and 3D
+        env:
+          THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three
+        run: node tests/e2e/exercise.mjs
 
   smoke:
     name: Full stack (smoke test, sim profile)

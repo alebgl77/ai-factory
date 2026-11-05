@@ -244,12 +244,13 @@ def test_missing_or_bad_token_file(tmp_path):
 def test_mixed_mode_with_live_sources(make_client, token_file):
     flags = dict(prometheus=True, langfuse=True, litellm=True, qdrant=True)
     rec = Recorder(**flags)
-    c = make_client(transport=httpx.MockTransport(rec), **live_settings(token_file, **flags))
+    c = make_client(transport=httpx.MockTransport(rec), cost_fx=0.8, **live_settings(token_file, **flags))
     health = c.get("/api/v1/health").json()
     assert health["sources"] == {"prometheus": True, "grafana": True, "langfuse": True, "litellm": True, "qdrant": True}
     r = c.get("/api/v1/snapshot")
     s = r.json()
     assert s["meta"]["mode"] == "mixed"
+    assert s["meta"]["telemetry_collected_at"] == "2026-11-03T10:00:00+01:00"
     assert s["meta"]["sections"]["costs"] == "live" and s["meta"]["sections"]["pipeline"] == "demo"
     assert s["gpu"]["source"] == "dcgm"
     dev = s["gpu"]["devices"][0]
@@ -294,23 +295,28 @@ def test_gpu_sim_label_reported_as_sim(make_client, token_file):
     assert s["gpu"]["devices"][0]["telemetry"] == "sim"
 
 
-def test_litellm_spend_logs_fallback(make_client, token_file):
+@pytest.mark.parametrize(("spend", "rate", "eur"), [(1.25, 1.0, 1.25), (1.25, 0.8, 1.0), ("NaN", 0.8, None)])
+def test_litellm_spend_logs_fallback(make_client, token_file, spend, rate, eur):
     class SpendRecorder(Recorder):
         def __call__(self, request):
             if request.url.host == "litellm" and request.url.path == "/spend/logs":
                 assert request.headers["authorization"] == "Bearer sk-master-SECRET-123"
                 return httpx.Response(200, json=[
-                    {"startTime": "2026-11-02T10:00:00Z", "spend": 1.25, "prompt_tokens": 1000,
+                    {"startTime": "2026-11-02T10:00:00Z", "spend": spend, "prompt_tokens": 1000,
                      "completion_tokens": 100, "metadata": {"usecase": "uc-02"}, "api_key": "hashed"}])
             return super().__call__(request)
     rec = SpendRecorder(litellm=True)
-    c = make_client(transport=httpx.MockTransport(rec), **live_settings(token_file, litellm=True))
+    c = make_client(transport=httpx.MockTransport(rec), cost_fx=rate, **live_settings(token_file, litellm=True))
     r = c.get("/api/v1/snapshot")
+    assert r.status_code == 200
     s = r.json()
-    assert s["meta"]["sections"]["costs"] == "live"
-    uc02 = next(u for u in s["costs"]["by_usecase"] if u["usecase"] == "uc-02")
-    assert uc02["llm_eur"] == 1.25 and uc02["requests"] == 1
-    assert any("LiteLLM" in w for w in s["meta"]["warnings"])
+    if eur is None:
+        assert s["meta"]["sections"]["costs"] == "demo"
+    else:
+        assert s["meta"]["sections"]["costs"] == "live"
+        uc02 = next(u for u in s["costs"]["by_usecase"] if u["usecase"] == "uc-02")
+        assert uc02["llm_eur"] == eur and uc02["requests"] == 1
+        assert any("LiteLLM" in w for w in s["meta"]["warnings"])
     assert_no_secret(r.text)
 
 

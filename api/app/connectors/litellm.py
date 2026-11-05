@@ -51,8 +51,8 @@ class LiteLLMClient(HttpSource):
     def spend_daily(self, start: dt.date, end: dt.date) -> list[dict[str, Any]]:
         """Aggregate the DB-backed spend logs per day and use case (metadata.usecase).
 
-        LiteLLM reports spend in its own currency setting (USD by default): the values are
-        returned as ``spend`` and are not used as EUR unless the gateway is configured so.
+        LiteLLM reports ``spend`` in its own price unit (USD by default). The live collector
+        converts these amounts to EUR with the same configured rate as the gateway callback.
         """
         payload = self._request_json("/spend/logs", params={"start_date": start.isoformat(),
                                                              "end_date": end.isoformat()},

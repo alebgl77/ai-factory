@@ -6,12 +6,13 @@ import { createRequire } from 'node:module';
 // ESM imports ignore NODE_PATH: fall back to require() so a global Playwright install also works
 let chromium;
 try { ({ chromium } = await import('playwright')); } catch { ({ chromium } = createRequire(import.meta.url)('playwright')); }
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const base = process.env.E2E_BASE_URL || 'file://' + path.join(root, 'dashboard/index.html');
+const dashboardPath = path.join(root, 'dashboard/index.html');
+const base = process.env.E2E_BASE_URL || pathToFileURL(dashboardPath).href;
 const vendor = process.env.THREE_VENDOR_DIR;
 const results = [];
 const check = (name, ok, info = '') => {
@@ -80,25 +81,34 @@ await page.keyboard.press('Escape');
 // Visit mode (Street View-like): drag the character onto the floor, walk, collide, interact, leave
 {
   const pov = () => page.evaluate(() => { const p = window.__twin.pov; return { active: p.active, anim: p.animating, ...p.pos, zone: p.zone, target: p.target }; });
-  await page.click('#view3d'); await page.waitForTimeout(1300);  // overview, so the drop target is on screen
+  await page.click('#view3d');
+  await page.waitForFunction(() => {  // let the overview and any drawer camera offset settle before projecting
+    const T = window.__twin;
+    return T.camera.position.distanceTo(T.viewPose('3d').p) < 0.1 && !T.camera.view?.enabled;
+  });
   const bb = await (await page.$('#pegBtn')).boundingBox();
   const drop = await page.evaluate(() => {
-    const T = window.__twin, V = T.camera.position.constructor, host = document.getElementById('canvasHost').getBoundingClientRect();
-    const p = new V(-4.0, 0, 4.6).project(T.camera);
-    return { x: host.left + (p.x + 1) / 2 * host.width, y: host.top + (1 - p.y) / 2 * host.height };
+    const T = window.__twin, V = T.camera.position.constructor, host = T.renderer.domElement.getBoundingClientRect();
+    const spot = T.pov.free(-4.0, 4.6);
+    T.camera.updateMatrixWorld();
+    const p = new V(spot.x, 0, spot.z).project(T.camera);
+    return { x: host.left + (p.x + 1) / 2 * host.width, y: host.top + (1 - p.y) / 2 * host.height, spot };
   });
   await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2); await page.mouse.down();
   for (let i = 1; i <= 10; i++) await page.mouse.move(bb.x + (drop.x - bb.x) * i / 10, bb.y + (drop.y - bb.y) * i / 10);
   await page.mouse.up();
   await page.waitForFunction(() => window.__twin.pov.active && !window.__twin.pov.animating, null, { timeout: 8000 }).catch(() => {});
   let s = await pov();
-  check('visit mode: dropping the character on the floor enters first-person view there', s.active && Math.hypot(s.x + 4.0, s.z - 4.6) < 0.8, `${s.zone} (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`);
+  check('visit mode: dropping the character on the floor enters first-person view there', s.active && Math.hypot(s.x - drop.spot.x, s.z - drop.spot.z) < 0.35, `${s.zone} (${s.x.toFixed(1)}, ${s.z.toFixed(1)})`);
   await page.evaluate(() => window.__twin.pov.enter(-4.0, 4.6, -Math.PI / 2));
   await page.waitForFunction(() => !window.__twin.pov.animating, null, { timeout: 8000 });
   const s0 = await pov();
+  const walkStart = await page.evaluate(() => performance.now());
   await page.keyboard.down('KeyW'); await page.waitForTimeout(1200); await page.keyboard.up('KeyW');
+  const walkSeconds = await page.evaluate(start => (performance.now() - start) / 1000, walkStart);
   s = await pov();
-  check('visit mode: W walks forward', Math.hypot(s.x - s0.x, s.z - s0.z) > 0.5, `${Math.hypot(s.x - s0.x, s.z - s0.z).toFixed(2)} m`);
+  const walked = Math.hypot(s.x - s0.x, s.z - s0.z);
+  check('visit mode: W walks forward at a speed bounded by elapsed time', walked > 0.5 && walked < 1.9 * walkSeconds + 0.5, `${walked.toFixed(2)} m in ${walkSeconds.toFixed(2)} s`);
   await page.evaluate(() => window.__twin.pov.enter(11.6, 7.2, -Math.PI / 2));
   await page.waitForFunction(() => !window.__twin.pov.animating, null, { timeout: 8000 });
   await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await page.keyboard.up('KeyW');
@@ -120,6 +130,118 @@ for (const lens of ['uc', 'heat', 'status']) { await page.click(`[data-lens="${l
 check('lenses switch without errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 const leak = await page.evaluate(() => /glsa_|Bearer\s+[A-Za-z0-9]/.test(document.documentElement.outerHTML));
 check('no Grafana token or bearer in the page', !leak);
+
+if (!process.env.E2E_BASE_URL) {
+  await page.evaluate(() => window.__twin.openConsole('registry'));
+  const frenchName = await page.evaluate(() => window.__twin.UC['uc-04'].name);
+  await page.selectOption('#languageSelect', 'en');
+  const switched = await page.evaluate(() => ({
+    lang: document.documentElement.lang,
+    payload: window.__twin.SNAP.meta.lang,
+    source: document.getElementById('srcBadge').textContent,
+    workshop: document.getElementById('exercise2d').getAttribute('href'),
+    registry: document.getElementById('cBody').textContent.includes(window.__twin.UC['uc-04'].name),
+    name: window.__twin.UC['uc-04'].name,
+  }));
+  check('offline EN switch updates the header, source badge and rendered registry immediately',
+    switched.lang === 'en' && switched.payload === 'en' && switched.source === 'Offline demo' && switched.registry && switched.name !== frenchName && switched.workshop === 'exercise/index.html?lang=en');
+  await page.reload();
+  await page.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'en');
+  check('saved locale survives a reload', await page.locator('#languageSelect').inputValue() === 'en');
+  await page.selectOption('#languageSelect', 'fr');
+  check('offline FR switch restores the French registry', await page.evaluate(() => window.__twin.UC['uc-04'].name) === frenchName);
+
+  const fixtures = await page.evaluate(() => Object.fromEntries(['en', 'fr'].map(lang => [lang, JSON.parse(document.getElementById(`demo-snapshot-${lang}`).textContent)])));
+  await page.close();
+  const html = fs.readFileSync(dashboardPath, 'utf8');
+  const mock = await ctx.newPage();
+  mock.setDefaultTimeout(15000);
+  await mock.clock.install();
+  let apiReady = false;
+  let holdFrench = null;
+  const snapshotCalls = [];
+  const tierMarkup = 'high" data-xss-probe="tier"><em data-xss-probe="tier">probe</em>';
+  const codeMarkup = '<em data-xss-probe="code">UC-04</em>';
+  const metricMarkup = '<em data-xss-probe="metric">metric</em>';
+  await mock.route('http://factory.test/**', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/') {
+      return route.fulfill({ contentType: 'text/html; charset=utf-8', body: url.searchParams.has('static') ? html.replace('<html ', '<html data-static-demo="1" ') : html });
+    }
+    if (url.pathname === '/api/v1/snapshot') {
+      const lang = url.searchParams.get('lang');
+      snapshotCalls.push(lang);
+      if (!apiReady || !fixtures[lang]) return route.fulfill({ status: 503, json: {} });
+      const data = structuredClone(fixtures[lang]);
+      data.meta.telemetry_collected_at = new Date().toISOString();
+      const useCase = data.registry.find(u => u.id === 'uc-04');
+      useCase.name += ' (API)';
+      useCase.code = codeMarkup;
+      useCase.risk.tier = tierMarkup;
+      data.catalog.models[0].eval = { [metricMarkup]: 0.5 };
+      if (lang === 'fr' && holdFrench) return holdFrench.then(() => route.fulfill({ json: data }));
+      return route.fulfill({ json: data });
+    }
+    const local = path.join(root, 'dashboard', url.pathname.slice(1));
+    return fs.existsSync(local) ? route.fulfill({ path: local }) : route.fulfill({ status: 404 });
+  });
+  await mock.goto('http://factory.test/');
+  await mock.waitForFunction(() => window.__twin?.source === 'embedded');
+  check('initial API failure falls back to the selected offline locale', snapshotCalls.join(',') === 'fr');
+  await mock.evaluate(() => window.__twin.openConsole('registry'));
+  apiReady = true;
+  await mock.clock.fastForward(30000);
+  await mock.waitForFunction(() => window.__twin?.source === 'api');
+  check('polling recovers the API and refreshes the source, telemetry age and open console',
+    (await mock.locator('#srcBadge').innerText()).startsWith('API') && await mock.locator('#telemetryAge').isVisible() &&
+    (await mock.locator('#cBody').textContent()).includes(`${frenchName} (API)`));
+  check('risk badges keep their known class and render unknown tier markup as text',
+    await mock.locator('#cBody .cchip.t-high').count() > 0 &&
+    await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    (await mock.locator('#cBody').textContent()).includes(tierMarkup));
+  await mock.selectOption('#languageSelect', 'en');
+  await mock.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'en');
+  const englishName = fixtures.en.registry.find(u => u.id === 'uc-04').name;
+  check('live EN switch requests and renders the selected API locale', snapshotCalls.at(-1) === 'en' &&
+    (await mock.locator('#cBody').textContent()).includes(`${englishName} (API)`));
+  let releaseFrench;
+  holdFrench = new Promise(resolve => { releaseFrench = resolve; });
+  const frenchRequest = mock.waitForRequest(/\/api\/v1\/snapshot\?lang=fr$/);
+  await mock.selectOption('#languageSelect', 'fr');
+  await frenchRequest;
+  const latestEnglish = mock.waitForResponse(/\/api\/v1\/snapshot\?lang=en$/);
+  await mock.selectOption('#languageSelect', 'en');
+  await latestEnglish;
+  const staleFrench = mock.waitForResponse(/\/api\/v1\/snapshot\?lang=fr$/);
+  releaseFrench();
+  await (await staleFrench).finished();
+  check('slow FR response cannot replace the newer EN selection',
+    await mock.locator('html').getAttribute('lang') === 'en' && (await mock.locator('#cBody').textContent()).includes(`${englishName} (API)`));
+  await mock.evaluate(() => window.__twin.openConsole('placement'));
+  check('use-case codes render as text in related console sections',
+    await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    (await mock.locator('#cBody').textContent()).includes(codeMarkup));
+  await mock.evaluate(() => window.__twin.openConsole('catalog'));
+  check('catalog evaluation keys render as text',
+    await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    (await mock.locator('#cBody').textContent()).includes(metricMarkup));
+  await mock.evaluate(() => window.__twin.closeConsole());
+  await mock.click('.tag[data-res="X1"]');
+  await mock.selectOption('#fUc', 'uc-04');
+  await mock.selectOption('#languageSelect', 'fr');
+  await mock.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'fr');
+  const useCaseSelect = mock.locator('#fUc');
+  check('use-case options keep literal labels and selection after switching language',
+    await useCaseSelect.inputValue() === 'uc-04' && await useCaseSelect.locator('option').first().getAttribute('value') === '' &&
+    (await useCaseSelect.locator('option:checked').textContent()).includes(`Sensible · ${codeMarkup} · ${frenchName} (API)`) &&
+    await useCaseSelect.locator('[data-xss-probe]').count() === 0);
+  const callsBeforeStatic = snapshotCalls.length;
+  await mock.goto('http://factory.test/?static');
+  await mock.waitForFunction(() => window.__twin?.source === 'embedded');
+  await mock.clock.fastForward(30000);
+  check('published static mode never requests the API, including after a poll interval', snapshotCalls.length === callsBeforeStatic);
+  await mock.close();
+}
 
 await browser.close();
 const failed = results.filter(r => !r.ok);

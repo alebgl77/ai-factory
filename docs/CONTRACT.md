@@ -273,7 +273,8 @@ Environment (all optional, see `.env.example`):
 | `FACTORY_ROLE_MAP` | comma-separated `group:role` items; roles `viewer`, `editor`, `maintainer`, `approver`, `admin` |
 | `FACTORY_DEFAULT_ROLE` | role of an authenticated user without mapped group (default: none, so 403) |
 | `FACTORY_RATE_LIMIT_PER_MIN`, `FACTORY_RATE_LIMIT_BURST` | write rate limit per actor, or per client IP without authentication (default 60 and 20; 0 disables) |
-| `FACTORY_CONNECTOR_TIMEOUT_S`, `FACTORY_CACHE_TTL_S` | connector timeout and snapshot cache TTL |
+| `FACTORY_CONNECTOR_TIMEOUT_S`, `FACTORY_CACHE_TTL_S` | connector timeout and TTL of raw telemetry and assembled snapshots |
+| `FACTORY_COST_FX` | positive finite rate from LiteLLM price unit to EUR, shared by gateway metrics and API spend fallback |
 
 Endpoints (JSON, read endpoints are GET):
 
@@ -319,6 +320,12 @@ The edge never applies the dashboard CSP to `/api/*` (the API's own policy is th
 removes client-supplied identity headers on every route (section 6).
 
 ## 4. Snapshot schema (`GET /api/v1/snapshot`)
+
+When collection yields live data, `meta.telemetry_collected_at` gives the ISO timestamp at the
+start of that collection, shared across languages and cost modes for the same date window.
+It measures the age of the retrieval, while source timestamps describe the age of individual
+measurements. `meta.generated_at` dates snapshot assembly and `meta.sections` gives the origin
+of each section. A snapshot with only demo or unavailable telemetry omits the collection time.
 
 ```jsonc
 {

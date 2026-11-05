@@ -45,9 +45,6 @@ class Connectors:
         return any(c.configured for c in self.clients().values())
 
     def health(self, force: bool = False) -> dict[str, bool]:
-        with self._lock:
-            if not force and self._cached and time.monotonic() - self._cached[0] < self._ttl:
-                return dict(self._cached[1])
         clients = self.clients()
 
         def probe(name: str) -> bool:
@@ -59,9 +56,12 @@ class Connectors:
             except Exception:  # a connector must never crash the API
                 return False
 
-        with ThreadPoolExecutor(max_workers=len(SOURCE_NAMES)) as pool:
-            results = dict(zip(SOURCE_NAMES, pool.map(probe, SOURCE_NAMES), strict=True))
         with self._lock:
+            if not force and self._cached and time.monotonic() - self._cached[0] < self._ttl:
+                return dict(self._cached[1])
+            # Only one group of probes can be in flight, including across snapshot date ranges.
+            with ThreadPoolExecutor(max_workers=len(SOURCE_NAMES)) as pool:
+                results = dict(zip(SOURCE_NAMES, pool.map(probe, SOURCE_NAMES), strict=True))
             self._cached = (time.monotonic(), results)
         return dict(results)
 
