@@ -13,7 +13,8 @@ decision from the human pillar classification of ``integrations/inventory.yaml``
 - ``to_relicense``: pillar match but no licence, or a licence the owner must change;
 - ``excluded``: fork, private, no pillar match, secrets found or copyleft dependency.
 
-Secret values are never printed or written: only rule, file, abbreviated commit and line.
+The redacted scanner report is temporary. Finding locations are used in memory for triage,
+and inventory outputs include only scanner status and counts.
 
 Usage:
   python scripts/inventory_github.py                       # repositories of integrations/inventory.yaml
@@ -400,40 +401,43 @@ def analyse_dependencies(repo: Path, exclude: list[str], lookup: LicenseLookup, 
 GITLEAKS_CONFIG = "[extend]\nuseDefault = true\n"
 
 
-def scan_secrets(repo: Path, work: Path, triage: list[dict[str, Any]], name: str) -> dict[str, Any]:
-    """Full-history gitleaks scan; returns findings metadata only (never the values)."""
+def gitleaks_summary(repo: Path, work: Path, triage: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    """Run a full-history scan and return only aggregate inventory data."""
     cfg = work / "gitleaks-cfg"
-    out = work / "gitleaks-out"
     cfg.mkdir(parents=True, exist_ok=True)
-    out.mkdir(parents=True, exist_ok=True)
     (cfg / "gitleaks.toml").write_text(GITLEAKS_CONFIG, encoding="utf-8")
     (cfg / "empty.gitleaksignore").write_text("", encoding="utf-8")
-    report = out / f"{name}.json"
-    report.unlink(missing_ok=True)
+
     def gitleaks_args(scan: str, cfg_dir: str, out_dir: str) -> list[str]:
         return ["git", scan, "--redact", "--no-banner", "--exit-code", "0", "--ignore-gitleaks-allow",
                 "--config", f"{cfg_dir}/gitleaks.toml", "--gitleaks-ignore-path", f"{cfg_dir}/empty.gitleaksignore",
-                "--report-format", "json", "--report-path", f"{out_dir}/{name}.json"]
+                "--report-format", "json", "--report-path", f"{out_dir}/report.json"]
 
-    if shutil.which("docker"):
-        cmd = ["docker", "run", "--rm", "--network", "none", "-v", f"{repo}:/scan:ro", "-v", f"{cfg}:/cfg:ro",
-               "-v", f"{out}:/out", GITLEAKS_IMAGE, *gitleaks_args("/scan", "/cfg", "/out")]
-    elif shutil.which("gitleaks"):
-        cmd = ["gitleaks", *gitleaks_args(str(repo), str(cfg), str(out))]
-    else:
-        return {"status": "not_scanned", "reason": "ni docker ni gitleaks disponibles"}
-    res = run(cmd, check=False, timeout=3600)
-    if res.returncode != 0 or not report.is_file():
-        return {"status": "not_scanned", "reason": f"gitleaks a échoué (code {res.returncode})"}
-    m = re.search(r"(\d+) commits scanned", res.stderr + res.stdout)
-    raw = json.loads(report.read_text(encoding="utf-8") or "[]")
-    report.unlink(missing_ok=True)  # the redacted report is not kept
+    with tempfile.TemporaryDirectory(prefix="gitleaks-out-", dir=work) as out:
+        report = Path(out) / "report.json"
+        if shutil.which("docker"):
+            cmd = ["docker", "run", "--rm", "--network", "none", "-v", f"{repo}:/scan:ro", "-v", f"{cfg}:/cfg:ro",
+                   "-v", f"{out}:/out", GITLEAKS_IMAGE, *gitleaks_args("/scan", "/cfg", "/out")]
+        elif shutil.which("gitleaks"):
+            cmd = ["gitleaks", *gitleaks_args(str(repo), str(cfg), out)]
+        else:
+            return {"status": "not_scanned", "reason": "ni docker ni gitleaks disponibles"}
+        try:
+            res = run(cmd, check=False, timeout=3600)
+            if res.returncode != 0 or not report.is_file():
+                return {"status": "not_scanned", "reason": f"gitleaks a échoué (code {res.returncode})"}
+            raw = json.loads(report.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError, subprocess.TimeoutExpired):
+            return {"status": "not_scanned", "reason": "rapport gitleaks indisponible ou invalide"}
+    if not isinstance(raw, list) or any(not isinstance(f, dict) or type(f.get("StartLine")) is not int for f in raw):
+        return {"status": "not_scanned", "reason": "rapport gitleaks indisponible ou invalide"}
+    m = re.search(r"\b([0-9]{1,10}) commits scanned\b", res.stderr + "\n" + res.stdout)
     findings = [{"rule": f.get("RuleID"), "file": f.get("File"), "commit": str(f.get("Commit", ""))[:7],
-                 "line": f.get("StartLine")} for f in raw]
+                 "line": f["StartLine"]} for f in raw]
     remaining, false_pos = apply_triage(findings, triage, name)
     return {"status": "clean" if not remaining else "findings", "tool": GITLEAKS_IMAGE,
             "commits_scanned": int(m.group(1)) if m else None, "raw_findings": len(findings),
-            "false_positives": false_pos, "findings": remaining}
+            "false_positive_count": len(false_pos), "remaining_count": len(remaining)}
 
 
 def apply_triage(findings: list[dict[str, Any]], triage: list[dict[str, Any]], name: str
@@ -468,10 +472,10 @@ def decide(entry: dict[str, Any], licence: dict[str, Any] | None, deps: dict[str
         why = str(entry.get("rationale") or "non classé").rstrip(".")
         extra = ""
         if scan and scan.get("status") == "findings":
-            extra = f" ; en outre {len(scan['findings'])} secret(s) potentiel(s) non trié(s)"
+            extra = f" ; en outre {scan['remaining_count']} secret(s) potentiel(s) non trié(s)"
         return "excluded", f"aucun pilier de l'usine : {why[:1].lower() + why[1:]}{extra}"
     if scan and scan.get("status") == "findings":
-        return "excluded", f"{len(scan['findings'])} secret(s) potentiel(s) non trié(s) dans l'historique"
+        return "excluded", f"{scan['remaining_count']} secret(s) potentiel(s) non trié(s) dans l'historique"
     if scan is None or scan.get("status") != "clean":
         return "excluded", "scan de secrets non effectué : intégration bloquée"
     if deps and deps["copyleft_runtime"]:
@@ -491,7 +495,7 @@ def decide(entry: dict[str, Any], licence: dict[str, Any] | None, deps: dict[str
 
 def card_for(result: dict[str, Any], owner: str) -> dict[str, Any]:
     name = result["name"]
-    scan = result.get("secrets") or {}
+    scan = result.get("scan_summary") or {}
     deps = result.get("dependencies") or {}
     git = result.get("git") or {}
     status = result["status"]
@@ -512,8 +516,8 @@ def card_for(result: dict[str, Any], owner: str) -> dict[str, Any]:
         "commit": git.get("head_short"),
         "inventoried": result.get("inventoried"),
         "secrets_detail": (f"gitleaks {scan.get('tool', '').rsplit(':', 1)[-1]}, {scan.get('commits_scanned')} commits, "
-                           f"{scan.get('raw_findings', 0)} résultat(s) brut(s), {len(scan.get('false_positives') or [])} faux positif(s) trié(s), "
-                           f"{len(scan.get('findings') or [])} restant(s)") if scan.get("status") in ("clean", "findings") else None,
+                            f"{scan['raw_findings']} résultat(s) brut(s), {scan['false_positive_count']} faux positif(s) trié(s), "
+                            f"{scan['remaining_count']} restant(s)") if scan.get("status") in ("clean", "findings") else None,
         "dependencies_checked": deps.get("count", 0),
         "relicense_to_mit": result.get("relicense"),
         "notes": result.get("notes"),
@@ -590,10 +594,10 @@ def markdown_table(results: list[dict[str, Any]]) -> str:
             dep_txt += (" ; " + " ; ".join(extra)) if extra else ", aucune copyleft"
         else:
             dep_txt = "—"
-        scan = r.get("secrets")
+        scan = r.get("scan_summary")
         if scan and scan.get("status") in ("clean", "findings"):
             sec = (f"{scan['commits_scanned']} commits, {scan['raw_findings']} brut(s), "
-                   f"{len(scan['false_positives'])} faux positif(s), {len(scan['findings'])} restant(s)")
+                   f"{scan['false_positive_count']} faux positif(s), {scan['remaining_count']} restant(s)")
         else:
             sec = "non scanné (" + ("fork" if r.get("fork") else "privé" if r.get("private") else "hors piliers") + ")" \
                 if not scan else scan.get("reason", "non scanné")
@@ -618,7 +622,7 @@ def self_test() -> int:
         if got != want:
             failures.append(f"{label}: got {got!r}, want {want!r}")
 
-    clean = {"status": "clean", "findings": []}
+    clean = {"status": "clean"}
     no_deps = {"copyleft_runtime": [], "unknown_runtime": []}
     mit = {"spdx": "MIT"}
     cases = [
@@ -629,7 +633,7 @@ def self_test() -> int:
         ("apache", {"pillar": "evaluation"}, {"spdx": "Apache-2.0"}, no_deps, clean, "integrated"),
         ("no licence", {"pillar": "rag"}, {"spdx": None}, no_deps, clean, "to_relicense"),
         ("own GPL", {"pillar": "rag"}, {"spdx": "GPL-3.0"}, no_deps, clean, "to_relicense"),
-        ("secrets", {"pillar": "rag"}, mit, no_deps, {"status": "findings", "findings": [{}]}, "excluded"),
+        ("secrets", {"pillar": "rag"}, mit, no_deps, {"status": "findings", "remaining_count": 1}, "excluded"),
         ("not scanned", {"pillar": "rag"}, mit, no_deps, None, "excluded"),
         ("copyleft dep", {"pillar": "rag"}, mit, {"copyleft_runtime": ["x (GPL-3.0)"], "unknown_runtime": []}, clean, "excluded"),
         ("unknown dep", {"pillar": "rag"}, mit, {"copyleft_runtime": [], "unknown_runtime": ["y"]}, clean, "excluded"),
@@ -703,8 +707,8 @@ def main(argv: list[str] | None = None) -> int:
     for entry in repos:
         name = entry["name"]
         url = f"https://github.com/{owner}/{name}.git"
-        result: dict[str, Any] = {**entry, "url": f"https://github.com/{owner}/{name}", "inventoried": today,
-                                  "pillar": entry.get("pillar") or "none"}
+        result: dict[str, Any] = {k: v for k, v in entry.items() if k not in ("secrets", "scan_summary")}
+        result.update(url=f"https://github.com/{owner}/{name}", inventoried=today, pillar=entry.get("pillar") or "none")
         licence = deps = scan = None
         if entry.get("private"):
             pass
@@ -731,8 +735,8 @@ def main(argv: list[str] | None = None) -> int:
                 result["dependencies"] = deps
             if not args.no_scan:
                 log(f"[repo] {name}: gitleaks")
-                scan = scan_secrets(dest, work, triage, name)
-                result["secrets"] = scan
+                scan = gitleaks_summary(dest, work, triage, name)
+                result["scan_summary"] = scan
         status, reason = decide(entry, licence, deps, scan, policy)
         if args.no_scan and status == "excluded" and result["pillar"] in PILLARS and scan is None:
             reason += " (relancer sans --no-scan)"
@@ -756,7 +760,8 @@ def main(argv: list[str] | None = None) -> int:
             problems.append(f"{path}: sous-module présent alors que la décision est « {r['status']} »")
 
     if args.report:
-        slim = [{k: v for k, v in r.items() if k not in ("gh_license",)} for r in results]
+        slim = [{("secrets" if k == "scan_summary" else k): v
+                 for k, v in r.items() if k != "gh_license"} for r in results]
         Path(args.report).write_text(json.dumps({"owner": owner, "date": today, "tool": GITLEAKS_IMAGE,
                                                  "repos": slim}, ensure_ascii=False, indent=1), encoding="utf-8")
     if args.markdown:
@@ -777,7 +782,7 @@ def main(argv: list[str] | None = None) -> int:
         kind = "privé" if r.get("private") else "fork" if r.get("fork") else "propre"
         licence = (r.get("license") or {}).get("spdx") or r.get("upstream_license") or "-"
         print(f"{r['name'].ljust(width)}  {kind:6}  {r['pillar']:20}  {licence!s:10}  "
-              f"{(r.get('secrets') or {}).get('status', '-'):9}  {r['status']}")
+              f"{(r.get('scan_summary') or {}).get('status', '-'):9}  {r['status']}")
     counts = {s: sum(1 for r in results if r["status"] == s) for s in ("integrated", "to_relicense", "excluded")}
     print(f"\n{len(results)} dépôts : {counts['integrated']} intégrés, {counts['to_relicense']} à relicencier, "
           f"{counts['excluded']} exclus.")

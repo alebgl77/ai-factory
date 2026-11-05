@@ -205,7 +205,7 @@ python -m pytest -q compose/litellm/tests                                # job C
 Le tableau des vulnérabilités HIGH/CRITICAL par image (Trivy 0.76.1, base du 2026-11-04) est
 dans la [version anglaise](README.md#image-scan-trivy). Les six images construites depuis ce
 dépôt passent le contrôle de la CI (aucune HIGH ou CRITICAL corrigeable) : celle du tableau de
-bord (`nginxinc/nginx-unprivileged:1.30.6-alpine-slim`, sans les modules optionnels ni leurs
+bord (`nginx/nginx-unprivileged:1.30.6-alpine-slim`, sans les modules optionnels ni leurs
 bibliothèques) n'a aucun constat HIGH ou CRITICAL ; les cinq images Python
 (`python:3.12.16-slim`, Debian 13.7) portent 45 HIGH encore sans version corrigée. Toutes les images sont à leur dernière
 version ; les constats restants attendent une reconstruction en amont. Ceux de `postgres` sont

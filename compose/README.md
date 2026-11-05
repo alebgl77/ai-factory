@@ -220,7 +220,7 @@ HIGH/CRITICAL only (fixable = a fixed version exists upstream):
 | `vllm/vllm-openai:v0.33.0` | not scanned (10.9 GB image) | |
 
 The six images built from this repository pass the CI gate (no fixable HIGH or CRITICAL):
-the dashboard image (`nginxinc/nginx-unprivileged:1.30.6-alpine-slim`, which leaves out the
+the dashboard image (`nginx/nginx-unprivileged:1.30.6-alpine-slim`, which leaves out the
 optional modules and their libraries) has no HIGH or CRITICAL finding at all; the five Python
 images (`python:3.12.16-slim`, Debian 13.7) carry 45 HIGH without any fixed version yet.
 

@@ -860,7 +860,7 @@ def validate(config_dir: Path, today: dt.date) -> Report:
         if r.get("status") not in REPO_STATUS:
             rep.err(where, f"status expected in {REPO_STATUS}")
         if r.get("secrets_scan") not in SECRETS_SCAN:
-            rep.err(where, f"secrets_scan expected in {SECRETS_SCAN}")
+            rep.err(where, "secrets_scan must be clean, findings or not_scanned")
         if r.get("status") == "integrated" and (r.get("secrets_scan") != "clean" or r.get("copyleft_deps")):
             rep.err(where, "integrated although the secret scan is not clean "
                            "or there are copyleft dependencies")

@@ -17,9 +17,11 @@ The token is never printed and never reaches the browser.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -88,7 +90,10 @@ def wait_for_grafana() -> None:
 
 def existing_token_valid() -> bool:
     try:
-        with open(TOKEN_FILE, encoding="utf-8") as fh:
+        fd = os.open(TOKEN_FILE, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, encoding="utf-8") as fh:
+            if hasattr(os, "fchmod"):
+                os.fchmod(fh.fileno(), 0o600)
             token = fh.read().strip()
     except OSError:
         return False
@@ -103,14 +108,18 @@ def existing_token_valid() -> bool:
 
 def write_token(token: str) -> None:
     directory = os.path.dirname(TOKEN_FILE) or "."
-    os.makedirs(directory, exist_ok=True)
-    tmp = os.path.join(directory, f".token.{os.getpid()}")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(token)
-    # Readable by the API container (another uid) through this dedicated volume only.
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, TOKEN_FILE)
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    # Both services run as UID 10001, so the API can read the owner-only file.
+    fd, tmp = tempfile.mkstemp(prefix=".token.", dir=directory)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(token)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, TOKEN_FILE)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
 
 
 def main() -> None:

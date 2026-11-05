@@ -48,9 +48,11 @@ Factory, au **3 novembre 2026**. Les projets retenus sont intégrés comme **fic
 6. **Secrets** : gitleaks **8.30.1** (image `zricethezav/gitleaks:v8.30.1` épinglée, réseau
    coupé, dépôt monté en lecture seule) sur **tout l'historique git**, règles par défaut ; une
    éventuelle configuration gitleaks du dépôt analysé et les commentaires `gitleaks:allow` sont
-   ignorés. Le rapport est masqué (`--redact`) puis supprimé après lecture : seuls la règle, le
-   fichier, le commit abrégé et la ligne sont conservés. Chaque résultat est trié à la main dans
-   `integrations/secrets-triage.yaml` ; tout résultat non trié bloque l'intégration.
+   ignorés. Le rapport masqué (`--redact`) est supprimé après lecture. La règle, le fichier, le
+   commit abrégé et la ligne sont utilisés en mémoire pour retrouver les entrées dans
+   `integrations/secrets-triage.yaml`. Tout résultat non trié bloque l'intégration. Les rapports
+   d'inventaire publient le statut du scan et les compteurs. Dans le JSON de `--report`,
+   `false_positive_count` et `remaining_count` donnent les deux totaux.
 7. **Décision** (calculée par le script) :
    - `integrated` : pilier couvert, licence permissive, aucune dépendance d'exécution copyleft ou
      inconnue, scan propre après tri ;

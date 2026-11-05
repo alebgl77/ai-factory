@@ -153,7 +153,15 @@ def _messages_text(messages: Any) -> str:
 
 
 _REDACTION_MARKER_RE = re.compile(r"\[REDACTED_[A-Z]+\]")
-_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+# This smoke-test probe only needs ordinary addresses. Bound every repetition so
+# failed matches cannot do super-linear work on arbitrarily long prompt text.
+_EMAIL_RE = re.compile(
+    r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63}){0,126}\.[A-Za-z]{2,63}"
+)
+
+
+def _count_raw_emails(text: str) -> int:
+    return sum(1 for _ in _EMAIL_RE.finditer(text))
 
 
 def _profile_or_404(name: str) -> Profile:
@@ -218,6 +226,8 @@ async def _chat(profile: Profile, request: Request) -> Any:
     model = str(body.get("model") or profile.models[0])
     prompt_text = _messages_text(body.get("messages"))
     prompt_tokens = _count_tokens(prompt_text)
+    redaction_markers = sum(1 for _ in _REDACTION_MARKER_RE.finditer(prompt_text))
+    raw_emails = _count_raw_emails(prompt_text)
     stream = bool(body.get("stream"))
     include_usage = bool((body.get("stream_options") or {}).get("include_usage"))
 
@@ -226,8 +236,8 @@ async def _chat(profile: Profile, request: Request) -> Any:
         st.requests += 1
         st.tokens_in += prompt_tokens
         st.by_model[model] = st.by_model.get(model, 0) + 1
-        st.redaction_markers += len(_REDACTION_MARKER_RE.findall(prompt_text))
-        st.raw_emails += len(_EMAIL_RE.findall(prompt_text))
+        st.redaction_markers += redaction_markers
+        st.raw_emails += raw_emails
 
     failure = _maybe_fail(profile)
     if failure is not None:

@@ -14,6 +14,7 @@ WORKDIR /app
 # whose hash differs and any dependency missing from the lock.
 COPY requirements.txt .
 # Optional build secret "build_ca": extra CA certificates for TLS-intercepting proxies.
+# pip and its bundled bootstrap wheel are build tools only.
 RUN --mount=type=secret,id=build_ca,required=false \
     set -eu; \
     if [ -s /run/secrets/build_ca ]; then \
@@ -21,6 +22,8 @@ RUN --mount=type=secret,id=build_ca,required=false \
       export PIP_CERT=/tmp/ca.pem; \
     fi; \
     pip install --no-compile --require-hashes -r requirements.txt; \
+    python -m pip uninstall --yes pip; \
+    rm -f /usr/local/lib/python3.*/ensurepip/_bundled/pip-*.whl; \
     rm -f /tmp/ca.pem; \
     useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin traffic
 
