@@ -1,6 +1,8 @@
 import importlib.util
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -215,3 +217,109 @@ def test_build_snapshot_lang_requires_out(tmp_path, build_mod):
 
 def test_build_snapshot_missing_config(tmp_path, build_mod):
     assert build_mod.main(["--config", str(tmp_path), "--out", str(tmp_path / "x.json")]) == 2
+
+
+# ---------------------------------------------------------------- scripts/inventory_github.py
+@pytest.fixture
+def inventory_mod(monkeypatch):
+    path = REPO / "scripts" / "inventory_github.py"
+    monkeypatch.syspath_prepend(str(path.parent))
+    spec = importlib.util.spec_from_file_location("inventory_github", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize(("triaged", "scan_status", "decision"), [
+    (False, "findings", "excluded"),
+    (True, "clean", "integrated"),
+])
+def test_inventory_reports_only_scan_summary(tmp_path, capsys, monkeypatch, inventory_mod,
+                                             triaged, scan_status, decision):
+    sentinel = "synthetic-sensitive-scanner-text"
+    repo_file = tmp_path / "inventory.yaml"
+    repo_file.write_text("owner: owner\nrepos:\n  - name: fixture\n    pillar: rag\n", encoding="utf-8")
+    triage = tmp_path / "triage.yaml"
+    if triaged:
+        triage.write_text(
+            inventory_mod.yaml.safe_dump({"triage": [{
+                "repo": "fixture", "commit": "abc1234", "file": f"{sentinel}.txt",
+                "line": 1, "rule": sentinel, "reason": sentinel, "verdict": "false_positive",
+            }]}),
+            encoding="utf-8",
+        )
+    cards = tmp_path / "cards"
+    monkeypatch.setattr(inventory_mod, "ROOT", tmp_path)
+    monkeypatch.setattr(inventory_mod, "CARDS_DIR", cards)
+    monkeypatch.setattr(inventory_mod, "TRIAGE", triage)
+    monkeypatch.setattr(inventory_mod, "clone_full", lambda *_: None)
+    monkeypatch.setattr(inventory_mod, "git_info", lambda _: {})
+    monkeypatch.setattr(inventory_mod, "repo_license", lambda _: {"spdx": "MIT"})
+    monkeypatch.setattr(inventory_mod.shutil, "which", lambda name: name if name == "gitleaks" else None)
+
+    def run_scanner(cmd, **kwargs):
+        report = Path(cmd[cmd.index("--report-path") + 1])
+        report.write_text(json.dumps([{
+            "RuleID": sentinel, "File": f"{sentinel}.txt", "Commit": "abc1234", "StartLine": 1,
+            "Secret": sentinel, "Match": sentinel,
+        }]), encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0, stdout=sentinel, stderr="12 commits scanned")
+
+    monkeypatch.setattr(inventory_mod, "run", run_scanner)
+    report, markdown, work = (tmp_path / name for name in ("report.json", "report.md", "work"))
+    assert inventory_mod.main(["--repos-file", str(repo_file), "--workdir", str(work), "--offline",
+                               "--no-deps", "--write-cards", "--report", str(report),
+                               "--markdown", str(markdown)]) == 0
+    report_text = report.read_text(encoding="utf-8")
+    markdown_text = markdown.read_text(encoding="utf-8")
+    assert "12 commits, 1 brut(s)" in markdown_text
+    item, = json.loads(report_text)["repos"]
+    assert item["status"] == decision
+    assert item["secrets"] == {
+        "status": scan_status, "tool": inventory_mod.GITLEAKS_IMAGE, "commits_scanned": 12,
+        "raw_findings": 1, "false_positive_count": int(triaged), "remaining_count": int(not triaged),
+    }
+    output = capsys.readouterr()
+    assert scan_status in output.out
+    assert sentinel not in report_text + markdown_text + output.out + output.err
+    assert not list(work.glob("gitleaks-out-*"))
+    if triaged:
+        card = (cards / "fixture.yaml").read_text(encoding="utf-8")
+        assert sentinel not in card and inventory_mod.yaml.safe_load(card)["secrets_scan"] == "clean"
+    else:
+        assert not cards.exists()
+
+
+@pytest.mark.parametrize("scanner_fails", [False, True])
+def test_inventory_discards_failed_scanner_report(tmp_path, monkeypatch, inventory_mod, scanner_fails):
+    sentinel = "synthetic-sensitive-scanner-text"
+    monkeypatch.setattr(inventory_mod.shutil, "which", lambda name: name if name == "gitleaks" else None)
+
+    def run_scanner(cmd, **kwargs):
+        Path(cmd[cmd.index("--report-path") + 1]).write_text(sentinel, encoding="utf-8")
+        if scanner_fails:
+            raise subprocess.TimeoutExpired(cmd, 3600, output=sentinel, stderr=sentinel)
+        return subprocess.CompletedProcess(cmd, 0, stdout=sentinel, stderr=sentinel)
+
+    monkeypatch.setattr(inventory_mod, "run", run_scanner)
+    assert inventory_mod.gitleaks_summary(tmp_path, tmp_path, [], "fixture") == {
+        "status": "not_scanned", "reason": "rapport gitleaks indisponible ou invalide",
+    }
+    assert not list(tmp_path.glob("gitleaks-out-*"))
+
+
+@pytest.mark.parametrize("format_args", [[], ["--json"]])
+def test_validate_config_reports_invalid_scan_status_without_input(tmp_path, format_args):
+    config = tmp_path / "config"
+    shutil.copytree(FIXTURE_DIR, config)
+    card = config / "catalog" / "github" / "demo-repo.yaml"
+    original = card.read_text(encoding="utf-8")
+    sentinel = "synthetic-sensitive-scanner-text"
+    card.write_text(original.replace("secrets_scan: clean", f"secrets_scan: {sentinel}"), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "validate_config.py"), "--config", str(config), *format_args],
+        check=False, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert result.returncode == 1
+    assert "secrets_scan must be clean, findings or not_scanned" in result.stdout + result.stderr
+    assert sentinel not in result.stdout + result.stderr

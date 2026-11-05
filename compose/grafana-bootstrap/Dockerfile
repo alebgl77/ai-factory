@@ -6,7 +6,9 @@
 # Base image pinned by digest (multi-arch index); the tag stays for Dependabot, which updates both.
 FROM python:3.12.16-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
-RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin bootstrap \
+RUN python -m pip uninstall --yes pip \
+ && rm -f /usr/local/lib/python3.*/ensurepip/_bundled/pip-*.whl \
+ && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin bootstrap \
  && mkdir -p /var/run/factory/grafana \
  && chown 10001:10001 /var/run/factory/grafana \
  && chmod 0755 /var/run/factory/grafana

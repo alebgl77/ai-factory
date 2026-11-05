@@ -191,6 +191,13 @@
 }
 
 # ---------------------------------------------------------------------------------- sites
+# The container health check uses a private listener independent of public TLS and auth.
+http://127.0.0.1:2018 {
+	bind 127.0.0.1
+	respond /healthz "ok" 200
+	respond 404
+}
+
 (app) {
 	import security_headers
 	header ?X-Frame-Options "DENY"

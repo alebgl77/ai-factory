@@ -7,7 +7,10 @@ FROM python:3.12.16-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad10
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
-RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin gpusim
+# The simulator uses the standard library only.
+RUN python -m pip uninstall --yes pip \
+ && rm -f /usr/local/lib/python3.*/ensurepip/_bundled/pip-*.whl \
+ && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin gpusim
 COPY --chown=root:root gpu_sim.py .
 USER 10001
 EXPOSE 9400

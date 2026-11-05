@@ -198,7 +198,7 @@ images:
     modified: false
     source: https://github.com/nodejs/docker-node
   - service: "dashboard (nginx base image)"
-    image: nginxinc/nginx-unprivileged
+    image: nginx/nginx-unprivileged
     tag: 1.30.6-alpine-slim
     spdx: BSD-2-Clause
     license: "BSD-2-Clause (nginx); Alpine packages of the image under their own licenses (aggregate)"

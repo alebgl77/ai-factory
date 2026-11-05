@@ -58,10 +58,9 @@ RUN set -eu; \
       mkdir -p /build/site/vendor && cp -r /vendor/three /build/site/vendor/three; \
     fi
 
-# alpine-slim: nginx without the optional dynamic modules and their libraries (curl, libexpat,
-# brotli...), none of which nginx.conf loads; it removes every fixable HIGH/CRITICAL finding
-# of the full alpine variant (Trivy gate in .github/workflows/security.yml).
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine-slim@sha256:5d8bb9437d74a600ec5dbf90c035451c724dc33eac8d3a71078f6f8612c345f6
+# The stable nginx/alpine-slim image keeps UID 101 and carries the patched Alpine packages.
+# Upstream publishes stable images under nginx/ from nginx 1.30.6 onwards.
+FROM nginx/nginx-unprivileged:1.30.6-alpine-slim@sha256:016193c18ef1ce19dc2229d3305f69af1b05e0bc0e8fe6ee724a58bd305f3855
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --from=vendor --chown=root:root /build/site/ /usr/share/nginx/html/
 # Listens on port 80 as uid 101: docker-compose.yml sets

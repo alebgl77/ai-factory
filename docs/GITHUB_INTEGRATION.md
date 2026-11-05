@@ -49,9 +49,10 @@ pinned **git submodules** (`integrations/<repo>`): no code is copied into this r
 6. **Secrets**: gitleaks **8.30.1** (pinned image `zricethezav/gitleaks:v8.30.1`, network
    disabled, repository mounted read-only) on the **full git history**, default rules; any
    gitleaks configuration of the scanned repository and `gitleaks:allow` comments are ignored.
-   The report is redacted (`--redact`) and deleted after reading: only the rule, the file, the
-   short commit and the line are kept. Each finding is triaged by hand in
-   `integrations/secrets-triage.yaml`; any untriaged finding blocks the integration.
+   The redacted report (`--redact`) is deleted after reading. The rule, file, short commit and
+   line are used in memory to match entries in `integrations/secrets-triage.yaml`. Any untriaged
+   finding blocks integration. Published inventory outputs contain the scan status and counts.
+   In `--report` JSON, `false_positive_count` and `remaining_count` give the two totals.
 7. **Decision** (computed by the script):
    - `integrated`: pillar covered, permissive license, no copyleft or unknown runtime
      dependency, clean scan after triage;

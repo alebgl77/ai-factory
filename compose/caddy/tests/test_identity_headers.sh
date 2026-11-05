@@ -21,6 +21,7 @@ cd "$ROOT"
 NET=factory-idh-test
 SUBNET=10.89.252.0/28
 EDGE_IP=10.89.252.2
+EDGE_HEALTH=http://127.0.0.1:2018/healthz
 P=factory-idh-test
 PY_IMAGE=${PY_IMAGE:-python:3.12.16-slim}
 CADDY_IMAGE=${CADDY_IMAGE:-$(docker compose config --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['services']['edge']['image'])")}
@@ -54,10 +55,25 @@ for mode in "${MODES[@]}"; do
     -e FACTORY_SCHEME=http -e FACTORY_HOST=factory.test -e FACTORY_AUTH="$mode" \
     -e FACTORY_BASIC_AUTH_USER="$BASIC_USER" -e FACTORY_BASIC_AUTH_HASH="$BASIC_HASH" \
     -v "$ROOT/compose/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" "$CADDY_IMAGE" >/dev/null
+  ready=0
   for _ in $(seq 1 30); do
-    docker exec "$P-edge" wget -q -O /dev/null http://localhost:2019/config/ 2>/dev/null && break
+    if health="$(docker exec "$P-edge" wget -q -O - "$EDGE_HEALTH" 2>/dev/null)" && [ "$health" = ok ]; then
+      ready=1
+      break
+    fi
     sleep 1
   done
+  if [ "$ready" -ne 1 ]; then
+    echo "edge health check failed ($mode): $EDGE_HEALTH" >&2
+    docker logs "$P-edge" 2>&1 | tail -n 20 >&2 || true
+    rc=1
+    continue
+  fi
+  if ! docker exec "$P-up" python -c \
+    'import socket, sys; s = socket.socket(); s.settimeout(2); sys.exit(s.connect_ex((sys.argv[1], 2018)) == 0)' "$EDGE_IP"; then
+    echo "edge health listener is reachable from the peer network ($mode)" >&2
+    rc=1
+  fi
   docker run --rm --network "$NET" -e EDGE_IP="$EDGE_IP" -e MODE="$mode" \
     -e BASIC_USER="$BASIC_USER" -e BASIC_PASSWORD="$BASIC_PASSWORD" \
     -v "$HERE/client.py:/client.py:ro" "$PY_IMAGE" python /client.py || { rc=1; docker logs "$P-edge" 2>&1 | tail -n 20 >&2; }

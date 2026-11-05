@@ -141,7 +141,7 @@ services:
       dashboard:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2019/config/"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2018/healthz"]
       interval: 15s
       timeout: 3s
       retries: 3

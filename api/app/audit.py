@@ -232,8 +232,12 @@ class AuditLog:
         line = canonical(record) + b"\n"
         if not status.ends_with_newline:
             line = b"\n" + line  # isolate a truncated last line instead of gluing onto it
-        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o640)
+        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(self.path, flags, 0o600)
         try:
+            if hasattr(os, "fchmod"):
+                # Existing volumes may still have the previous group-readable mode.
+                os.fchmod(fd, 0o600)
             view = memoryview(line)
             while view:
                 written = os.write(fd, view)
