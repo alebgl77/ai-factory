@@ -34,9 +34,12 @@ jobs:
           cp dashboard/index.html _site/index.html
           cp dashboard/assets/assets.js _site/assets/assets.js
           cp -R dashboard/exercise _site/exercise
+          cp -R dashboard/companion _site/companion
           # Static hosting: tell the page not to look for the aggregation API
           sed -i 's/<html /<html data-static-demo="1" /' _site/index.html
+          sed -i 's/<html /<html data-static-demo="1" /' _site/companion/index.html
           grep -q 'data-static-demo="1"' _site/index.html
+          grep -q 'data-static-demo="1"' _site/companion/index.html
           grep -q 'DEMO_SNAPSHOT_START' _site/index.html
       # actions/configure-pages is not used: it only configures static site generators, which this
       # plain HTML site does not have, and would need an extra Pages permission in this job.

@@ -43,6 +43,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
 
 COPY index.html /build/site/index.html
 COPY exercise/ /build/site/exercise/
+COPY companion/ /build/site/companion/
 # Optional visual pack (data-URI bundle built by scripts/build_assets.py; empty when no image was generated)
 COPY assets/assets.js /build/site/assets/assets.js
 RUN set -eu; \

@@ -194,6 +194,8 @@ services:
       FACTORY_DEMO_MODE: ${FACTORY_DEMO_MODE:-auto}
       FACTORY_DEMO_SEED: ${FACTORY_DEMO_SEED:-42}
       FACTORY_DEFAULT_LANG: ${FACTORY_DEFAULT_LANG:-en}
+      FACTORY_WORKBENCH_MODE: ${FACTORY_WORKBENCH_MODE:-off}
+      FACTORY_WORKBENCH_CHAT_MODE: ${FACTORY_WORKBENCH_CHAT_MODE:-simulation}
       # Identity: "none" (demo, everybody acts as admin) or "proxy" (SSO at the edge, see
       # FACTORY_AUTH=sso). Identity headers are read only from FACTORY_TRUSTED_PROXIES, by
       # default the fixed address of the edge on the edge-identity network.

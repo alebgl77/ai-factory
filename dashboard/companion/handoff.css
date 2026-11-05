@@ -1,0 +1,46 @@
+/* SPDX-License-Identifier: MIT */
+.companion-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+}
+.companion-entry a { text-decoration: underline; text-underline-offset: .18em; }
+.companion-entry button { cursor: pointer; }
+.companion-entry a:focus-visible, .companion-entry button:focus-visible,
+.companion-handoff :focus-visible { outline: 3px solid #9b561e; outline-offset: 3px; }
+.companion-entry--workshop {
+  position: relative;
+  margin: .75rem auto 0;
+  padding: .4rem .75rem;
+  width: min(66rem, calc(100% - 2rem));
+  justify-content: end;
+  color: #153b2d;
+  font: 700 .85rem "Trebuchet MS", sans-serif;
+}
+.companion-entry--workshop a { color: inherit; }
+.companion-entry--workshop button, .companion-handoff button {
+  min-height: 44px;
+  padding: .55rem .7rem;
+  color: #153b2d;
+  background: #edf3ec;
+  border: 1px solid #a5b8aa;
+  border-radius: .3rem;
+  font: inherit;
+}
+.companion-handoff {
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 1.1rem;
+  border: 1px solid #a5b8aa;
+  border-radius: .4rem;
+  background: #fffdf8;
+  color: #18261e;
+  font: 1rem/1.45 "Trebuchet MS", sans-serif;
+}
+.companion-handoff::backdrop { background: #17251db0; }
+.companion-handoff h2 { font: 500 1.9rem Georgia, serif; margin: 0 0 .4rem; }
+.companion-handoff p { margin: .55rem 0; }
+.companion-handoff canvas { display: block; max-width: 100%; height: auto; margin: .7rem auto; image-rendering: pixelated; }
+.companion-handoff a { display: block; color: #174c38; overflow-wrap: anywhere; margin: .6rem 0; }
+.companion-handoff .companion-buttons { display: flex; flex-wrap: wrap; gap: .45rem; }
+.companion-handoff [hidden] { display: none !important; }
