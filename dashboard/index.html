@@ -3002,7 +3002,12 @@ const CONSOLE_SECTIONS = {
   grafana: { title: 'Grafana', icon: 'info' },
 };
 const CONSOLE_ORDER = ['registry', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'catalog', 'skills', 'grafana'];
-const TIER_FR = { prohibited: 'Interdit (art. 5)', high: 'Haut risque', limited: 'Transparence (art. 50)', minimal: 'Minimal' };
+const TIER_BADGES = new Map([
+  ['prohibited', { className: 't-prohibited', label: 'Interdit (art. 5)' }],
+  ['high', { className: 't-high', label: 'Haut risque' }],
+  ['limited', { className: 't-limited', label: 'Transparence (art. 50)' }],
+  ['minimal', { className: 't-minimal', label: 'Minimal' }],
+]);
 const AREA_FR = { biometrics: 'Biométrie', critical_infrastructure: 'Infrastructures critiques', education: 'Éducation', employment: 'Emploi', essential_services: 'Services essentiels',
   law_enforcement: 'Répression', migration_border: 'Migration & frontières', justice_democracy: 'Justice & démocratie' };
 const NIST_FR = [['govern', 'Gouverner'], ['map', 'Cartographier'], ['measure', 'Mesurer'], ['manage', 'Gérer']];
@@ -3025,7 +3030,7 @@ const compact = v => Number.isFinite(+v) ? (+v).toLocaleString(locale(), { notat
 const eur = v => Number.isFinite(+v) ? (+v).toLocaleString(locale(), { style: 'currency', currency: SNAP?.factory?.currency || 'EUR', maximumFractionDigits: +v < 100 ? 2 : 0 }) : '—';
 const num = (v, d = 0) => Number.isFinite(+v) ? (+v).toLocaleString(locale(), { maximumFractionDigits: d }) : '—';
 const pctS = v => Number.isFinite(+v) ? Math.round(+v * 100) + ' %' : '—';
-const ucCode = id => UC[id]?.code || esc(id || '—');
+const ucCode = id => esc(UC[id]?.code || id || '—');
 const personName = id => Store.emp(id)?.name || id || '—';
 function sparkSvg(vals, w = 90, h = 22) {
   const v = (vals || []).filter(Number.isFinite); if (v.length < 2) return '';
@@ -3033,8 +3038,14 @@ function sparkSvg(vals, w = 90, h = 22) {
   const pts = v.map((x, i) => `${((i / (v.length - 1)) * w).toFixed(1)},${(h - 2 - ((x - lo) / span) * (h - 4)).toFixed(1)}`).join(' ');
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true"><polyline points="${pts}"/></svg>`;
 }
-const chip = (cls, txt, title = '') => `<span class="cchip ${cls}"${title ? ` title="${esc(title)}"` : ''}>${esc(txt)}</span>`;
-const tierChip = r => chip('t-' + (r?.tier || 'minimal'), TIER_FR[r?.tier] || r?.tier || '—', r?.annex_iii_area ? 'Annexe III : ' + (AREA_FR[r.annex_iii_area] || r.annex_iii_area) : '');
+const chip = (cls, txt, title = '') => `<span class="cchip ${esc(cls)}"${title ? ` title="${esc(title)}"` : ''}>${esc(txt)}</span>`;
+function tierChip(r) {
+  const tier = r?.tier;
+  const badge = TIER_BADGES.get(tier);
+  const area = r?.annex_iii_area;
+  return chip(badge?.className ?? (tier ? '' : 't-minimal'), badge?.label ?? (tier || '—'),
+    area ? 'Annexe III : ' + (AREA_FR[area] || area) : '');
+}
 
 let consoleKey = null, consoleReturn = null, catalogFilter = 'models';
 function openConsole(key) {
@@ -3165,7 +3176,7 @@ function secDataloop() {
 }
 function secPlacement() {
   const p = SNAP?.placement || {}, g = SNAP?.gpu?.devices?.[0];
-  return `<section class="csec"><h3>Cibles d’exécution · cloud d’abord, repli VPS puis matériel local</h3><div class="ccards">${(p.targets || []).map(t => `<div class="ccard tgt-${esc(t.status)}"><b>${esc(TARGET_FR[t.id] || t.label || t.id)}</b>${chip('st-' + esc(t.status), { up: 'disponible', degraded: 'dégradé', down: 'indisponible' }[t.status] || t.status)}
+  return `<section class="csec"><h3>Cibles d’exécution · cloud d’abord, repli VPS puis matériel local</h3><div class="ccards">${(p.targets || []).map(t => `<div class="ccard tgt-${esc(t.status)}"><b>${esc(TARGET_FR[t.id] || t.label || t.id)}</b>${chip('st-' + t.status, { up: 'disponible', degraded: 'dégradé', down: 'indisponible' }[t.status] || t.status)}
       <small>utilisation ${num(t.util_pct)} % · ${eurFine(t.eur_per_1k_tokens)}/1k tokens · p95 ${num(t.latency_ms_p95)} ms</small>${t.id === 'local' && g ? `<small>${esc(gpuName(g))} · ${num(g.temp_c)} °C · ${num(g.power_w)} W · ${num(g.mem_used_gb, 1)}/${num(g.mem_total_gb)} Go (${esc(SNAP?.gpu?.source || '')})</small>` : ''}</div>`).join('')}</div>
     <p class="cnote">Règle : les classes ${esc([...SENSITIVE_CLASSES].join(', '))} ne quittent jamais le GPU local (si celui-ci est indisponible, la charge est mise en file, jamais envoyée au cloud).</p></section>
     <section class="csec"><h3>Charges et décisions</h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>Charge</th><th>Use case</th><th>Données</th><th>Cible</th><th>Repli</th><th>Alias passerelle</th><th>Raisons</th></tr></thead><tbody>${(p.workloads || []).map(w => `<tr><td>${esc(w.id)}</td><td><b>${ucCode(w.usecase)}</b></td><td>${chip(SENSITIVE_CLASSES.has(w.sensitivity) ? 'sens' : 'nsens', w.sensitivity || '—')}</td><td>${w.target === 'queued' || w.queued ? `<b class="warn" title="GPU local indisponible : la charge sensible attend, elle n’est jamais envoyée au cloud ni au VPS">⏸ ${esc(TARGET_FR.queued)}</b>` : `<b>${esc(TARGET_FR[w.target] || w.target)}</b>`}</td><td>${esc((w.fallback || []).map(f => TARGET_FR[f] || f).join(' → ') || '—')}</td><td><code>${esc(w.model_alias || '')}</code></td><td><small>${esc((w.reasons || []).join(' · '))}</small></td></tr>`).join('')}</tbody></table></div></section>`;
@@ -3183,7 +3194,7 @@ function secCatalog() {
   const c = SNAP?.catalog || {}, tabs = [['models', 'Modèles'], ['agents', 'Agents'], ['tools', 'Outils'], ['repos', 'Dépôts intégrés']];
   const f = catalogFilter, items = c[f] || [];
   const card = {
-    models: m => `<b>${esc(m.id)}</b><small>${esc(m.provider || '')} · ${esc(TARGET_FR[m.hosting] || m.hosting || '')} · ${esc(m.license || '')}</small><small>alias <code>${esc(m.alias || '')}</code> · contexte ${num(m.context_k)} k · ${m.price_in_per_1k != null ? eur(m.price_in_per_1k) + ' / ' + eur(m.price_out_per_1k) + ' par 1k' : 'coût GPU'}</small><small>classes autorisées : ${esc((m.allowed_classes || []).join(', '))}${m.eval ? ' · éval ' + Object.entries(m.eval).map(([k, v]) => `${k} ${num(v, 2)}`).join(', ') : ''}</small>`,
+    models: m => `<b>${esc(m.id)}</b><small>${esc(m.provider || '')} · ${esc(TARGET_FR[m.hosting] || m.hosting || '')} · ${esc(m.license || '')}</small><small>alias <code>${esc(m.alias || '')}</code> · contexte ${num(m.context_k)} k · ${m.price_in_per_1k != null ? eur(m.price_in_per_1k) + ' / ' + eur(m.price_out_per_1k) + ' par 1k' : 'coût GPU'}</small><small>classes autorisées : ${esc((m.allowed_classes || []).join(', '))}${m.eval ? ' · éval ' + Object.entries(m.eval).map(([k, v]) => `${esc(k)} ${num(v, 2)}`).join(', ') : ''}</small>`,
     agents: a => `<b>${esc(a.name || a.id)}</b><small>${esc(a.framework || '')} ${esc(a.version || '')} · ${ucCode(a.usecase)} · ${tierChip({ tier: a.risk_tier })}</small><small>outils : ${esc((a.tools || []).join(', '))}</small><small>éval : ${esc(a.eval_status || '—')} · responsable ${esc(personName(a.owner))}</small>`,
     tools: t => `<b>${esc(t.name || t.id)}</b><small>${esc(t.kind || '')} · permissions ${esc((t.permissions || []).join(', '))} · risque ${esc(t.risk || '')}</small><small>responsable ${esc(personName(t.owner))}</small>`,
     repos: r => `<b>${esc(r.name || r.id)}</b><small>${esc(r.pillar || '')} · ${esc(r.license || 'sans licence')} · ${esc({ integrated: 'intégré (sous-module)', to_relicense: 'à relicencier en MIT', excluded: 'exclu' }[r.status] || r.status || '')}</small>${r.description ? `<small>${esc(r.description)}</small>` : ''}<small>${r.submodule ? `<code>${esc(r.submodule)}</code>${r.commit ? ` @ <code>${esc(r.commit)}</code>` : ''} · ` : ''}secrets : ${esc({ clean: 'aucun', triaged: 'faux positifs triés' }[r.secrets_scan] || r.secrets_scan || '—')}</small>${r.secrets_detail ? `<small title="${esc(r.secrets_detail)}">${esc(r.secrets_detail)}</small>` : ''}${/^https:\/\/github\.com\//.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Voir le dépôt</a>` : ''}`,
@@ -3646,7 +3657,11 @@ function renderDrawerInfo(sn) {
 /* ---------- Booking form ---------- */
 const F = { emp: $('fEmp'), start: $('fStart'), end: $('fEnd'), uc: $('fUc'), act: $('fAct'), info: $('fInfo'), note: $('fNote'), visio: $('fVisio'), err: $('fError') };
 function fillUcSelects(ucId, act) {
-  F.uc.innerHTML = '<option value="">Hors use case / interne</option>' + USE_CASES.map(u => `<option value="${u.id}"${u.id === ucId ? ' selected' : ''}>${u.sensitive ? 'Sensible · ' : ''}${esc(u.code)} · ${esc(u.name)}</option>`).join('');
+  const options = USE_CASES.map(u => {
+    const selected = u.id === ucId;
+    return new Option(`${u.sensitive ? 'Sensible · ' : ''}${u.code} · ${u.name}`, u.id, selected, selected);
+  });
+  F.uc.replaceChildren(new Option('Hors use case / interne', ''), ...options);
   F.act.innerHTML = Object.entries(ACTIVITIES).map(([k, l]) => `<option value="${k}"${k === act ? ' selected' : ''}>${esc(l)}</option>`).join('');
 }
 function updateFormInfo() {

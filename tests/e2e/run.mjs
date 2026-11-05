@@ -160,6 +160,9 @@ if (!process.env.E2E_BASE_URL) {
   let apiReady = false;
   let holdFrench = null;
   const snapshotCalls = [];
+  const tierMarkup = 'high" data-xss-probe="tier"><em data-xss-probe="tier">probe</em>';
+  const codeMarkup = '<em data-xss-probe="code">UC-04</em>';
+  const metricMarkup = '<em data-xss-probe="metric">metric</em>';
   await mock.route('http://factory.test/**', route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/') {
@@ -171,7 +174,11 @@ if (!process.env.E2E_BASE_URL) {
       if (!apiReady || !fixtures[lang]) return route.fulfill({ status: 503, json: {} });
       const data = structuredClone(fixtures[lang]);
       data.meta.telemetry_collected_at = new Date().toISOString();
-      data.registry.find(u => u.id === 'uc-04').name += ' (API)';
+      const useCase = data.registry.find(u => u.id === 'uc-04');
+      useCase.name += ' (API)';
+      useCase.code = codeMarkup;
+      useCase.risk.tier = tierMarkup;
+      data.catalog.models[0].eval = { [metricMarkup]: 0.5 };
       if (lang === 'fr' && holdFrench) return holdFrench.then(() => route.fulfill({ json: data }));
       return route.fulfill({ json: data });
     }
@@ -188,6 +195,10 @@ if (!process.env.E2E_BASE_URL) {
   check('polling recovers the API and refreshes the source, telemetry age and open console',
     (await mock.locator('#srcBadge').innerText()).startsWith('API') && await mock.locator('#telemetryAge').isVisible() &&
     (await mock.locator('#cBody').textContent()).includes(`${frenchName} (API)`));
+  check('risk badges keep their known class and render unknown tier markup as text',
+    await mock.locator('#cBody .cchip.t-high').count() > 0 &&
+    await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    (await mock.locator('#cBody').textContent()).includes(tierMarkup));
   await mock.selectOption('#languageSelect', 'en');
   await mock.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'en');
   const englishName = fixtures.en.registry.find(u => u.id === 'uc-04').name;
@@ -206,6 +217,24 @@ if (!process.env.E2E_BASE_URL) {
   await (await staleFrench).finished();
   check('slow FR response cannot replace the newer EN selection',
     await mock.locator('html').getAttribute('lang') === 'en' && (await mock.locator('#cBody').textContent()).includes(`${englishName} (API)`));
+  await mock.evaluate(() => window.__twin.openConsole('placement'));
+  check('use-case codes render as text in related console sections',
+    await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    (await mock.locator('#cBody').textContent()).includes(codeMarkup));
+  await mock.evaluate(() => window.__twin.openConsole('catalog'));
+  check('catalog evaluation keys render as text',
+    await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    (await mock.locator('#cBody').textContent()).includes(metricMarkup));
+  await mock.evaluate(() => window.__twin.closeConsole());
+  await mock.click('.tag[data-res="X1"]');
+  await mock.selectOption('#fUc', 'uc-04');
+  await mock.selectOption('#languageSelect', 'fr');
+  await mock.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'fr');
+  const useCaseSelect = mock.locator('#fUc');
+  check('use-case options keep literal labels and selection after switching language',
+    await useCaseSelect.inputValue() === 'uc-04' && await useCaseSelect.locator('option').first().getAttribute('value') === '' &&
+    (await useCaseSelect.locator('option:checked').textContent()).includes(`Sensible · ${codeMarkup} · ${frenchName} (API)`) &&
+    await useCaseSelect.locator('[data-xss-probe]').count() === 0);
   const callsBeforeStatic = snapshotCalls.length;
   await mock.goto('http://factory.test/?static');
   await mock.waitForFunction(() => window.__twin?.source === 'embedded');
