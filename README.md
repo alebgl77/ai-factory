@@ -36,6 +36,8 @@ catalog), `?` for help. Switch language with the **EN/FR** toggle in the header.
 Open **UC-04 Workshop** from the 3D dashboard or launch the [standalone 2D workshop](https://alebgl77.github.io/ai-factory/exercise/).
 Business, risk and platform review a fictional release, simulate a GPU outage and export a decision record. The exercise runs in the browser with simulated data and decisions.
 
+Use the **Decision Companion** from the dashboard or workshop to open the Workbench on a phone. See the [Workbench guide](docs/WORKBENCH.md) for the offline demo, approval flow and integration contract.
+
 ### Local quick start (no key at all)
 
 Requirements: Docker 24+ with Compose v2, 4 vCPUs, 8 GB of free RAM, ports 80 and 443 available.
