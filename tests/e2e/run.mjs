@@ -216,7 +216,7 @@ if (!process.env.E2E_BASE_URL) {
     proposals: proposedPolicy && !policyDecision ? [{ ...proposedPolicy, id: shadowProposalId }] : [],
     capabilities: { propose: ['editor', 'admin'].includes(shadowRole), decide: shadowRole === 'approver' },
   });
-  let apiReady = false;
+  let apiReady = false, buMode = false, buAuthorized = true, buWrites = 0, unscopedFirstRead = false;
   let holdFrench = null;
   const snapshotCalls = [];
   const assessmentCalls = [];
@@ -235,6 +235,15 @@ if (!process.env.E2E_BASE_URL) {
       snapshotCalls.push(lang);
       if (!apiReady || !fixtures[lang]) return route.fulfill({ status: 503, json: {} });
       const data = structuredClone(fixtures[lang]);
+      if (buMode) {
+        if (!buAuthorized) return route.fulfill({ status: 403, json: {} });
+        if (unscopedFirstRead) { unscopedFirstRead = false; return route.fulfill({ json: data }); }
+        data.meta.business_scope = true;
+        data.meta.business_view = 'fictional-bu-view';
+        data.profiles.people = data.profiles.people.filter(person => person.id === 'p02');
+        data.registry = data.registry.filter(usecase => usecase.id === 'uc-01');
+        return route.fulfill({ json: data });
+      }
       data.meta.telemetry_collected_at = new Date().toISOString();
       if (assessmentCalls.length) {
         data.registry.find(u => u.id === reviewTarget.id).review_revision = nextReviewRevision;
@@ -246,6 +255,11 @@ if (!process.env.E2E_BASE_URL) {
       data.catalog.models[0].eval = { [metricMarkup]: 0.5 };
       if (lang === 'fr' && holdFrench) return holdFrench.then(() => route.fulfill({ json: data }));
       return route.fulfill({ json: data });
+    }
+    if (buMode && url.pathname === '/api/v1/spaces/state') {
+      if (route.request().method() === 'PUT') buWrites++;
+      return route.fulfill({ json: { version: 0, view_token: 'f'.repeat(64), state: { v: 2, bookings: [], dayStatus: {}, meta: { autoDemo: false } },
+        scope: { write: true, employee: 'p02', resources: ['D1'], resource_usecases: { D1: ['uc-01'] }, owned: [] } } });
     }
     if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
       assessmentCalls.push(route.request().postDataJSON());
@@ -267,9 +281,17 @@ if (!process.env.E2E_BASE_URL) {
     const local = path.join(root, 'dashboard', url.pathname.slice(1));
     return fs.existsSync(local) ? route.fulfill({ path: local }) : route.fulfill({ status: 404 });
   });
+  await mock.addInitScript(() => {
+    localStorage.setItem('aiFactoryRef.v2', JSON.stringify({ v: 2, bookings: [
+      { id: 'legacy-private', resourceId: 'D1', employeeId: 'p02', ucId: 'uc-01', activity: 'delivery',
+        date: '2026-11-06', start: 540, end: 600, note: 'legacy-private-note' },
+    ], meta: { autoDemo: false } }));
+  });
   await mock.goto('http://factory.test/');
   await mock.waitForFunction(() => window.__twin?.source === 'embedded');
   check('initial API failure falls back to the selected offline locale', snapshotCalls.join(',') === 'fr');
+  check('a failed first API request never restores a legacy local planning cache', await mock.evaluate(() =>
+    localStorage.getItem('aiFactoryRef.v2').includes('legacy-private-note') && !window.__twin.Store.d.bookings.some(b => b.id === 'legacy-private')));
   await mock.evaluate(() => window.__twin.openConsole('registry'));
   apiReady = true;
   await mock.clock.fastForward(30000);
@@ -377,6 +399,36 @@ if (!process.env.E2E_BASE_URL) {
   await (await shadowResponse).finished();
   check('a delayed Observatory response cannot repaint another console', await mock.locator('[data-shadow-state]').count() === 0 && (await mock.locator('#cTitle').textContent()).includes('Catalogue'));
   await mock.close();
+
+  buMode = true;
+  unscopedFirstRead = true; // rolling transition: the first snapshot predates the scoped booking API
+  const scoped = await ctx.newPage();
+  await scoped.clock.install();
+  await scoped.addInitScript(() => {
+    localStorage.setItem('aiFactoryRef.v2', JSON.stringify({ v: 2, bookings: [], meta: { autoDemo: true } }));
+    localStorage.setItem('aiFactoryRef.v2.backup', 'legacy-booking-private');
+  });
+  await scoped.goto('http://factory.test/?lang=fr', { waitUntil: 'commit' });
+  await scoped.waitForFunction(() => window.__appReady && window.__twin?.source === 'api', null, { timeout: 30000 });
+  await scoped.clock.fastForward(1500);
+  check('scoped booking response revalidates the snapshot, purges browser caches and does not reseed', buWrites === 0 &&
+    await scoped.evaluate(() => window.__twin.SNAP.meta.business_scope === true) &&
+    await scoped.evaluate(() => localStorage.getItem('aiFactoryRef.v2') === null && localStorage.getItem('aiFactoryRef.v2.backup') === null));
+  await scoped.locator('#tabSpaces').click();
+  await scoped.locator('#spacePanel button[data-res="D1"]').click();
+  check('protected scheduling presents only its authorized case and verified booking identity',
+    await scoped.locator('#fSubmit').isEnabled() && await scoped.locator('#fEmp').inputValue() === 'p02' &&
+    await scoped.locator('#fUc').inputValue() === 'uc-01');
+  await scoped.keyboard.press('Escape');
+  await scoped.locator('#spacePanel button[data-res="B1"]').click();
+  check('protected scheduling disables booking an out-of-scope resource', await scoped.locator('#fSubmit').isDisabled());
+  buAuthorized = false;
+  await scoped.clock.fastForward(30000);
+  await scoped.locator('#businessOffline').waitFor();
+  check('loss of access conceals the protected dashboard without switching to the fictional schedule',
+    await scoped.locator('#app').evaluate(el => el.inert) && await scoped.evaluate(() => window.__twin?.source === 'none') && buWrites === 0);
+  await scoped.close();
+  buMode = false;
 
   // Test a fresh static boot after releasing the live renderer and its clock.
   const callsBeforeStatic = snapshotCalls.length;

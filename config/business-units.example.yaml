@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT
+# Example only. Replace these groups and IdP subjects with the verified deployment mappings.
+version: 1
+groups:
+  bu-operations: [cc-ops]
+  bu-rh: [cc-rh]
+  bu-finance: [cc-finance]
+  bu-relation: [cc-relation]
+  factory-governance-admin: ["*"]
+resources:
+  D1: [cc-ops]
+  D2: [cc-relation]
+  B1: [cc-rh]
+  B2: [cc-finance]
+  R1: ["*"]
+secure_resources: [B1, B2]
+people:
+  cc-ops: [p02]
+  cc-rh: [p06]
+  cc-finance: [p07]
+  cc-relation: [p03]
+identities:
+  example-oidc-ops-subject: p02
+  example-oidc-hr-subject: p06
+  example-oidc-finance-subject: p07
+  example-oidc-relations-subject: p03
+shadow_teams:
+  cc-ops: [operations]
+  cc-rh: [human-resources]
+  cc-finance: [finance]
+  cc-relation: [customer-relations, marketing]

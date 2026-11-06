@@ -2,7 +2,7 @@
 # Edge proxy of the Virtual AI Factory (the "VPS proxy"), Caddy 2 (Apache-2.0).
 #
 #   {$FACTORY_HOST}            -> dashboard (static 3D page) and /api/* -> api:8000
-#   grafana.{$FACTORY_HOST}    -> grafana:3000   (Grafana keeps its own login)
+#   grafana.{$FACTORY_HOST}    -> grafana:3000   (unscoped demo and operator environments)
 #   langfuse.{$FACTORY_HOST}   -> langfuse-web:3000 (Langfuse keeps its own login)
 #   :3001 / :3002 (published on 127.0.0.1 only) -> Grafana / Langfuse, for local use when
 #   *.localhost names do not resolve.
@@ -224,6 +224,9 @@ http://127.0.0.1:2018 {
 	}
 
 	# The API exposes /metrics for Prometheus only; it is not routed to the outside.
+	handle /metrics {
+		respond 404
+	}
 	handle {
 		import csp-{$DASHBOARD_THREE_SOURCE:vendored}
 		reverse_proxy dashboard:80 {
@@ -241,6 +244,10 @@ http://127.0.0.1:2018 {
 		max_size 10MB
 	}
 	import security_txt
+	@private_telemetry expression `"{$FACTORY_PRIVATE_TELEMETRY:}" == "disabled"`
+	handle @private_telemetry {
+		respond 404
+	}
 	handle {
 		reverse_proxy grafana:3000 {
 			header_up X-Real-IP {remote_host}
@@ -257,6 +264,10 @@ http://127.0.0.1:2018 {
 		max_size 20MB
 	}
 	import security_txt
+	@private_telemetry expression `"{$FACTORY_PRIVATE_TELEMETRY:}" == "disabled"`
+	handle @private_telemetry {
+		respond 404
+	}
 	handle {
 		reverse_proxy langfuse-web:3000 {
 			header_up X-Real-IP {remote_host}

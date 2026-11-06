@@ -34,11 +34,12 @@ def valid_config():
         {"target": 3001, "published": "3001", "host_ip": "127.0.0.1", "protocol": "tcp"},
     ]
     services["edge"]["environment"].update(
-        FACTORY_SCHEME="https", FACTORY_HOST=PRODUCTION_HOST, FACTORY_AUTH="sso",
+        FACTORY_SCHEME="https", FACTORY_HOST=PRODUCTION_HOST, FACTORY_AUTH="sso", FACTORY_PRIVATE_TELEMETRY="disabled",
     )
     services["api"]["environment"].update(
         FACTORY_AUTH_MODE="proxy", FACTORY_DEFAULT_ROLE="", FACTORY_ROLE_MAP="staff:viewer,governance:approver",
         FACTORY_TRUSTED_PROXIES="10.89.255.2/32", FACTORY_DEMO_MODE="never", FACTORY_WORKBENCH_MODE="off",
+        FACTORY_BU_POLICY="/config/business-units.yaml",
     )
     services["oauth2-proxy"]["environment"].update(
         OAUTH2_PROXY_OIDC_ISSUER_URL="https://idp.company.internal:8443/realm",
@@ -51,8 +52,16 @@ def valid_config():
     services["litellm"]["environment"].update(
         FACTORY_GUARDRAIL_MODE="block", FACTORY_ENFORCE_SENSITIVE_ROUTING="true",
         FACTORY_PII_REDACTION="true", FACTORY_SENSITIVE_CLASSES="C3,C4",
+        FACTORY_DEMO_MODE="never", FACTORY_GATEWAY_POLICY="/run/factory-gateway/policy.json",
+        FACTORY_GATEWAY_REGISTRY="/factory-usecases",
         LOCAL_API_BASE="http://10.40.20.15:8000/v1", LOCAL_EMBED_API_BASE="http://[fd00::20]:8000/v1",
+        LOCAL_CHAT_MODEL="openai/local-chat", LOCAL_EMBED_MODEL="openai/local-embed",
     )
+    services["api"]["volumes"] = [{"type": "bind", "source": "/operator/config", "target": "/config", "read_only": True}]
+    services["litellm"]["volumes"] = [
+        {"type": "bind", "source": "/operator/policy.json", "target": "/run/factory-gateway/policy.json", "read_only": True},
+        {"type": "bind", "source": "/operator/config/usecases", "target": "/factory-usecases", "read_only": True},
+    ]
     services["grafana"]["environment"].update(
         GF_SERVER_ROOT_URL=f"https://grafana.{PRODUCTION_HOST}", GRAFANA_COOKIE_SECURE="auto", FACTORY_SCHEME="https",
     )
@@ -73,7 +82,11 @@ def test_valid_private_hostname_and_explicit_public_edge_bind(valid_config):
     ("edge", "FACTORY_HOST", "demo.test", "FACTORY_HOST"),
     ("edge", "FACTORY_SCHEME", "http", "FACTORY_SCHEME"),
     ("edge", "FACTORY_AUTH", "none", "FACTORY_AUTH"),
+    ("edge", "FACTORY_PRIVATE_TELEMETRY", "", "direct Grafana and Langfuse"),
     ("api", "FACTORY_AUTH_MODE", "none", "FACTORY_AUTH_MODE"),
+    ("api", "FACTORY_BU_POLICY", "", "FACTORY_BU_POLICY"),
+    ("api", "FACTORY_BU_POLICY", "/config/business-units.example.yaml", "FACTORY_BU_POLICY"),
+    ("api", "FACTORY_BU_POLICY", "/config/../policy.yaml", "FACTORY_BU_POLICY"),
     ("api", "FACTORY_ROLE_MAP", "", "FACTORY_ROLE_MAP"),
     ("api", "FACTORY_ROLE_MAP", "staff:unknown", "FACTORY_ROLE_MAP"),
     ("api", "FACTORY_DEFAULT_ROLE", "admin", "FACTORY_DEFAULT_ROLE"),
@@ -99,6 +112,11 @@ def test_valid_private_hostname_and_explicit_public_edge_bind(valid_config):
     ("grafana", "GRAFANA_COOKIE_SECURE", "false", "secure Grafana cookies"),
     ("grafana", "FACTORY_SCHEME", "http", "secure Grafana cookies"),
     ("litellm", "FACTORY_GUARDRAIL_MODE", "flag", "blocking LiteLLM"),
+    ("litellm", "FACTORY_GATEWAY_POLICY", "", "FACTORY_GATEWAY_POLICY"),
+    ("litellm", "FACTORY_DEMO_MODE", "auto", "strict LiteLLM inference"),
+    ("litellm", "LOCAL_CHAT_MODEL", "anthropic/remote-model", "LOCAL_CHAT_MODEL"),
+    ("litellm", "LOCAL_EMBED_MODEL", "bedrock/remote-model", "LOCAL_EMBED_MODEL"),
+    ("litellm", "LOCAL_CHAT_MODEL", "openai/", "LOCAL_CHAT_MODEL"),
     ("litellm", "FACTORY_ENFORCE_SENSITIVE_ROUTING", "false", "sensitive routing for C3 and C4"),
     ("litellm", "FACTORY_PII_REDACTION", "false", "PII redaction"),
     ("litellm", "FACTORY_SENSITIVE_CLASSES", "C4", "sensitive routing for C3 and C4"),
@@ -119,6 +137,14 @@ def test_valid_private_hostname_and_explicit_public_edge_bind(valid_config):
 def test_insecure_settings_fail(valid_config, service, key, value, label):
     valid_config["services"][service]["environment"][key] = value
     assert any(label in message for message in production_errors(valid_config))
+
+
+def test_policy_mounts_must_be_read_only_and_unambiguous(valid_config):
+    valid_config["services"]["api"]["volumes"][0]["read_only"] = False
+    mounts = valid_config["services"]["litellm"]["volumes"]
+    mounts.append(mounts[0].copy())
+    errors = "\n".join(production_errors(valid_config))
+    assert "FACTORY_BU_POLICY" in errors and "FACTORY_GATEWAY_POLICY" in errors
 
 
 def test_rejects_unintended_bindings(valid_config):
@@ -233,6 +259,7 @@ def test_rendered_production_fixture_passes():
     rendered = _render_compose(dict.fromkeys(fixture_vars, FIXTURE_VALUE) | {
         "FACTORY_HOST": PRODUCTION_HOST, "FACTORY_SCHEME": "https", "FACTORY_AUTH": "sso",
         "FACTORY_AUTH_MODE": "proxy", "FACTORY_ROLE_MAP": "staff:viewer,governance:approver",
+        "FACTORY_BU_POLICY": "/config/business-units.yaml", "FACTORY_GATEWAY_POLICY": "./private-gateway-policy.json",
         "FACTORY_DEMO_MODE": "never", "FACTORY_GUARDRAIL_MODE": "block", "EDGE_BIND": "0.0.0.0",
         "LANGFUSE_ENCRYPTION_KEY": bytes(range(32)).hex(),
         "GRAFANA_PUBLIC_URL": f"https://grafana.{PRODUCTION_HOST}",

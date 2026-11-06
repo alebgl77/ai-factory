@@ -74,8 +74,27 @@ def check_rollback(online: dict[str, Any] | None, rollback_cfg: dict[str, Any]) 
     return None
 
 
+def _verified_review(run: dict[str, Any], assessment: dict[str, Any]) -> bool:
+    # The authorized snapshot omits the reviewer identity. Receipt ingress separately
+    # checks the protected subject proof and timestamp before recording evidence.
+    return bool(assessment.get("decision") == "approved" and assessment.get("separation_of_duties") == "verified"
+                and assessment.get("reviewed_revision") == run.get("review_revision")
+                and assessment.get("reviewed_model_version") == run.get("model_version"))
+
+
+def evaluate_release_gate(run: dict[str, Any], item: dict[str, Any], factory_cfg: dict[str, Any]) -> bool:
+    """Require complete evidence and the server's exact four-eyes approval."""
+    risk = item.get("risk") or {}
+    thresholds = gate_thresholds(risk.get("tier", "high"), factory_cfg.get("eval_gates") or {})
+    return bool(thresholds and not risk.get("deploy_block")
+                and all((run.get("stages") or {}).get(key) for key in _UPSTREAM)
+                and _verified_review(run, item.get("assessment") or {})
+                and evaluate_gate((run.get("eval") or {}).get("metrics"), thresholds)[0])
+
+
 def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str, Any],
-                 rollback_cfg: dict[str, Any], lang: str = DEFAULT_LANG) -> tuple[dict[str, Any], dict[str, Any] | None]:
+                 rollback_cfg: dict[str, Any], lang: str = DEFAULT_LANG, *,
+                 verified: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Evaluate one release run against the gates. Returns (item, rollback_event_or_None).
 
     Stage details are written in ``lang``; ``risk["reason"]`` must already be in that language.
@@ -96,6 +115,9 @@ def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str
         info = stages_in.get(key) or {}
         if not upstream_ok:
             add(key, "pending")
+        elif verified and not info:
+            add(key, "pending")
+            upstream_ok = False
         elif failed_stage == key:
             add(key, "failed", info.get("at"), info.get("detail") or msg(lang, "pipeline.stage.failed"))
             upstream_ok = False
@@ -118,8 +140,12 @@ def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str
     elif in_progress == "eval_gate":
         add("eval_gate", "running", ev.get("at"), msg(lang, "pipeline.eval.running"), metrics=ev.get("metrics") or {},
             thresholds=thresholds)
+    elif verified and not ev.get("at"):
+        add("eval_gate", "pending", thresholds=thresholds)
     else:
         ok, failures = evaluate_gate(ev.get("metrics"), thresholds, lang)
+        if verified and not thresholds:
+            ok = False
         gate_passed = ok
         add("eval_gate", "passed" if ok else "failed", ev.get("at"),
             msg(lang, "pipeline.eval.passed", tier=tier_label(tier, lang)) if ok
@@ -143,6 +169,9 @@ def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str
     elif risk.get("deploy_block") == "assessment_rejected":
         blocked_by = "assessment_rejected"
         add("deploy", "blocked", None, msg(lang, "pipeline.deploy.rejected"))
+    elif verified and not _verified_review(run, risk.get("assessment") or {}):
+        blocked_by = "risk_reassessment"
+        add("deploy", "blocked", None, msg(lang, "pipeline.deploy.reassessment", reason=risk.get("reason") or ""))
     elif not gate_passed:
         if out_stages[-1]["status"] == "failed":
             blocked_by = "eval_gate"
@@ -151,16 +180,28 @@ def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str
             add("deploy", "pending")
     elif in_progress == "deploy":
         add("deploy", "running", deploy_info.get("at"), msg(lang, "pipeline.deploy.canary"))
+    elif verified and not run.get("deployment_receipt"):
+        add("deploy", "pending")
     else:
         deployed = True
+        if verified:
+            deploy_info = run["deployment_receipt"]
         add("deploy", "passed", deploy_info.get("at"), deploy_info.get("detail") or msg(lang, "pipeline.deploy.done"))
 
     # Feedback and rollback guard (online thumbs, faithfulness, errors).
     online = run.get("online")
-    deployed_version = run.get("previous_version")
+    deployed_version = None if verified else run.get("previous_version")
     if deployed:
         deployed_version = run.get("version")
-        if online:
+        if verified and run.get("rollback_receipt"):
+            receipt = run["rollback_receipt"]
+            add("feedback", "passed" if online else "pending", (online or {}).get("at"))
+            add("rollback_guard", "passed", receipt["at"])
+            rollback = {"at": receipt["at"], "usecase": run["usecase"], "from": run["version"],
+                        "to": run["previous_version"], "status": "observed", "trigger": "provider_receipt",
+                        "receipt_digest": receipt["digest"], "auto": False}
+            deployed_version = run["previous_version"]
+        elif online:
             add("feedback", "passed", online.get("at"), msg(lang, "pipeline.feedback.collected"),
                 metrics={k: online.get(k) for k in ("thumbs_down_ratio", "faithfulness_drop", "error_rate") if k in online})
             breach = check_rollback(online, rollback_cfg)
@@ -173,11 +214,14 @@ def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str
                     "trigger": breach["trigger"],
                     "value": breach["value"],
                     "threshold": breach["threshold"],
-                    "auto": True,
+                    "auto": not verified,
                 }
-                deployed_version = run.get("previous_version")
+                if verified:
+                    rollback["status"] = "recommended"
+                else:
+                    deployed_version = run.get("previous_version")
                 add("rollback_guard", "failed", online.get("at"),
-                    msg(lang, "pipeline.rollback.auto", to=run.get("previous_version"),
+                    None if verified else msg(lang, "pipeline.rollback.auto", to=run.get("previous_version"),
                         trigger=trigger_label(breach["trigger"], lang), value=breach["value"],
                         threshold=breach["threshold"]),
                     trigger=breach["trigger"])
@@ -203,15 +247,23 @@ def evaluate_run(run: dict[str, Any], risk: dict[str, Any], eval_gates: dict[str
         "blocked_by": blocked_by,
         "gate_passed": gate_passed,
     }
+    if verified:
+        item.update({"source": run["source"], "observed_at": run["observed_at"], "run_id": run["run_id"],
+                     "review_revision": run["review_revision"], "artifact_digest": run["artifact_digest"],
+                     "deployment_receipt": run.get("deployment_receipt"),
+                     "deployment_observed": bool(run.get("deployment_receipt"))})
     return item, rollback
 
 
 def evaluate_pipeline(runs: list[dict[str, Any]], registry: list[dict[str, Any]], factory_cfg: dict[str, Any],
-                      history: list[dict[str, Any]] | None = None, lang: str = DEFAULT_LANG) -> dict[str, Any]:
+                      history: list[dict[str, Any]] | None = None, lang: str = DEFAULT_LANG, *,
+                      verified: bool = False) -> dict[str, Any]:
     risk_by_uc = {}
     for item in registry:
         risk = dict(item.get("risk") or {})
         risk["reviewed_model_version"] = (item.get("assessment") or {}).get("reviewed_model_version")
+        if verified:
+            risk["assessment"] = item.get("assessment") or {}
         risk_by_uc[item.get("id")] = risk
     eval_gates = factory_cfg.get("eval_gates") or {}
     rollback_cfg = factory_cfg.get("rollback") or {}
@@ -221,7 +273,7 @@ def evaluate_pipeline(runs: list[dict[str, Any]], registry: list[dict[str, Any]]
         risk = risk_by_uc.get(run.get("usecase"))
         if risk is None:
             continue  # unknown use case: ignore rather than invent a risk tier
-        item, rb = evaluate_run(run, risk, eval_gates, rollback_cfg, lang)
+        item, rb = evaluate_run(run, risk, eval_gates, rollback_cfg, lang, verified=verified)
         items.append(item)
         if rb:
             rollbacks.append(rb)

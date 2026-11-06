@@ -10,27 +10,31 @@ from ..connectors import NAMED_QUERIES, SourceError
 from ..connectors.grafana import describe_queries
 from ..i18n import msg
 from ..service import FactoryService
-from .deps import READ_ONLY, response_lang, service
+from .deps import Reader, require_global, response_lang, service
 
 router = APIRouter(prefix="/api/v1/grafana", tags=["grafana"])
 
 
-@router.get("/dashboards", dependencies=READ_ONLY, summary="Provisioned Grafana dashboards and named queries")
-def dashboards(svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
+@router.get("/dashboards", summary="Provisioned Grafana dashboards and named queries")
+def dashboards(access: Reader, svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
+    require_global(svc, access)
     client = svc.connectors.grafana
     queries = describe_queries(lang)
     if not client.configured or svc.settings.demo_mode == "always":
         return {"available": False, "dashboards": [], "queries": queries}
     try:
-        return {"available": True, "dashboards": client.dashboards(), "queries": queries}
+        dashboards = client.dashboards()
+        if svc.bu_policy is not None:
+            dashboards = [{key: dashboard.get(key) for key in ("uid", "title")} for dashboard in dashboards]
+        return {"available": True, "dashboards": dashboards, "queries": queries}
     except SourceError:
         return {"available": False, "dashboards": [], "queries": queries}
 
 
-@router.get("/metric/{name}", dependencies=READ_ONLY,
-            summary="Named PromQL query run through Grafana's datasource proxy")
-def metric(name: str = Path(pattern=r"^[a-z0-9_]{1,64}$"), svc: FactoryService = Depends(service),
+@router.get("/metric/{name}", summary="Named PromQL query run through Grafana's datasource proxy")
+def metric(access: Reader, name: str = Path(pattern=r"^[a-z0-9_]{1,64}$"), svc: FactoryService = Depends(service),
            lang: str = Depends(response_lang)) -> dict[str, Any]:
+    require_global(svc, access)
     if name not in NAMED_QUERIES:
         raise HTTPException(status_code=404, detail=msg(lang, "error.unknown_query"))
     client = svc.connectors.grafana

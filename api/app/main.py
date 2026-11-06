@@ -168,6 +168,8 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
 
     for r in (core.router, registry.router, placement.router, grafana.router, spaces.router, audit.router):
         app.include_router(r)
+    if service.bu_policy is not None:
+        app.include_router(spaces.recovery_router)
     if settings.workbench_mode != "off":
         advisor = None
         if settings.workbench_chat_mode == "local":
@@ -195,9 +197,16 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
         app.state.shadow_ai = Observatory(settings.state_dir, settings.shadow_ai_privacy_threshold, clock=clock)
         app.include_router(shadow_ai_router)
 
+    if service.bu_policy is not None or settings.shadow_ai_enabled:
+        from .operating_evidence import configure_operating_evidence
+
+        configure_operating_evidence(app)
+
     @app.get("/metrics", include_in_schema=False)
     def prometheus_metrics() -> Response:
-        snap = app.state.service.snapshot()
+        # The unauthenticated internal scrape carries platform security counters only in BU mode.
+        snap = (app.state.service.snapshot() if service.bu_policy is None
+                else {"meta": {"mode": "scoped", "version": API_VERSION}})
         extra = metrics_mod.security_families(service.state.audit_status(), service.state.audit_counts(),
                                               service.guard.denials())
         return Response(content=metrics_mod.render(snap, extra),

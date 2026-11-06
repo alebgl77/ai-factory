@@ -15,7 +15,7 @@ from ..audit import ACTIONS
 from ..security import AUDIT_READ, AUTHENTICATED, Access, require
 from ..service import FactoryService
 from ..state import StateError
-from .deps import response_lang, service, state_unavailable
+from .deps import require_global, response_lang, service, state_unavailable
 
 router = APIRouter(prefix="/api/v1", tags=["security"])
 
@@ -24,8 +24,9 @@ Action = Literal[ACTIONS]  # type: ignore[valid-type]
 
 @router.get("/audit", summary="Audit records of every write, newest first (roles approver, admin)")
 def audit_records(offset: int = Query(0, ge=0, le=1_000_000), limit: int = Query(100, ge=1, le=500),
-                  action: Action | None = Query(None), _: Access = Depends(require(AUDIT_READ)),
+                  action: Action | None = Query(None), access: Access = Depends(require(AUDIT_READ)),
                   svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
+    require_global(svc, access)
     try:
         records = svc.state.audit_records()
     except StateError:
@@ -38,8 +39,9 @@ def audit_records(offset: int = Query(0, ge=0, le=1_000_000), limit: int = Query
 
 
 @router.get("/audit/verify", summary="Recompute the audit hash chain and reconcile it with the state")
-def audit_verify(_: Access = Depends(require(AUDIT_READ)), svc: FactoryService = Depends(service),
+def audit_verify(access: Access = Depends(require(AUDIT_READ)), svc: FactoryService = Depends(service),
                  lang: str = Depends(response_lang)) -> dict[str, Any]:
+    require_global(svc, access)
     try:
         result = svc.state.verify_audit()
     except StateError:
@@ -50,8 +52,14 @@ def audit_verify(_: Access = Depends(require(AUDIT_READ)), svc: FactoryService =
 
 
 @router.get("/whoami", summary="Identity, roles and permissions of the caller as the API sees them")
-def whoami(access: Access = Depends(require(AUTHENTICATED))) -> dict[str, Any]:
+def whoami(access: Access = Depends(require(AUTHENTICATED)), svc: FactoryService = Depends(service)) -> dict[str, Any]:
     p = access.principal
+    if svc.bu_policy is not None:
+        policy = svc.bu_policy
+        return {"actor": p.actor, "authenticated": p.authenticated, "auth_mode": p.auth_mode,
+                "permissions": [permission for permission in p.permissions()
+                                if policy.scope(access, svc.guard.config, permission=permission) is not None],
+                "profile_id": policy.identities.get(p.user or ""), "request_id": access.request_id}
     return {"actor": p.actor, "authenticated": p.authenticated, "auth_mode": p.auth_mode,
             "roles": sorted(p.roles), "permissions": p.permissions(), "groups": list(p.groups),
             "request_id": access.request_id}

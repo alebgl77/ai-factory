@@ -10,6 +10,7 @@ import hmac
 import json
 import secrets
 import sqlite3
+import stat
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -25,6 +26,8 @@ USAGE_PRIORITY = ("usage", "observation", "inventory")
 EVIDENCE_MAX_AGE = dt.timedelta(days=7)
 PENDING_MAX_AGE = dt.timedelta(days=90)
 DECISIONS_MAX_AGE = dt.timedelta(days=365)
+SHADOW_EVENTS = frozenset({"privacy_raised", "evidence_imported", "period_imported", "policy_proposed",
+                           "policy_approved", "policy_rejected", "policy_approved_v2", "policy_rejected_v2"})
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -92,19 +95,40 @@ def _hash_journal(seq: int, at: str, action: str, object_id: str, actor_ref: str
     return hashlib.sha256(_encode([seq, at, action, object_id, actor_ref, previous]).encode()).hexdigest()
 
 
-def _verify(db: sqlite3.Connection) -> dict:
+def _verified_events(db: sqlite3.Connection) -> Iterator[dict[str, Any]]:
     settings = db.execute("SELECT journal_seq, journal_hash FROM settings WHERE id = 1").fetchone()
     seq, previous = 0, ""
     for row in db.execute("SELECT seq, at, action, object_id, actor_ref, previous, hash FROM journal ORDER BY seq"):
         index, at, action, object_id, actor_ref, recorded_previous, recorded_hash = row
         seq += 1
         computed = _hash_journal(seq, at, action, object_id, actor_ref, previous)
-        if index != seq or recorded_previous != previous or recorded_hash != computed:
+        if index != seq or recorded_previous != previous or not hmac.compare_digest(recorded_hash, computed):
             raise ObservatoryError(503, "journal_invalid")
         previous = computed
+        yield {"seq": seq, "ts": at, "action": action, "object_id": object_id, "actor_ref": actor_ref,
+               "hash": computed}
     if settings is None or seq != settings[0] or previous != settings[1]:
         raise ObservatoryError(503, "journal_invalid")
-    return {"status": "verified", "events": seq, "head": previous}
+
+
+def _verify(db: sqlite3.Connection) -> dict:
+    tail = None
+    for tail in _verified_events(db):
+        pass
+    return {"status": "verified", "events": tail["seq"] if tail else 0,
+            "head": tail["hash"] if tail else ""}
+
+
+def iter_verified_events(path: Path) -> Iterator[dict[str, Any]]:
+    """Validate and stream a consistent read-only SQLite journal snapshot."""
+    if not stat.S_ISREG(path.lstat().st_mode):
+        raise ObservatoryError(503, "journal_invalid")
+    uri = path.resolve().as_uri() + "?mode=ro"
+    with contextlib.closing(sqlite3.connect(uri, uri=True, timeout=5)) as db:
+        db.execute("PRAGMA query_only = ON")
+        db.execute("PRAGMA trusted_schema = OFF")
+        db.execute("BEGIN")
+        yield from _verified_events(db)
 
 
 class Observatory:
@@ -198,35 +222,43 @@ class Observatory:
                    (seq, at, action, object_id, actor_ref, previous, digest))
         db.execute("UPDATE settings SET journal_seq = ?, journal_hash = ? WHERE id = 1", (seq, digest))
 
-    def read(self, *, propose: bool, decide: bool) -> dict:
+    def read(self, *, propose: bool, decide: bool, teams: frozenset[str] | None = None) -> dict:
         now = self._now()
         with self._transaction() as db:
             evidence = db.execute("""
                 SELECT window_start, window_end, events, unique_users FROM evidence
                 WHERE unique_users >= ? AND window_end >= ?
-            """, (self.threshold, _utc(now - EVIDENCE_MAX_AGE))).fetchone()
+            """, (self.threshold, _utc(now - EVIDENCE_MAX_AGE))).fetchone() if teams is None else None
             periods = db.execute("SELECT * FROM periods WHERE period >= ? ORDER BY period DESC",
                                  (_oldest_month(now),)).fetchall()
             policies = db.execute("SELECT * FROM policies ORDER BY tool").fetchall()
             proposals = db.execute("""
                 SELECT id, tool, status, alternative, expected_revision FROM proposals
                 WHERE decision IS NULL AND created_at >= ? ORDER BY created_at, id
-            """, (_utc(now - PENDING_MAX_AGE),)).fetchall() if propose or decide else []
+            """, (_utc(now - PENDING_MAX_AGE),)).fetchall() if teams is None and (propose or decide) else []
+        usage = [{"period": row["period"], **item} for row in periods for item in json.loads(row["team_usage"])
+                 if teams is None or item["team"] in teams]
+        adoption = [{"period": row["period"], **item} for row in periods for item in json.loads(row["adoption"])
+                    if teams is None or item["team"] in teams]
+        tools = {item["tool"] for item in (*usage, *adoption)} if teams is not None else None
+        effective = [dict(row) for row in policies if tools is None or row["tool"] in tools]
+        if tools is not None:
+            effective = [{**row, "alternative": row["alternative"] if row["alternative"] in tools else None}
+                         for row in effective]
         return {
             "privacy_threshold": self.threshold,
             "evidence": dict(evidence) if evidence else None,
-            "team_usage": [
-                {"period": row["period"], **item}
-                for row in periods for item in json.loads(row["team_usage"])
-            ],
-            "adoption": [
-                {"period": row["period"], **item}
-                for row in periods for item in json.loads(row["adoption"])
-            ],
-            "policies": [dict(row) for row in policies],
+            "team_usage": usage,
+            "adoption": adoption,
+            "policies": effective,
             "proposals": [dict(row) for row in proposals],
-            "capabilities": {"propose": propose, "decide": decide},
+            "capabilities": {"propose": propose and teams is None, "decide": decide and teams is None},
         }
+
+    def catalogue_policies(self) -> list[dict[str, Any]]:
+        """Effective policy projection only; telemetry, proposals and identities stay private."""
+        with self._transaction() as db:
+            return [dict(row) for row in db.execute("SELECT tool, status, alternative, revision FROM policies")]
 
     def import_evidence(self, start: dt.datetime, end: dt.datetime, events: int, unique_users: int,
                         principal: Principal) -> None:
@@ -343,8 +375,13 @@ class Observatory:
                 """, (proposal["tool"], proposal["status"], proposal["alternative"], proposal["expected_revision"] + 1))
             db.execute("UPDATE proposals SET decision = ?, decided_at = ? WHERE id = ?",
                        (decision, _utc(now), proposal_id))
-            self._journal(db, now, "policy_approved" if decision == "approve" else "policy_rejected",
-                          f"{proposal_id}:{proposal['tool']}", actor)
+            proof = hashlib.sha256(_encode({
+                "v": 2, "proposal_id": proposal_id, "tool": proposal["tool"], "status": proposal["status"],
+                "alternative": proposal["alternative"], "expected_revision": proposal["expected_revision"],
+                "decision": decision,
+            }).encode()).hexdigest()
+            event = "policy_approved_v2" if decision == "approve" else "policy_rejected_v2"
+            self._journal(db, now, event, f"{proposal_id}:{proof}", actor)
             self._prune(db, now)
 
 
@@ -361,7 +398,7 @@ def main() -> int:
             if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
                 raise ObservatoryError(503, "journal_invalid")
             print(_encode(_verify(db)))
-    except (OSError, sqlite3.Error, ObservatoryError):
+    except (OSError, sqlite3.Error, ObservatoryError, TypeError, ValueError):
         print(_encode({"status": "unverifiable"}))
         return 1
     return 0

@@ -1043,15 +1043,15 @@ function demoBookings(date) {
    (GET/PUT /api/v1/spaces/state with an optimistic version). People and use cases are configuration, never stored here. */
 const Store = {
   d: null, version: 0, ok: true, recovered: false, dropped: 0,
-  fresh() { return { v: 2, bookings: [], dayStatus: {}, meta: { autoDemo: true, seededFor: null } }; },
+  fresh() { return { v: 2, bookings: [], dayStatus: {}, meta: Remote.private ? { autoDemo: false } : { autoDemo: true, seededFor: null } }; },
   load({ persist = true, raw: rawIn = null } = {}) {
     let d = null, raw = rawIn;
-    if (raw == null) { try { raw = localStorage.getItem(STORE_KEY); } catch (e) { raw = null; } }
+    if (raw == null && !Remote.private && !Remote.memoryOnly) { try { raw = localStorage.getItem(STORE_KEY); } catch (e) { raw = null; } }
     try { if (raw) d = JSON.parse(raw); } catch (e) { d = null; }
     const isUC = x => typeof x === 'string' && Object.hasOwn(UC, x); let dropped = 0;
     const valid = !!d && typeof d === 'object' && d.v === 2 && Array.isArray(d.bookings);
     if (!valid) {
-      if (raw) { try { localStorage.setItem(STORE_KEY + '.backup', raw); } catch (e) {} this.recovered = true; }
+      if (raw && !Remote.private && !Remote.memoryOnly) { try { localStorage.setItem(STORE_KEY + '.backup', raw); } catch (e) {} this.recovered = true; }
       d = this.fresh();
     }
     if (!d.dayStatus || typeof d.dayStatus !== 'object' || Array.isArray(d.dayStatus)) d.dayStatus = {};
@@ -1070,13 +1070,14 @@ const Store = {
       })
       .filter(b => b.end - b.start >= 5);
     this.dropped = valid && raw ? dropped : 0;
-    if (this.dropped && rawIn == null) { try { localStorage.setItem(STORE_KEY + '.backup', raw); } catch (e) {} }
+    if (this.dropped && rawIn == null && !Remote.private && !Remote.memoryOnly) { try { localStorage.setItem(STORE_KEY + '.backup', raw); } catch (e) {} }
     this.d = d;
     const t = todayISO();
     if (d.meta.autoDemo && d.meta.seededFor !== t) this.reseed(persist);
     else if (persist) this.save({ remote: rawIn == null });
   },
   reseed(persist = true) {
+    if (Remote.private) return;
     const t = todayISO();
     this.d.bookings = demoBookings(t);
     this.d.dayStatus = {};
@@ -1085,7 +1086,8 @@ const Store = {
   },
   save({ remote = true } = {}) {
     const was = this.ok;
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(this.d)); this.ok = true; } catch (e) { this.ok = Remote.enabled; }
+    if (Remote.private || Remote.memoryOnly) this.ok = Remote.enabled;
+    else { try { localStorage.setItem(STORE_KEY, JSON.stringify(this.d)); this.ok = true; } catch (e) { this.ok = Remote.enabled; } }
     if (was !== this.ok) window.onStoreHealth?.(this.ok);
     if (remote) Remote.push();
   },
@@ -1095,11 +1097,12 @@ const Store = {
   day(date) { return this.d.bookings.filter(b => b.date === date); },
   forRes(rid, date) { return this.d.bookings.filter(b => b.date === date && b.resourceId === rid).sort((a, b) => a.start - b.start); },
   get(id) { return this.d.bookings.find(b => b.id === id); },
-  add(b) { this.d.bookings.push({ ...b, id: uid() }); this.commit(); },
-  update(id, patch) { const b = this.get(id); if (b) Object.assign(b, patch); this.commit(); },
-  remove(id) { this.d.bookings = this.d.bookings.filter(b => b.id !== id); this.commit(); },
+  add(b) { if (Remote.canReserve(b.resourceId)) { this.d.bookings.push({ ...b, id: uid() }); this.commit(); } },
+  update(id, patch) { const b = this.get(id); if (b && Remote.canEdit(id)) { Object.assign(b, patch); this.commit(); } },
+  remove(id) { if (Remote.canEdit(id)) { this.d.bookings = this.d.bookings.filter(b => b.id !== id); this.commit(); } },
   dayFlag(date, eid) { return this.d.dayStatus[date]?.[eid]; },
   setDayFlag(date, eid, v) {
+    if (Remote.private) return;
     const m = this.d.dayStatus[date] || (this.d.dayStatus[date] = {});
     if (v) m[eid] = v; else delete m[eid];
     if (!Object.keys(m).length) delete this.d.dayStatus[date];
@@ -1120,7 +1123,31 @@ async function apiFetch(path, opts = {}, timeoutMs = 4000) {
   } catch (e) { return { ok: false, status: 0, body: null }; } finally { clearTimeout(t); }
 }
 const Remote = {
-  enabled: false, version: 0, timer: null,
+  enabled: false, version: 0, timer: null, private: false, memoryOnly: false, access: null, token: null, view: null,
+  saving: false, queued: false, epoch: 0,
+  enablePrivate() {
+    if (this.private) return;
+    this.private = true;
+    this.clearPrivate();
+    try { localStorage.removeItem(STORE_KEY); localStorage.removeItem(STORE_KEY + '.backup'); } catch (e) {}
+  },
+  clearPrivate() {
+    clearTimeout(this.timer); this.timer = null; this.queued = false;
+    this.enabled = false; this.access = null; this.token = null; this.view = null; this.epoch++;
+    Store.d = Store.fresh(); Store.version++;
+  },
+  adoptPrivate(body) {
+    this.enabled = !!(body?.scope && body?.view_token);
+    this.version = body?.version || 0;
+    this.access = this.enabled ? body.scope : null;
+    this.token = this.enabled ? body.view_token : null;
+    const data = this.enabled ? this.payload(body) : null;
+    Store.load({ raw: JSON.stringify(data || Store.fresh()), persist: false });
+    Store.version++;
+    if (S.editingId && !this.canEdit(S.editingId)) S.editingId = null;
+  },
+  canReserve(id) { return !this.private || !!(this.access?.write && this.access.resources.includes(id)); },
+  canEdit(id) { return !this.private || !!(this.access?.write && this.access.owned.includes(id)); },
   async pull() { const r = await apiFetch('/spaces/state'); return r.ok && r.body ? r.body : null; },
   // Bookings payload of a GET/409 body ({version, state}); null when the server copy is empty
   payload(b) {
@@ -1128,20 +1155,42 @@ const Remote = {
     return d && typeof d === 'object' && Array.isArray(d.bookings) ? d : null;
   },
   push() {
-    if (!this.enabled) return;
+    if (!this.enabled || (this.private && !this.access?.write)) return;
+    if (this.saving) { this.queued = true; return; }
     clearTimeout(this.timer);
     this.timer = setTimeout(async () => {
-      const r = await apiFetch('/spaces/state', { method: 'PUT', body: JSON.stringify({ version: this.version, state: Store.d }) });
-      if (r.ok && r.body) this.version = r.body.version ?? this.version + 1;
-      else if (r.status === 409) {
+      this.timer = null;
+      this.saving = true;
+      const epoch = this.epoch;
+      const token = this.private ? { view_token: this.token } : {};
+      const r = await apiFetch('/spaces/state', { method: 'PUT', body: JSON.stringify({ version: this.version, state: Store.d, ...token }) });
+      if (epoch !== this.epoch) { this.saving = false; return; }
+      if (r.ok && r.body) {
+        this.version = r.body.version ?? this.version + 1;
+        if (this.private) {
+          this.access = r.body.scope;
+          this.token = r.body.view_token;
+          if (!this.queued) this.adoptPrivate(r.body);
+          refresh();
+        }
+      } else if (this.private) {
+        const body = r.body?.current?.scope ? r.body.current : await this.pull();
+        if (epoch !== this.epoch) { this.saving = false; return; }
+        this.queued = false;
+        this.adoptPrivate(body); refresh();
+        toast(ui('Booking could not be saved. The authorized schedule was refreshed.', 'Réservation non enregistrée. Le planning autorisé a été actualisé.'));
+      } else if (r.status === 409) {
         // The server holds a newer copy: adopt it (the API returns it in the body or on a fresh GET)
         const cur = Remote.payload(r.body?.current) ? r.body.current : Remote.payload(r.body) ? r.body : await this.pull();
         const data = Remote.payload(cur);
-        if (!data) return;
-        this.version = cur.version || 0; Store.load({ raw: JSON.stringify(data), persist: false }); Store.save({ remote: false });
-        if (S.editingId && !Store.get(S.editingId)) S.editingId = null;
-        refresh(); toast('Planning mis à jour depuis le serveur (modifié par un autre poste)');
+        if (data) {
+          this.version = cur.version || 0; Store.load({ raw: JSON.stringify(data), persist: false }); Store.save({ remote: false });
+          if (S.editingId && !Store.get(S.editingId)) S.editingId = null;
+          refresh(); toast('Planning mis à jour depuis le serveur (modifié par un autre poste)');
+        }
       }
+      this.saving = false;
+      if (this.queued) { this.queued = false; this.push(); }
     }, 400);
   },
 };
@@ -3380,8 +3429,10 @@ function secRegistry() {
   return h;
 }
 function secFinops() {
-  const c = SNAP?.costs || {}, t = c.totals || {}, mode = S.costMode || c.mode || 'showback';
-  let h = `<section class="csec"><h3>Coûts sur ${num(c.days || 30)} jours <span class="seg2"><button type="button" class="chip" data-cact="mode" data-mode="showback" aria-pressed="${mode === 'showback'}">Showback</button><button type="button" class="chip" data-cact="mode" data-mode="chargeback" aria-pressed="${mode === 'chargeback'}">Chargeback</button></span></h3>
+  const c = SNAP?.costs || {}, t = c.totals || {}, attributed = c.scope === 'attributed_only';
+  const mode = attributed ? 'showback' : S.costMode || c.mode || 'showback';
+  let h = `<section class="csec"><h3>Coûts sur ${num(c.days || 30)} jours ${attributed ? '' : `<span class="seg2"><button type="button" class="chip" data-cact="mode" data-mode="showback" aria-pressed="${mode === 'showback'}">Showback</button><button type="button" class="chip" data-cact="mode" data-mode="chargeback" aria-pressed="${mode === 'chargeback'}">Chargeback</button></span>`}</h3>
+    ${attributed ? `<p class="cnote">${ui('Attributed costs only. Shared platform fees are excluded.', 'Coûts attribués uniquement. Les frais de plateforme partagés sont exclus.')}</p>` : ''}
     <div class="ctiles"><div class="ctile"><b>${eur(t.total_eur)}</b><span>total</span></div><div class="ctile"><b>${eur(t.llm_eur)}</b><span>tokens LLM</span></div><div class="ctile"><b>${eur(t.gpu_eur)}</b><span>GPU (cloud + local amorti)</span></div>
     <div class="ctile"><b>${eur(t.platform_eur)}</b><span>plateforme partagée</span></div><div class="ctile"><b>${compact(t.tokens_in)} / ${compact(t.tokens_out)}</b><span>tokens entrée / sortie</span></div></div></section>`;
   const al = c.alerts || [];
@@ -3412,12 +3463,16 @@ function secPipeline() {
   }
   h += `</tbody></table></div><p class="cnote">Seuils du gate selon le niveau AI Act du use case (plus stricts en haut risque) : RAGAS (faithfulness, answer relevancy, context precision) + LLM-as-judge + red team.</p></section>`;
   const rb = p.rollbacks || [];
-  h += `<section class="csec"><h3>Retours arrière automatiques <em>${rb.length}</em></h3>${rb.length ? `<ul class="clist">${rb.map(r => `<li class="warn"><b>${ucCode(r.usecase)}</b> ${esc(r.from)} → ${esc(r.to)}<span>déclencheur : ${esc(TRIGGER_FR[r.trigger] || r.trigger)} = ${num(r.value, 2)} (seuil ${num(r.threshold, 2)})${r.auto ? ' · automatique' : ''}</span><small>${esc(String(r.at || '').replace('T', ' ').slice(0, 16))}</small></li>`).join('')}</ul>` : '<p class="cnote">Aucun rollback.</p>'}</section>`;
+  const live = Remote.private || SNAP?.meta?.sections?.pipeline === 'live';
+  const rollbackTitle = live ? ui('Observed or recommended rollbacks', 'Retours arrière observés ou recommandés') : 'Retours arrière automatiques';
+  h += `<section class="csec"><h3>${rollbackTitle} <em>${rb.length}</em></h3>${rb.length ? `<ul class="clist">${rb.map(r => `<li class="warn"><b>${ucCode(r.usecase)}</b> ${esc(r.from)} → ${esc(r.to)}<span>déclencheur : ${esc(TRIGGER_FR[r.trigger] || r.trigger)} = ${num(r.value, 2)} (seuil ${num(r.threshold, 2)})${live ? ` · ${r.status === 'observed' ? ui('observed', 'observé') : ui('recommended', 'recommandé')}` : r.auto ? ' · automatique' : ''}</span><small>${esc(String(r.at || '').replace('T', ' ').slice(0, 16))}</small></li>`).join('')}</ul>` : '<p class="cnote">Aucun rollback.</p>'}</section>`;
   return h;
 }
 function secDataloop() {
   const d = SNAP?.dataloop || {}, ev = d.events || [];
-  return `<section class="csec"><div class="cbanner">Réentraînement : <b>${d.retraining === 'disabled' || SNAP?.meta?.fine_tuning === false ? 'désactivé' : esc(d.retraining)}</b> — sur dérive, l’usine réindexe, met à jour les jeux d’évaluation ou change le routage. Aucun fine-tuning.</div>
+  const live = Remote.private || SNAP?.meta?.sections?.dataloop === 'live';
+  const mode = live ? ui('Drift recommendations await validation. Execution remains with the authorized system.', 'Les recommandations de dérive attendent validation. L’exécution relève du système habilité.') : 'Sur dérive, la démo montre une réindexation, une mise à jour du jeu d’évaluation ou un changement de routage.';
+  return `<section class="csec"><div class="cbanner">Réentraînement : <b>${d.retraining === 'disabled' || SNAP?.meta?.fine_tuning === false ? 'désactivé' : esc(d.retraining)}</b> — ${mode}</div>
     <h3>Événements de dérive <em>${ev.length}</em></h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>Quand</th><th>Use case</th><th>Signal</th><th>Valeur / seuil</th><th>Action</th><th>Statut</th></tr></thead><tbody>${ev.map(e => `<tr><td>${esc(String(e.at || '').replace('T', ' ').slice(5, 16))}</td><td><b>${ucCode(e.usecase)}</b></td><td>${esc(SIGNAL_FR[e.signal] || e.signal)}${e.detail ? `<small>${esc(e.detail)}</small>` : ''}</td><td>${num(e.value, 2)} / ${num(e.threshold, 2)}</td><td>${chip('act', ACTION_FR[e.action] || e.action)}</td><td>${esc({ done: 'fait', running: 'en cours', proposed: 'proposé' }[e.status] || e.status || '')}</td></tr>`).join('')}</tbody></table></div></section>`;
 }
 function secPlacement() {
@@ -3442,7 +3497,7 @@ function secCatalog() {
   const card = {
     models: m => `<b>${esc(m.id)}</b><small>${esc(m.provider || '')} · ${esc(TARGET_FR[m.hosting] || m.hosting || '')} · ${esc(m.license || '')}</small><small>alias <code>${esc(m.alias || '')}</code> · contexte ${num(m.context_k)} k · ${m.price_in_per_1k != null ? eur(m.price_in_per_1k) + ' / ' + eur(m.price_out_per_1k) + ' par 1k' : 'coût GPU'}</small><small>classes autorisées : ${esc((m.allowed_classes || []).join(', '))}${m.eval ? ' · éval ' + Object.entries(m.eval).map(([k, v]) => `${esc(k)} ${num(v, 2)}`).join(', ') : ''}</small>`,
     agents: a => `<b>${esc(a.name || a.id)}</b><small>${esc(a.framework || '')} ${esc(a.version || '')} · ${ucCode(a.usecase)} · ${tierChip({ tier: a.risk_tier })}</small><small>outils : ${esc((a.tools || []).join(', '))}</small><small>éval : ${esc(a.eval_status || '—')} · responsable ${esc(personName(a.owner))}</small>`,
-    tools: t => `<b>${esc(t.name || t.id)}</b><small>${esc(t.kind || '')} · permissions ${esc((t.permissions || []).join(', '))} · risque ${esc(t.risk || '')}</small><small>responsable ${esc(personName(t.owner))}</small>`,
+    tools: t => `<b>${esc(t.name || t.id)}</b><small>${esc(t.kind || '')} · permissions ${esc((t.permissions || []).join(', '))} · risque ${esc(t.risk || '')}</small><small>responsable ${esc(personName(t.owner))}</small>${t.shadow_policy ? `<small>${ui('Observatory policy', 'Politique Observatoire')} · ${esc(shadowLabel(SHADOW_POLICY, t.shadow_policy.status))}${t.shadow_policy.alternative ? ` · ${ui('Approved alternative', 'Alternative approuvée')} ${esc(t.shadow_policy.alternative)}` : ''}</small>` : ''}${c.shadow_governance === 'unavailable' ? `<small>${ui('Observatory policy unavailable', 'Politique Observatoire indisponible')}</small>` : ''}`,
     repos: r => `<b>${esc(r.name || r.id)}</b><small>${esc(r.pillar || '')} · ${esc(r.license || 'sans licence')} · ${esc({ integrated: 'intégré (sous-module)', to_relicense: 'à relicencier en MIT', excluded: 'exclu' }[r.status] || r.status || '')}</small>${r.description ? `<small>${esc(r.description)}</small>` : ''}<small>${r.submodule ? `<code>${esc(r.submodule)}</code>${r.commit ? ` @ <code>${esc(r.commit)}</code>` : ''} · ` : ''}secrets : ${esc({ clean: 'aucun', triaged: 'faux positifs triés' }[r.secrets_scan] || r.secrets_scan || '—')}</small>${r.secrets_detail ? `<small title="${esc(r.secrets_detail)}">${esc(r.secrets_detail)}</small>` : ''}${/^https:\/\/github\.com\//.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Voir le dépôt</a>` : ''}`,
   }[f];
   return `<section class="csec"><div class="chips" role="group" aria-label="Type d’élément">${tabs.map(([k, l]) => `<button type="button" class="chip" data-cact="catf" data-f="${k}" aria-pressed="${k === f}">${l} · ${(c[k] || []).length}</button>`).join('')}</div>
@@ -3463,7 +3518,7 @@ function secSkills() {
 function secGrafana() {
   const g = SNAP?.grafana || {};
   return `<section class="csec"><p class="cnote">Grafana est interrogé par l’API d’agrégation via le proxy du VPS : aucun jeton dans le navigateur. Grafana (AGPLv3) tourne comme service séparé, non modifié.</p>
-    ${g.available ? `<ul class="clist">${(g.dashboards || []).map(d => `<li><b>${esc(d.title)}</b><span><code>${esc(d.uid)}</code></span>${/^(\/|https:\/\/)/.test(d.url || '') ? `<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Ouvrir dans Grafana</a>` : ''}</li>`).join('')}</ul>` : '<p class="cnote">Grafana non joignable depuis l’API (mode démo) : les tableaux versionnés sont dans <code>compose/grafana/dashboards/</code>.</p>'}</section>`;
+    ${g.available ? `<ul class="clist">${(g.dashboards || []).map(d => `<li><b>${esc(d.title)}</b><span><code>${esc(d.uid)}</code></span>${!Remote.private && /^(\/|https:\/\/)/.test(d.url || '') ? `<a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">Ouvrir dans Grafana</a>` : ''}</li>`).join('')}</ul>` : '<p class="cnote">Grafana non disponible dans ce périmètre. Les tableaux versionnés sont dans <code>compose/grafana/dashboards/</code>.</p>'}</section>`;
 }
 function renderFactoryPanel() {
   const sn = SNAP || {}, reg = sn.registry || [], c = sn.costs || {}, p = sn.pipeline || {}, a = sn.agentops?.global || {}, slo = sn.agentops?.slo || {}, k = sn.skills || {};
@@ -3501,8 +3556,10 @@ async function consoleAction(btn) {
       await pollSnapshot(true);
       return;
     }
+    const reviewer = Remote.private ? (await apiFetch('/whoami')).body?.profile_id : byRole('governance')[0]?.id || 'governance';
+    if (!reviewer) { toast(ui('Your reviewer identity is not configured.', 'Votre identité de revue n’est pas configurée.')); return; }
     const r = await apiFetch(`/registry/${encodeURIComponent(id)}/assessment`, { method: 'POST', body: JSON.stringify({
-      decision: 'approved', reviewer: byRole('governance')[0]?.id || 'governance', expected_review_revision: revision,
+      decision: 'approved', reviewer, expected_review_revision: revision,
     }) });
     if (r.status === 409 && r.body?.code === 'stale_review_revision') {
       toast(ui('The model proposal changed. Review it before approving again.', 'La proposition a changé. Examinez-la avant de l’approuver.'));
@@ -3516,6 +3573,27 @@ async function fetchSnapshot(lang) {
   if (!apiReachable()) return null;
   const r = await apiFetch(`/snapshot?lang=${lang}`, {}, 5000);
   return r.ok && r.body?.meta?.lang === lang ? r.body : null;
+}
+
+function protectedOffline() {
+  closeConsole(); if (S.selected && snap) closeDrawer();
+  Remote.clearPrivate();
+  SNAP = null; SNAP_SOURCE = 'none'; snap = null; initDomain(null);
+  const app = $('app');
+  app.inert = true; app.style.visibility = 'hidden';
+  let notice = $('businessOffline');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.id = 'businessOffline'; notice.setAttribute('role', 'status');
+    notice.style.cssText = 'position:fixed;inset:0;display:grid;place-content:center;padding:24px;text-align:center';
+    document.body.append(notice);
+  }
+  notice.textContent = ui('The protected workspace is unavailable. Waiting for reconnection.', 'L’espace protégé est indisponible. Reconnexion en cours.');
+}
+
+function restoreProtectedView() {
+  $('businessOffline')?.remove();
+  $('app').inert = false; $('app').style.visibility = '';
 }
 
 function setLanguage(lang) {
@@ -3583,7 +3661,23 @@ async function pollSnapshot(force = false, lang = pendingSnapshotLanguage || lan
   try {
     const sn = await fetchSnapshot(lang);
     if (request !== snapshotRequest) return;
-    if (sn) applySnapshot(sn, 'api', lang);
+    if (sn?.meta?.business_scope === true) {
+      Remote.enablePrivate();
+      const nextView = sn.meta.business_view;
+      const changedView = Remote.view !== nextView;
+      if (changedView) Remote.clearPrivate();
+      Remote.view = nextView;
+      applySnapshot(sn, 'api', lang);
+      if (changedView || (!Remote.saving && !Remote.timer)) {
+        const body = await Remote.pull();
+        if (request !== snapshotRequest) return;
+        Remote.adoptPrivate(body); refresh();
+        if (S.selected) resetForm();
+      }
+      restoreProtectedView();
+    } else if (Remote.private) {
+      protectedOffline();
+    } else if (sn) applySnapshot(sn, 'api', lang);
     else if (lang !== language) {
       // Preserve live data when the requested translation is temporarily unavailable.
       $('languageSelect').value = language;
@@ -3611,7 +3705,7 @@ function statusOfResText(r, st) {
   if (st.state === 'busy') return `${e ? shortName(e.name) + ' · ' : ''}jusqu'à ${fmt(b.end)}`;
   if (st.state === 'soon') return `${e ? shortName(e.name) + ' · ' : ''}dès ${fmt(b.start)}`;
   if (st.state === 'later') return `Réservation à ${fmt(b.start)}`;
-  return st.list.length ? 'Libre jusqu’à la fin de journée' : 'Aucune réservation';
+  return Remote.private ? ui('Availability is scoped', 'Disponibilité selon le périmètre') : st.list.length ? 'Libre jusqu’à la fin de journée' : 'Aucune réservation';
 }
 const cssVar = st => `var(--${st})`;
 const dayScope = () => (S.date === todayISO() ? "aujourd'hui" : 'ce jour');
@@ -3888,7 +3982,7 @@ function renderDrawerInfo(sn) {
   g += '</div>';
   for (const x of st.list) {
     const em = Store.emp(x.employeeId), w = ((x.end - x.start) / SPAN) * 100;
-    g += `<button type="button" class="g-blk" data-edit="${esc(x.id)}" style="left:${pct(x.start)}%;width:${w}%;--c:${esc(em?.color || '#888')}" title="${esc(em?.name)} · ${fmt(x.start)}–${fmt(x.end)}${x.project ? ' · ' + esc(x.project) : ''}" aria-label="Modifier ${esc(em?.name)} ${fmt(x.start)}–${fmt(x.end)}">${w > 7 ? esc(initials(em?.name || '?')) : ''}</button>`;
+    g += `<button type="button" class="g-blk" data-edit="${esc(x.id)}" style="left:${pct(x.start)}%;width:${w}%;--c:${esc(em?.color || '#888')}" title="${esc(em?.name)} · ${fmt(x.start)}–${fmt(x.end)}${x.project ? ' · ' + esc(x.project) : ''}" aria-label="Modifier ${esc(em?.name)} ${fmt(x.start)}–${fmt(x.end)}"${Remote.canEdit(x.id) ? '' : ' disabled'}>${w > 7 ? esc(initials(em?.name || '?')) : ''}</button>`;
   }
   g += `<i class="g-cur" style="left:${clamp(pct(sn.t), 0, 100)}%"></i>`;
   setHTMLKeepFocus($('dGantt'), g);
@@ -3908,11 +4002,11 @@ function renderDrawerInfo(sn) {
       <span class="avatar sm" data-emp="${esc(em?.id || '')}" style="--c:${esc(em?.color || '#888')}">${esc(initials(em?.name || '?'))}</span>
       <div class="bk-main"><div class="bk-top"><b>${fmt(x.start)}–${fmt(x.end)}</b>${who}</div>
       <div class="bk-sub">${extra.join(' · ') || '—'}</div></div>
-      <div class="bk-act">
+      ${Remote.canEdit(x.id) ? `<div class="bk-act">
         ${S.live && active ? `<button type="button" class="mini icon" data-end="${esc(x.id)}" title="Libérer maintenant (fin de la réservation à l’heure actuelle)" aria-label="Terminer maintenant la réservation de ${who}">${icon('exit')}</button>` : ''}
         <button type="button" class="mini icon" data-edit="${esc(x.id)}" title="Modifier" aria-label="Modifier la réservation de ${who}">${icon('edit')}</button>
         <button type="button" class="mini icon danger" data-del="${esc(x.id)}" title="Supprimer" aria-label="Supprimer la réservation de ${who}">${icon('trash')}</button>
-      </div></li>`;
+      </div>` : ''}</li>`;
   }).join('');
   setHTMLKeepFocus($('dList'), html);
 }
@@ -3920,11 +4014,12 @@ function renderDrawerInfo(sn) {
 /* ---------- Booking form ---------- */
 const F = { emp: $('fEmp'), start: $('fStart'), end: $('fEnd'), uc: $('fUc'), act: $('fAct'), info: $('fInfo'), note: $('fNote'), visio: $('fVisio'), err: $('fError') };
 function fillUcSelects(ucId, act) {
-  const options = USE_CASES.map(u => {
+  const allowed = Remote.private ? Remote.access?.resource_usecases?.[S.selected] || [] : null;
+  const options = USE_CASES.filter(u => !allowed || allowed.includes(u.id)).map(u => {
     const selected = u.id === ucId;
     return new Option(`${u.sensitive ? 'Sensible · ' : ''}${u.code} · ${u.name}`, u.id, selected, selected);
   });
-  F.uc.replaceChildren(new Option('Hors use case / interne', ''), ...options);
+  F.uc.replaceChildren(...(Remote.private ? [] : [new Option('Hors use case / interne', '')]), ...options);
   F.act.innerHTML = Object.entries(ACTIVITIES).map(([k, l]) => `<option value="${k}"${k === act ? ' selected' : ''}>${esc(l)}</option>`).join('');
 }
 function updateFormInfo() {
@@ -3992,7 +4087,8 @@ function applyPreset(k) {
 }
 function fillEmpSelect(selected) {
   const sn = snap;
-  F.emp.innerHTML = '<option value="">Choisir un collaborateur…</option>' + Store.employees.map(e => {
+  const roster = Remote.private ? Store.employees.filter(e => e.id === Remote.access?.employee) : Store.employees;
+  F.emp.innerHTML = (Remote.private ? '' : '<option value="">Choisir un collaborateur…</option>') + roster.map(e => {
     const p = sn.people[e.id];
     const hint = p.kind === 'onsite' ? ' — sur site' : p.kind === 'off' ? ' — en congé' : p.kind === 'remote' ? ' — télétravail' : '';
     return `<option value="${esc(e.id)}"${e.id === selected ? ' selected' : ''}>${esc(e.name)}${hint}</option>`;
@@ -4012,6 +4108,7 @@ function resetForm(prefillEmp = null) {
   const r = RES[S.selected];
   $('fTitle').textContent = 'Nouvelle réservation';
   $('fSubmit').textContent = r.id === 'S1' ? 'Réserver le Skills Lab' : r.type === 'room' ? 'Réserver la War Room' : r.type === 'booth' ? 'Réserver le pod' : 'Assigner le poste';
+  $('fSubmit').disabled = !Remote.canReserve(r.id);
   $('fCancel').hidden = true;
   fillEmpSelect(prefillEmp || '');
   const [s, e] = suggestSlot(r.id);
@@ -4026,7 +4123,7 @@ function resetForm(prefillEmp = null) {
   $('fPresets').innerHTML = presetsFor(r.type).map(([k, l]) => `<button type="button" class="chip" data-preset="${k}">${l}</button>`).join('');
 }
 function editBooking(id) {
-  const b = Store.get(id); if (!b) return;
+  const b = Store.get(id); if (!b || !Remote.canEdit(id)) return;
   S.editingId = id;
   $('fTitle').textContent = 'Modifier la réservation';
   $('fSubmit').textContent = 'Enregistrer';
@@ -4074,6 +4171,7 @@ function submitForm(ev) {
   ev.preventDefault();
   const r = RES[S.selected];
   const editing = S.editingId ? Store.get(S.editingId) : null;
+  if (!Remote.canReserve(r.id) || editing && !Remote.canEdit(editing.id)) return;
   const d = {
     resourceId: r.id, date: editing ? editing.date : S.date, employeeId: F.emp.value,
     start: parseHM(F.start.value), end: parseHM(F.end.value),
@@ -4367,6 +4465,7 @@ function bindUI() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.live) goLive(); });
   // Another tab changed the saved data: reload it instead of overwriting it later
   window.addEventListener('storage', e => {
+    if (Remote.private || Remote.memoryOnly) return;
     if (e.key !== STORE_KEY && e.key !== null) return;
     Store.load({ persist: false }); Store.version++; densityKey = '';
     const lost = S.editingId && !Store.get(S.editingId);
@@ -4409,6 +4508,10 @@ async function boot() {
   const preferred = [linked, Prefs.p.lang].find(lang => lang === 'en' || lang === 'fr');
   setLanguage(preferred || (navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en'));
   const api = await fetchSnapshot(language);
+  // A failed first request cannot establish that this origin is a public demo. Old versions
+  // mirrored API reservations locally, so an unverified origin must start in memory only.
+  Remote.memoryOnly = !api && apiReachable();
+  if (api?.meta?.business_scope === true) Remote.enablePrivate();
   SNAP = api || readInlineSnapshot(language); SNAP_SOURCE = api ? 'api' : SNAP ? 'embedded' : 'none';
   if (!SNAP) {
     const l = $('loading'); l.classList.add('error');
@@ -4416,11 +4519,31 @@ async function boot() {
     window.__appReady = true; clearTimeout(window.__bootTimer); return;
   }
   initDomain(SNAP);
-  const st = api ? await Remote.pull() : null;
-  if (st) { Remote.enabled = true; Remote.version = st.version || 0; }
-  const remote = Remote.payload(st);
-  if (remote) Store.load({ raw: JSON.stringify(remote) });
-  else { Store.load(); if (Remote.enabled) Remote.push(); }  // first deployed run: seed the server copy
+  let st = api ? await Remote.pull() : null, hideOnBoot = false;
+  if (st?.scope && api?.meta?.business_scope !== true) {
+    Remote.enablePrivate();
+    const confirmed = await fetchSnapshot(language);
+    if (confirmed?.meta?.business_scope === true) {
+      SNAP = confirmed;
+      st = await Remote.pull();
+    } else {
+      st = null;
+      SNAP = readInlineSnapshot(language);
+      SNAP_SOURCE = 'embedded';
+      hideOnBoot = true;
+    }
+    initDomain(SNAP);
+  }
+  if (Remote.private) {
+    Remote.view = SNAP?.meta?.business_view;
+    Remote.adoptPrivate(st);
+  }
+  else {
+    if (st) { Remote.enabled = true; Remote.version = st.version || 0; }
+    const remote = Remote.payload(st);
+    if (remote) Store.load({ raw: JSON.stringify(remote) });
+    else { Store.load(); if (Remote.enabled) Remote.push(); } // demo only: seed the first server copy
+  }
   try { initScene(); }
   catch (err) {
     console.error(err);
@@ -4461,6 +4584,7 @@ async function boot() {
   clearTimeout(window.__bootTimer);
   // Debug / automation hook (read-only use recommended)
   window.__twin = { pov: { get active() { return POV.active; }, get animating() { return !!POV.anim; }, get pos() { return { x: POV.pos.x, z: POV.pos.z }; }, get yaw() { return POV.yaw; }, get target() { return POV.target; }, get zone() { return POV.zone; }, get boxes() { return POV.boxes.length; }, keys: POV.keys, enter: enterPov, exit: exitPov, blocked: povBlocked, free: povFree }, S, Store, refresh, setView, viewPose, get camera() { return camera; }, get controls() { return controls; }, get renderer() { return renderer; }, VIS, RES, resState, personAt, get UC() { return UC; }, squadsOf, recommendations, setLens, setTab, openConsole, closeConsole, get snap() { return snap; }, get SNAP() { return SNAP; }, get source() { return SNAP_SOURCE; }, get EMPLOYEES() { return EMPLOYEES; } };
+  if (hideOnBoot) protectedOffline();
 }
 boot();
 </script>

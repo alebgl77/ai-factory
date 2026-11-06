@@ -10,6 +10,7 @@ import hmac
 import json
 import os
 import re
+import sqlite3
 import stat
 import sys
 from collections.abc import Iterator
@@ -28,7 +29,7 @@ MAX_SEQ = 2**63 - 1
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)\Z", re.ASCII)
-KINDS = ("platform", "workbench")
+KINDS = ("platform", "workbench", "shadow")
 SEVERITIES = ("info", "low", "medium", "high", "critical")
 CHECKPOINT_FIELDS = frozenset({"v", "kind", "stream", "key_id", "seq", "head_hash", "sealed_at", "previous_mac", "mac"})
 WORKBENCH_EVENTS = frozenset({
@@ -203,6 +204,16 @@ def _platform_events(path: Path) -> Iterator[dict[str, Any]]:
 def _source_events(kind: str, path: Path) -> Iterator[dict[str, Any]]:
     if kind == "platform":
         yield from _platform_events(path)
+    elif kind == "shadow":
+        from .shadow_ai import ObservatoryError, iter_verified_events
+
+        try:
+            for record in iter_verified_events(path):
+                if not _timestamp(record.get("ts")):
+                    raise EvidenceError("shadow_journal_invalid", integrity=True)
+                yield record
+        except (ObservatoryError, OSError, sqlite3.Error, TypeError, ValueError):
+            raise EvidenceError("shadow_journal_invalid", integrity=True) from None
     else:
         from ai_factory_workbench.cyberlog import JournalError, iter_verified_events
 
@@ -229,7 +240,7 @@ def _project(record: dict[str, Any], kind: str, stream: str, key: bytes) -> dict
         row["event"] = record["action"] if record["action"] in audit.ACTIONS else "platform.audit"
         row["outcome"] = record["outcome"] if record["outcome"] in audit.OUTCOMES else "other"
         pairs = (("actor_ref", "actor"), ("target_ref", "target"), ("request_ref", "request_id"))
-    else:
+    elif kind == "workbench":
         row["event"] = record["event"] if record["event"] in WORKBENCH_EVENTS else "workbench.audit"
         row["outcome"] = record["outcome"] if record["outcome"] in WORKBENCH_OUTCOMES else "other"
         pairs = (("actor_ref", "actor_ref"), ("case_ref", "case_ref"), ("source_ref", "source_ref"),
@@ -242,6 +253,14 @@ def _project(record: dict[str, Any], kind: str, stream: str, key: bytes) -> dict
             row["proposal_hash"] = record["proposal_hash"]
         if type(record.get("revision")) is int and 1 <= record["revision"] <= MAX_SEQ:
             row["revision"] = record["revision"]
+    else:
+        from .shadow_ai import SHADOW_EVENTS
+
+        action = record["action"]
+        row["event"] = action if action in SHADOW_EVENTS else "shadow.audit"
+        row["outcome"] = ("approved" if action in {"policy_approved", "policy_approved_v2"} else
+                          "rejected" if action in {"policy_rejected", "policy_rejected_v2"} else "success")
+        pairs = (("actor_ref", "actor_ref"), ("target_ref", "object_id"))
     for exported, original in pairs:
         value = _ref(key, kind, stream, exported, record.get(original))
         if value is not None:

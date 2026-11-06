@@ -20,6 +20,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import secrets
 import tempfile
 import threading
 from pathlib import Path
@@ -34,6 +35,7 @@ except ImportError:  # pragma: no cover
 
 REGISTRY_FILE = "registry_overrides.json"
 SPACES_FILE = "spaces_state.json"
+BOOKING_KEY_FILE = ".booking-view.key"
 APPROVING_DECISIONS = frozenset({"approved", "approved_with_conditions"})
 EMPTY_SPACES: dict[str, Any] = {"version": 0, "updated_at": None, "state": {}}
 
@@ -70,6 +72,7 @@ class VersionConflict(RuntimeError):
 
 def _registry_item(uc: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
     item = copy.deepcopy(uc)
+    item.pop("_review_approval", None)  # only the authenticated state transition may supply this proof
     for section in ("model", "assessment"):
         if isinstance(entry.get(section), dict):
             item[section] = {**(item.get(section) or {}), **copy.deepcopy(entry[section])}
@@ -77,6 +80,9 @@ def _registry_item(uc: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
     # write lock even when a previous version is reused. Review decisions do not change the proposal.
     proposal = {key: value for key, value in item.items() if key not in ("assessment", "review_revision")}
     item["review_revision"] = hashlib.sha256(canonical(proposal)).hexdigest()
+    approval = entry.get("review_approval")
+    if isinstance(approval, dict) and approval.get("revision") == item["review_revision"]:
+        item["_review_approval"] = copy.deepcopy(approval)
     return item
 
 
@@ -300,7 +306,8 @@ class StateStore:
 
     def record_assessment(self, uc: dict[str, Any], decision: str, reviewer: str, today: dt.date,
                           *, expected_review_revision: str, audit: AuditContext | None = None,
-                          enforce_four_eyes: bool = False) -> dict[str, Any]:
+                          enforce_four_eyes: bool = False, review_subject_ref: str | None = None,
+                          review_clock: Callable[[], dt.datetime] | None = None) -> dict[str, Any]:
         """Record a review if the configured proposal and locked model overlay still match.
 
         With ``enforce_four_eyes`` an approving decision is refused (:class:`SeparationOfDuties`, and
@@ -340,7 +347,13 @@ class StateStore:
                 assessment.update({"reviewed_by": audit.actor, "reviewed_by_role": audit.role,
                                    "separation_of_duties": sod})
             entry["assessment"] = assessment
-            entry["updated_at"] = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+            now = (review_clock or (lambda: dt.datetime.now(dt.timezone.utc)))().astimezone(dt.timezone.utc)
+            if review_subject_ref and decision in APPROVING_DECISIONS:
+                entry["review_approval"] = {"subject_ref": review_subject_ref, "reviewed_at": now.isoformat(),
+                                            "revision": revision}
+            else:
+                entry.pop("review_approval", None)
+            entry["updated_at"] = now.replace(microsecond=0).isoformat()
             data[uc_id] = entry
             record = None if audit is None else (lambda: self._append(
                 audit, action="registry.assessment", target=f"usecase:{uc_id}", before=before, after=entry,
@@ -366,6 +379,16 @@ class StateStore:
         return "violated" if recorded_ids & set(audit.ids) else "verified"
 
     # -- spaces (3D bookings) -------------------------------------------------------------------
+    def booking_key(self) -> bytes:
+        with self._locked():
+            key = self._raw(BOOKING_KEY_FILE)
+            if key is None:
+                key = secrets.token_bytes(32)
+                self._write_bytes_atomic(BOOKING_KEY_FILE, key)
+            if len(key) != 32:
+                raise StateError("booking view key unavailable")
+            return key
+
     def spaces_state(self) -> dict[str, Any]:
         with self._mutex:
             data = self._read(SPACES_FILE, {"version": 0, "updated_at": None, "state": {}})
@@ -374,19 +397,27 @@ class StateStore:
         return data
 
     def put_spaces_state(self, expected_version: int, state: dict[str, Any],
-                         audit: AuditContext | None = None) -> dict[str, Any]:
+                         audit: AuditContext | None = None, *,
+                         merge: Callable[[dict[str, Any], dict[str, Any]],
+                                         tuple[dict[str, Any], dict[str, str]]] | None = None) -> dict[str, Any]:
         with self._locked():
             previous_raw = self._raw(SPACES_FILE)
             current = self._read(SPACES_FILE, EMPTY_SPACES)
             if not isinstance(current, dict) or not isinstance(current.get("version"), int):
                 current = copy.deepcopy(EMPTY_SPACES)
+            if merge is None and "owners" in current:
+                raise StateError("business-scoped planning requires its policy")
             if expected_version != current["version"]:
                 raise VersionConflict(current)
+            if merge is not None:
+                state, owners = merge(current, state)
             new = {
                 "version": current["version"] + 1,
                 "updated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
                 "state": state,
             }
+            if merge is not None:
+                new["owners"] = owners
             before = current if previous_raw is not None else None
             record = None if audit is None else (lambda: self._append(
                 audit, action="spaces.put", target="spaces:state", before=before, after=new,

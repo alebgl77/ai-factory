@@ -25,6 +25,8 @@ Utilisez un collecteur ou un hôte de vérification séparé, avec un accès en 
 
 Attribuez un nom de flux distinct et stable à chaque source et déploiement. Cet exemple suppose que le collecteur dispose déjà de la source, du fichier de clé et d’un répertoire de scellés protégé. Pour l’audit plateforme, utilisez `--kind platform --path /data/audit.jsonl` avec son propre nom de flux.
 
+Pour l’Observatoire, utilisez `--kind shadow --path /data/shadow-ai/observatory.sqlite3` et un flux distinct. Le collecteur vérifie une transaction SQLite en lecture seule. L’export contient les types d’événements et leurs références HMAC. Les équipes, outils, propositions, personnes et compteurs restent dans la source. Les décisions `policy_approved_v2` et `policy_rejected_v2` engagent le condensat de la proposition et de sa décision. Les entrées plus anciennes restent vérifiables selon leur format initial. Conservez la preuve détaillée sous contrôle séparé si vous devez reconstituer la décision après expiration de la proposition.
+
 ```bash
 cd api
 python -m app.cyber seal --kind workbench --path /data/workbench-protected_demo.sqlite3 \

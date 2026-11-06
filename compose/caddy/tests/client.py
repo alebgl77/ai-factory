@@ -127,7 +127,13 @@ for label, host, port in (("Grafana", f"grafana.{HOST}", 80), ("Langfuse", f"lan
                           ("Grafana alternate port 3001", "localhost", 3001),
                           ("Langfuse alternate port 3002", "localhost", 3002)):
     status, headers, echo = request(host, port, "/", auth)
-    expect_identity(label, echo, {}, 3000)
+    if os.environ.get("FACTORY_PRIVATE_TELEMETRY") == "disabled":
+        check(f"{label}: private telemetry blocked at the edge", status == 404 and echo is None, status)
+    else:
+        expect_identity(label, echo, {}, 3000)
+
+status, _, echo = request(HOST, 80, "/metrics", auth)
+check("internal Prometheus endpoint blocked at the edge", status == 404 and echo is None, status)
 
 for path in ("/healthz", "/.well-known/security.txt"):
     status, _, echo = request(HOST, 80, path)

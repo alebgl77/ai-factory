@@ -25,6 +25,8 @@ Use a separate collector or verification host. Give it read-only access to the a
 
 Use a distinct, stable stream name for each audit source and deployment. The example assumes the collector already has the source, key file, and a protected checkpoint directory. Use `--kind platform --path /data/audit.jsonl` with its own stream name for the platform audit.
 
+Use `--kind shadow --path /data/shadow-ai/observatory.sqlite3` with a dedicated stream for the Observatory. The collector verifies the journal in a read-only SQLite transaction. The export contains event types and HMAC references. Teams, tools, proposals, people, and counts stay in the source. The `policy_approved_v2` and `policy_rejected_v2` events bind a digest of the proposal and its decision. Older entries verify against their original format and do not attest to exact policy content. Retain the detailed evidence under separate access control if you need to reconstruct a decision after its proposal expires.
+
 ```bash
 cd api
 python -m app.cyber seal --kind workbench --path /data/workbench-protected_demo.sqlite3 \
@@ -37,6 +39,24 @@ python -m app.cyber verify --kind workbench --path /data/workbench-protected_dem
 ```
 
 Use the first seal to establish a trusted baseline. For every subsequent seal, pass `--previous` with the last independently trusted checkpoint and select a new output file. During rotation, use the new `--key-file` and `--key-id` and pass the old key with `--previous-key-file`. A checkpoint authenticates the journal prefix through its recorded sequence. Verification checks that prefix and the local chain. `unsigned_tail` counts later events outside the authenticated prefix.
+
+From `api/`, verify the local Observatory journal, then create and use a checkpoint on the separate collector. The example uses the first checkpoint for this stream.
+
+```bash
+python -m app.shadow_ai verify /data/shadow-ai/observatory.sqlite3
+
+python -m app.cyber seal --kind shadow --path /data/shadow-ai/observatory.sqlite3 \
+  --stream customer-a-shadow --key-file /secure/keys/cyber-01.key --key-id cyber-01 \
+  --output /evidence/checkpoints/shadow-0001.json
+
+python -m app.cyber verify --kind shadow --path /data/shadow-ai/observatory.sqlite3 \
+  --stream customer-a-shadow --key-file /secure/keys/cyber-01.key \
+  --checkpoint /evidence/checkpoints/shadow-0001.json
+
+python -m app.cyber export --kind shadow --path /data/shadow-ai/observatory.sqlite3 \
+  --stream customer-a-shadow --key-file /secure/keys/cyber-01.key \
+  --checkpoint /evidence/checkpoints/shadow-0001.json --after 0 --limit 1000
+```
 
 Store checkpoints in separately administered storage with immutability and retention controls appropriate to your evidence policy. Retain the source journal and the appropriate verification key under restricted access. An independently held checkpoint makes rewriting or truncating its authenticated prefix detectable. Changes to the unsealed tail are outside that guarantee. The HMAC is symmetric, so anyone holding the key can also create a seal. Protect it from readers who only need an audit report. [OWASP logging guidance](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) · [NIST log management guide](https://csrc.nist.gov/pubs/sp/800/92/final)
 
