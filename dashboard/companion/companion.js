@@ -90,6 +90,7 @@
   let escalationId = null;
   let listRevision = 0;
   let historyRevision = 0;
+  let pendingDecisionId = null;
   let busy = false;
   const t = key => copy[lang][key] || key;
   const show = (id, visible) => { byId(id).hidden = !visible; };
@@ -98,6 +99,25 @@
   const caseStatus = item => t(item.reconciliation_required === true ? 'reconciliationRequired' : item.status);
   const canDecide = item => capabilities.can_decide === true && item.can_decide !== false &&
     item.reconciliation_required !== true && ['waiting_review', 'applying'].includes(item.status);
+
+  function mergeCase(previous, incoming) {
+    if (!previous || incoming.revision > previous.revision) return incoming;
+    if (incoming.revision !== previous.revision || incoming.proposal_hash !== previous.proposal_hash) return previous;
+
+    // A proposal can advance from review to execution or a terminal outcome only once per revision.
+    const sameStatus = previous.status === incoming.status;
+    const advances = previous.status === 'waiting_review' ||
+      (previous.status === 'applying' && incoming.status !== 'waiting_review');
+    const lostHold = previous.reconciliation_required === true && incoming.reconciliation_required !== true;
+    const preferIncoming = sameStatus ? !lostHold : advances;
+    const latest = preferIncoming ? incoming : previous;
+    // Reconciliation can arrive in an older execution snapshot and remains required for this revision.
+    if (latest.reconciliation_required !== true &&
+        (previous.reconciliation_required === true || incoming.reconciliation_required === true)) {
+      return { ...latest, reconciliation_required: true };
+    }
+    return latest;
+  }
 
   function displayNotice(id, key = '', error = false, caseId = '') {
     const notice = byId(id);
@@ -335,7 +355,10 @@
       if (!Array.isArray(result.cases) || !['demo', 'protected_demo'].includes(result.mode)) throw new Error('bad response');
       mode = staticMode ? 'static' : result.mode;
       const previous = current();
-      cases = [...result.cases].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+      const previousById = new Map(cases.map(item => [item.id, item]));
+      cases = result.cases.map(item => mergeCase(previousById.get(item.id), item))
+        .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+      if (!cases.some(item => item.id === pendingDecisionId)) pendingDecisionId = null;
       capabilities = result.capabilities ?? {};
       const next = current();
       if (previous && next && (previous.revision !== next.revision || previous.proposal_hash !== next.proposal_hash)) {
@@ -359,6 +382,7 @@
       if (version !== listRevision) return;
       mode = 'unavailable';
       cases = [];
+      pendingDecisionId = null;
       capabilities = {};
       byId('messages').replaceChildren();
       show('chat-empty', true);
@@ -420,6 +444,7 @@
       if ([401, 403, 409].includes(error.status)) await loadCases();
     } finally {
       busy = false;
+      pendingDecisionId = null;
       event.submitter?.removeAttribute('aria-busy');
     }
   }
@@ -459,14 +484,21 @@
     if (!item || !canDecide(item) || !['approve', 'request_changes', 'reject'].includes(decision)) return;
     if (!rationale) return displayNotice('decision-notice', 'reasonRequired', true);
     const input = { decision, revision: item.revision, proposal_hash: item.proposal_hash, rationale };
+    pendingDecisionId = item.id;
     const updated = demo ? demo.decide(item.id, input, lang) :
       await request(`/cases/${encodeURIComponent(item.id)}/decisions`, input);
-    ++listRevision;
-    setRefreshing(false);
+    if (pendingDecisionId !== item.id) return;
+    if (updated?.id !== item.id || updated.revision !== input.revision || updated.proposal_hash !== input.proposal_hash) {
+      throw new Error('bad response');
+    }
+    const previous = cases.find(record => record.id === item.id);
+    if (!previous) return;
+    const next = mergeCase(previous, updated);
+    if (next === previous) return;
     const sameCase = current()?.id === item.id;
     const focusedForm = sameCase && byId('decision-form').contains(document.activeElement);
     if (sameCase) byId('rationale').value = '';
-    cases = cases.map(previous => previous.id === item.id ? updated : previous);
+    cases = cases.map(record => record.id === item.id ? next : record);
     renderList();
     displayCase();
     if (sameCase) {

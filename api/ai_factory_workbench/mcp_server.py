@@ -114,7 +114,7 @@ def build_server(engine: Workbench, profile: WorkProfile) -> MCPServer:
     def workbench_list_cases(limit: Annotated[int, Field(strict=True, ge=1, le=50)] = 20) -> dict[str, Any]:
         """List a bounded set of case summaries. Use workbench_get_case to read one dossier."""
         with _tool_errors():
-            cases = engine.cases(agent)[:limit]
+            cases = engine.cases(agent, limit=limit)
         fields = ("id", "title", "kind", "status", "revision", "priority")
         return {"cases": [{field: case[field] for field in fields} for case in cases]}
 

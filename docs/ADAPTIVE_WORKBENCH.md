@@ -39,6 +39,8 @@ Each source stores its own resume point after its window succeeds. Continue by i
 
 New won opportunities enter the configured work profile, which defaults to `governance`. A later stage change observed by polling withdraws an unclaimed action. If execution may have started, check the existing ERP operation before acting. Plan a separate deletion feed for removals that the provider's opportunity listing no longer returns. The command uses the local ERP simulation. To share the queue, configure a protected Companion host with the same workspace and database. For a real ERP, construct `Workbench` with your `DraftConnector`, the same exact customer mapping and `crm_sources=(source.source, ...)`, then call `sync_opportunities` from the trusted SDK host. Use the approval channels described below to authorize the resulting work.
 
+If a later page fails, the sync still records confirmed withdrawals, blocked observations and conflicts. Changed opportunities also suspend existing actions until a complete sync confirms the update. The checkpoint advances only after the complete window succeeds.
+
 ## Adapt the working method
 
 | Profile | Evidence it asks for |
@@ -114,8 +116,8 @@ The relay verifies a shared-secret HMAC and the engine records a proof fingerpri
 
 ## Connect a draft ERP adapter
 
-Inject a trusted `DraftConnector` and a workspace-scoped customer catalogue. The connector declares a stable ERP target and supports draft writes, a unique idempotency key enforced by the ERP, and independent readback. The engine compares the persisted draft to the approved fields. A conflicting result requires investigation.
+Inject a trusted `DraftConnector` and a workspace-scoped customer catalogue. The connector declares a stable ERP target and supports draft writes, a unique idempotency key enforced by the ERP, and independent readback. Use `crm-sim` with the built-in ERP sandbox and configure a trusted source when injecting an ERP adapter. The engine compares the persisted draft to the approved fields. A definitive mismatch holds the case for manual reconciliation and removes it from the automatic execution queue.
 
 To run effects in a host worker, construct the engine with `defer_execution=True`. Approval persists an `applying` case. The host can discover pending cases with `pending_execution_ids()` and resume one with `reconcile_pending(case_id)`. If a write times out, resume the same case after restart and let the adapter look up the same operation key. Reserve worker access for trusted infrastructure. The bundled Odoo probe reads partner records. The example uses a local ERP simulator. [Read-only Odoo probe](WORKBENCH.md#read-only-odoo-probe-and-synthetic-replay)
 
-The worker claims the exact revision in SQLite before contacting the ERP. If the Workbench accepts a newer CRM event before the claim, it replaces the pending proposal and requires a new review. Once execution is claimed, or if an older pending case has an unknown execution state, reconcile the existing operation first. The claim is local to the Workbench database. Atomic uniqueness at the ERP remains the connector's responsibility.
+The worker claims the exact revision in SQLite before contacting the ERP. If the Workbench accepts a newer CRM event before the claim, it replaces the pending proposal and requires a new review. When readback confirms the draft is absent, the worker checks the revision and reconciliation hold again before dispatch. An ERP request already dispatched can complete and may need manual reconciliation. Atomic uniqueness at the ERP remains the connector's responsibility.

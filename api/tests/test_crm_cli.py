@@ -63,7 +63,7 @@ def test_crm_cli_routes_all_providers_and_reports_each_result(tmp_path, monkeypa
     output = capsys.readouterr()
     result = json.loads(output.out)
     assert requested == ["salesforce/sales-sandbox", "hubspot/eu-portal", "twenty/operations"]
-    assert closed == requested[::-1]
+    assert closed == requested
     assert result[0]["applied"] == 1
     assert result[0]["blocked"] == result[0]["conflicts"] == 0
     assert result[1] == {"source": "hubspot/eu-portal", "error": "crm_rate_limited"}
@@ -76,8 +76,45 @@ def test_crm_cli_requires_credentials_only_for_selected_sources(tmp_path, monkey
     monkeypatch.delenv("AI_FACTORY_TWENTY_TOKEN", raising=False)
     assert crm_sync.main(_args(path, tmp_path, "--provider", "twenty/operations")) == 1
     output = capsys.readouterr()
-    assert json.loads(output.err) == {"error": "missing_crm_credentials"}
-    assert output.out == ""
+    assert json.loads(output.out) == [{"source": "twenty/operations", "error": "missing_crm_credentials"}]
+    assert output.err == ""
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_crm_cli_continues_after_provider_setup_failure(tmp_path, monkeypatch, capsys, configured):
+    path = _example_config(tmp_path)
+    monkeypatch.setenv("AI_FACTORY_SALESFORCE_TOKEN", "fixture-credential")
+    monkeypatch.setenv("AI_FACTORY_TWENTY_TOKEN", "fixture-credential")
+    monkeypatch.delenv("AI_FACTORY_HUBSPOT_TOKEN", raising=False)
+    if configured:
+        monkeypatch.setenv("AI_FACTORY_HUBSPOT_TOKEN", "fixture-credential")
+    closed = []
+
+    class Provider:
+        def __init__(self, source):
+            self.source = source
+
+        def close(self):
+            closed.append(self.source)
+
+    def broken_provider(token, **_kwargs):
+        raise CRMError(f"Invalid credential: {token}")
+
+    monkeypatch.setattr(crm_sync, "SalesforceCRM", lambda *_args, instance, **_kwargs: Provider(f"salesforce/{instance}"))
+    monkeypatch.setattr(crm_sync, "TwentyCRM", lambda *_args, instance, **_kwargs: Provider(f"twenty/{instance}"))
+    monkeypatch.setattr(crm_sync, "HubSpotCRM", broken_provider)
+    monkeypatch.setattr(crm_sync, "sync_opportunities", lambda _engine, provider, _actor, **kwargs:
+                        CRMSyncResult(provider.source, kwargs["until"], seen=1, applied=1))
+
+    assert crm_sync.main(_args(path, tmp_path)) == 1
+    output = capsys.readouterr()
+    first, error, last = json.loads(output.out)
+    assert closed == ["salesforce/sales-sandbox", "twenty/operations"]
+    assert [first["applied"], last["applied"]] == [1, 1]
+    assert error == {"source": "hubspot/eu-portal", "error": "invalid_crm_sync_configuration" if configured
+                     else "missing_crm_credentials"}
+    assert "fixture-credential" not in output.out + output.err
+    assert output.err == ""
 
 
 @pytest.mark.parametrize("change", ["token", "duplicate", "foreign_mapping"])

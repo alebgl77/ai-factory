@@ -4,7 +4,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, Inexact, localcontext
 
 import httpx
 import pytest
@@ -174,6 +174,106 @@ def test_reopen_withdraws_unclaimed_approval_and_late_won_cannot_restore(tmp_pat
     assert wb.store.draft_count() == 0
 
 
+@pytest.mark.parametrize("change", ["reopen", "blocked", "conflict"])
+def test_partial_poll_preserves_only_latest_verified_holds(tmp_path, change):
+    wb = engine(tmp_path)
+    original = won("deal", 1)
+    sync_opportunities(wb, Feed(SALESFORCE, original), EDITOR, since=START, until=minute(2))
+    case = wb.cases(REVIEWER)[0]
+    approve(wb, case)
+
+    class PartialFeed(Feed):
+        def opportunities(self, start, end):
+            if change == "reopen":
+                yield CRMOpportunity("deal", minute(3), False)
+                yield original  # A later arrival from an older revision cannot undo the withdrawal.
+            elif change == "blocked":
+                yield won("deal", 3, amount=None)
+            else:
+                yield original
+                yield replace(original, amount="500")
+            yield won("new", 3)
+            raise CRMError("crm_rate_limited", 429)
+
+    with pytest.raises(CRMError, match="^crm_rate_limited$") as failure:
+        sync_opportunities(wb, PartialFeed(SALESFORCE), EDITOR, until=minute(4))
+    assert failure.value.status_code == 429
+    restarted = engine(tmp_path)
+    records = restarted.cases(REVIEWER)
+    assert [record["id"] for record in records] == [case["id"]]
+    assert records[0]["status"] == ("withdrawn" if change == "reopen" else "waiting_review")
+    assert records[0]["action"] is None
+    with pytest.raises(WorkbenchError, match="no_pending_execution"):
+        restarted.reconcile_pending(case["id"])
+    assert restarted.store.draft_count() == 0
+    result = sync_opportunities(restarted, Feed(SALESFORCE, won("new", 3)), EDITOR, until=minute(4))
+    assert (result.seen, result.applied) == (1, 1)
+
+
+@pytest.mark.parametrize("evidence", ["reopen", "winner", "older-conflict"])
+def test_partial_poll_blocks_old_approval_until_complete_repeat(tmp_path, evidence):
+    wb = engine(tmp_path)
+    original = won("deal", 1)
+    updated = won("deal", 4, amount="500")
+    sync_opportunities(wb, Feed(SALESFORCE, original), EDITOR, since=START, until=minute(2))
+    old = wb.cases(REVIEWER)[0]
+    approve(wb, old)
+    if evidence == "reopen":
+        changes = [CRMOpportunity("deal", minute(3), False), updated]
+    elif evidence == "older-conflict":
+        changes = [original, updated, replace(original, amount="300")]
+    else:
+        changes = [updated]
+
+    class PartialFeed(Feed):
+        def opportunities(self, start, end):
+            yield from changes
+            raise CRMError("crm_rate_limited", 429)
+
+    with pytest.raises(CRMError, match="^crm_rate_limited$"):
+        sync_opportunities(wb, PartialFeed(SALESFORCE), EDITOR, until=minute(5))
+    current = wb.get_case(old["id"], REVIEWER)
+    assert current["status"] == ("withdrawn" if evidence == "reopen" else "waiting_review")
+    assert current["action"] is None
+    if evidence == "winner":
+        assert current["can_decide"] is False
+        with pytest.raises(WorkbenchError, match="^crm_sync_incomplete$") as failure:
+            approve(wb, current)
+        assert failure.value.status == 409
+    assert wb.pending_execution_ids() == []
+    with pytest.raises(WorkbenchError, match="no_pending_execution"):
+        wb.reconcile_pending(old["id"])
+    assert wb.store.draft_count() == 0
+
+    result = sync_opportunities(wb, Feed(SALESFORCE, *changes), EDITOR, until=minute(5))
+    assert (result.seen, result.applied) == (len(changes), 1)
+    current = wb.get_case(old["id"], REVIEWER)
+    assert current["revision"] > old["revision"]
+    assert current["action"]["fields"]["amount_minor"] == 50000
+    with pytest.raises(WorkbenchError, match="stale_proposal"):
+        approve(wb, old)
+
+
+def test_complete_poll_cannot_restore_a_different_winner_at_an_incomplete_revision(tmp_path):
+    wb = engine(tmp_path)
+    sync_opportunities(wb, Feed(SALESFORCE, won("deal", 1)), EDITOR, since=START, until=minute(2))
+    old = wb.cases(REVIEWER)[0]
+    approve(wb, old)
+
+    class PartialFeed(Feed):
+        def opportunities(self, start, end):
+            yield won("deal", 3, amount="500")
+            raise CRMError("crm_rate_limited", 429)
+
+    with pytest.raises(CRMError, match="^crm_rate_limited$"):
+        sync_opportunities(wb, PartialFeed(SALESFORCE), EDITOR, until=minute(4))
+    result = sync_opportunities(wb, Feed(SALESFORCE, won("deal", 3, amount="700")), EDITOR, until=minute(4))
+    assert (result.conflicts, result.applied) == (1, 0)
+    assert wb.get_case(old["id"], REVIEWER)["action"] is None
+    assert wb.pending_execution_ids() == []
+    assert wb.store.draft_count() == 0
+
+
 def test_unwon_without_existing_case_is_a_tombstone(tmp_path):
     wb = engine(tmp_path)
     # Two changes for one record can arrive out of timestamp order in one scan.
@@ -203,7 +303,7 @@ def test_reopen_after_claim_holds_future_retries_and_does_not_block_checkpoint(t
     case = wb.cases(REVIEWER)[0]
     approve(wb, case)
 
-    def lost_ack(*_args):
+    def lost_ack(*_args, **_kwargs):
         raise TimeoutError
 
     monkeypatch.setattr(wb.store, "create_draft", lost_ack)
@@ -230,6 +330,21 @@ def test_exact_currency_minor_units(tmp_path, currency, amount, minor):
     sync_opportunities(wb, Feed(SALESFORCE, won("deal", 1, amount=amount, currency=currency)),
                        EDITOR, since=START, until=minute(2))
     assert wb.cases(REVIEWER)[0]["action"]["fields"]["amount_minor"] == minor
+
+
+def test_currency_conversion_does_not_inherit_decimal_context(tmp_path):
+    wb = engine(tmp_path)
+    with localcontext() as context:
+        context.prec = context.Emax = 2
+        context.Emin = -2
+        context.traps[Inexact] = True
+        sync_opportunities(wb, Feed(SALESFORCE, won("good", 1, amount="1000.01"),
+                                    won("invalid", 1, amount="1.0001")),
+                           EDITOR, since=START, until=minute(2))
+
+    cases = {case["title"]: case for case in wb.cases(REVIEWER)}
+    assert cases["good won"]["action"]["fields"]["amount_minor"] == 100001
+    assert cases["CRM opportunity requires review"]["action"] is None
 
 
 @pytest.mark.parametrize(("row", "code"), [(won("deal", 2), "crm_out_of_window"),

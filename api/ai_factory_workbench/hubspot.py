@@ -19,7 +19,8 @@ _SEARCH = "/crm/objects/2026-09/deals/search"
 _COMPANIES = "/crm/associations/2026-09/deals/companies/batch/read"
 _FIELDS = ("dealname", "dealstage", "amount", "deal_currency_code", "hs_lastmodifieddate")
 _MODIFIED = "hs_lastmodifieddate"
-_PAGE_SIZE = 100
+_SEARCH_PAGE_SIZE = 200
+_ASSOCIATION_BATCH_SIZE = 100
 _RESULT_LIMIT = 10_000
 _MAX_SEARCH_REQUESTS = 256
 _SEARCH_INTERVAL = 0.21
@@ -138,37 +139,45 @@ class HubSpotCRM:
             offset = 0
             records: list[CRMOpportunity] = []
             record_ids: set[str] = set()
-            while True:
-                if remaining == 0:
-                    raise CRMError("hubspot_search_budget")
-                page = self._search(lower, upper, offset)
-                remaining -= 1
-                total = page.get("total")
-                results = page.get("results")
-                if type(total) is not int or total < 0 or not isinstance(results, list) or len(results) > _PAGE_SIZE:
-                    raise CRMError("hubspot_invalid_response")
-                if total >= _RESULT_LIMIT:
-                    if upper - lower <= 1:
-                        raise CRMError("hubspot_search_window_limit")
-                    middle = (lower + upper) // 2
-                    windows.extend(((middle, upper), (lower, middle)))
-                    break
-                for row in results:
-                    record = self._opportunity(row)
-                    if (record.record_id in record_ids or not start <= record.updated_at < end
-                            or not lower <= _ceil_millis(record.updated_at) < upper):
-                        raise CRMError("hubspot_search_changed")
-                    record_ids.add(record.record_id)
-                    records.append(record)
-                next_offset = _next_offset(page)
-                if next_offset is None:
-                    if len(records) != total:
-                        raise CRMError("hubspot_search_changed")
-                    yield from self._with_companies(records)
-                    break
-                if not results or next_offset != len(records) or not offset < next_offset < total:
-                    raise CRMError("hubspot_invalid_cursor")
-                offset = next_offset
+            try:
+                while True:
+                    if remaining == 0:
+                        raise CRMError("hubspot_search_budget")
+                    page = self._search(lower, upper, offset)
+                    remaining -= 1
+                    total = page.get("total")
+                    results = page.get("results")
+                    if (type(total) is not int or total < 0 or not isinstance(results, list)
+                            or len(results) > _SEARCH_PAGE_SIZE):
+                        raise CRMError("hubspot_invalid_response")
+                    if total >= _RESULT_LIMIT:
+                        if offset:
+                            raise CRMError("hubspot_search_changed")
+                        if upper - lower <= 1:
+                            raise CRMError("hubspot_search_window_limit")
+                        middle = (lower + upper) // 2
+                        windows.extend(((middle, upper), (lower, middle)))
+                        break
+                    for row in results:
+                        record = self._opportunity(row)
+                        if (record.record_id in record_ids or not start <= record.updated_at < end
+                                or not lower <= _ceil_millis(record.updated_at) < upper):
+                            raise CRMError("hubspot_search_changed")
+                        record_ids.add(record.record_id)
+                        records.append(record)
+                    next_offset = _next_offset(page)
+                    if next_offset is None:
+                        if len(records) != total:
+                            raise CRMError("hubspot_search_changed")
+                        break
+                    if not results or next_offset != len(records) or not offset < next_offset < total:
+                        raise CRMError("hubspot_invalid_cursor")
+                    offset = next_offset
+            except CRMError:
+                # Reopenings do not depend on successful company resolution.
+                yield from (record for record in records if not record.won)
+                raise
+            yield from self._with_companies(records)
 
     def _search(self, lower: int, upper: int, offset: int) -> dict[str, Any]:
         body = {
@@ -178,7 +187,7 @@ class HubSpotCRM:
             ]}],
             "sorts": [{"propertyName": "hs_object_id", "direction": "ASCENDING"}],
             "properties": list(_FIELDS),
-            "limit": _PAGE_SIZE,
+            "limit": _SEARCH_PAGE_SIZE,
         }
         if offset:
             body["after"] = str(offset)
@@ -212,10 +221,14 @@ class HubSpotCRM:
         return CRMOpportunity(record_id, updated_at, True, title=title, amount=amount, currency=currency or self._currency)
 
     def _with_companies(self, records: list[CRMOpportunity]) -> Iterable[CRMOpportunity]:
-        for index in range(0, len(records), _PAGE_SIZE):
-            batch = records[index:index + _PAGE_SIZE]
+        for index in range(0, len(records), _ASSOCIATION_BATCH_SIZE):
+            batch = records[index:index + _ASSOCIATION_BATCH_SIZE]
             ids = {record.record_id for record in batch if record.won}
-            companies = self._companies(ids) if ids else {}
+            try:
+                companies = self._companies(ids) if ids else {}
+            except CRMError:
+                yield from (record for record in records[index:] if not record.won)
+                raise
             for record in batch:
                 yield replace(record, account_id=companies.get(record.record_id)) if record.won else record
 

@@ -5,12 +5,14 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
-from threading import Barrier
+from threading import Barrier, Event
+from types import SimpleNamespace
 
 import pytest
 
 from ai_factory_workbench import Actor, AdapterCapabilities, DraftReadback, Workbench, WorkbenchError
 from ai_factory_workbench.conformance import probe_draft_connector
+from ai_factory_workbench.crm import CRMOpportunity, sync_opportunities
 from app.workbench.service import Workbench as LegacyWorkbench
 
 
@@ -50,6 +52,34 @@ def test_legacy_import_and_workspace_isolation(tmp_path):
         Workbench(tmp_path / "beta.sqlite3", workspace="beta").get_case(case["id"], APPROVER)
     with pytest.raises(WorkbenchError, match="authentication_required"):
         first.get_case(case["id"], Actor("anonymous", frozenset({"admin"}), authenticated=False))
+
+
+def test_case_limit_preserves_order_and_bounds_public_materialization(tmp_path, monkeypatch):
+    engine = Workbench(tmp_path / "workbench.sqlite3", clock=lambda: NOW)
+    for subject in ("policy-1", "policy-2", "policy-3"):
+        review(engine, subject=subject)
+    ordered = engine.cases(APPROVER)
+    projected = []
+    original = engine._public
+
+    def project(record, *args):
+        projected.append(record["id"])
+        return original(record, *args)
+
+    monkeypatch.setattr(engine, "_public", project)
+    assert engine.cases(APPROVER, limit=1) == ordered[:1]
+    assert projected == [ordered[0]["id"]]
+    for invalid in (0, 201, True, 1.0):
+        with pytest.raises(ValueError, match="limit must be between 1 and 200"):
+            engine.cases(APPROVER, limit=invalid)
+
+
+def test_exact_customer_index_retains_duplicate_aliases_and_tenant_scope(tmp_path):
+    customer = CUSTOMERS[0]
+    engine = Workbench(tmp_path / "workbench.sqlite3", workspace=WORKSPACE, crm_source="crm-test",
+                       customers=[customer, customer.copy(), {**customer, "id": "elsewhere", "tenant": "other"}])
+    case = engine.submit(EVENT, EDITOR)
+    assert case["action"]["fields"]["customer_id"] == customer["id"]
 
 
 def test_legacy_demo_binding_never_adopted_by_other_workspace(tmp_path):
@@ -194,7 +224,12 @@ def test_readback_conflict_preserves_unknown_result_and_never_overwrites(tmp_pat
     case = engine.submit(EVENT, EDITOR)
     with pytest.raises(WorkbenchError, match="draft_readback_conflict"):
         approve(engine, case)
-    assert engine.get_case(case["id"], APPROVER)["status"] == "applying"
+    held = engine.get_case(case["id"], APPROVER)
+    assert held["status"] == "applying" and held["reconciliation_required"] and not held["can_decide"]
+    reopened = Workbench(engine.store.path, workspace=WORKSPACE, connector=provider)
+    assert reopened.pending_execution_ids() == []
+    with pytest.raises(WorkbenchError, match="reconciliation_required"):
+        reopened.reconcile_pending(case["id"])
 
     provider.capabilities = AdapterCapabilities(draft_writes=True)
     with pytest.raises(ValueError, match="atomic idempotent"):
@@ -203,6 +238,102 @@ def test_readback_conflict_preserves_unknown_result_and_never_overwrites(tmp_pat
 
 def _next_event():
     return {**EVENT, "id": "order-delivery-2", "data": {**EVENT["data"], "amount_minor": 4500, "record_version": 2}}
+
+
+def _sync_authoritative_case(engine, *, won: bool) -> None:
+    offset = timedelta(minutes=1 if won else 3)
+    row = CRMOpportunity("deal", NOW + offset, won, "Prepare draft", "account", "Test Partner", "23.00", "EUR")
+    feed = SimpleNamespace(source="salesforce/eu", opportunities=lambda _start, _end: iter([row]))
+    sync_opportunities(engine, feed, EDITOR, since=NOW if won else None, until=row.updated_at + timedelta(minutes=1))
+
+
+@pytest.mark.parametrize("already_committed", [False, True])
+def test_reopen_during_external_read_checks_hold_before_new_write(tmp_path, already_committed):
+    read_started, allow_read = Event(), Event()
+
+    class PausedERP(FixtureERP):
+        def read_draft(self, external_ref):
+            if already_committed:
+                super().ensure_draft(external_ref, case["action"]["fields"])
+            read_started.set()
+            assert allow_read.wait(5)
+            return super().read_draft(external_ref)
+
+        def ensure_draft(self, external_ref, fields):
+            pytest.fail("a hold recorded during readback must stop a new write")
+
+    provider = PausedERP(tmp_path / "provider.sqlite3")
+    engine = Workbench(tmp_path / "workbench.sqlite3", workspace=WORKSPACE, connector=provider,
+                       customers=[{**CUSTOMERS[0], "reference": "salesforce/eu/account"}],
+                       crm_sources=("salesforce/eu",), defer_execution=True)
+    _sync_authoritative_case(engine, won=True)
+    case = engine.cases(APPROVER)[0]
+    assert approve(engine, case)["status"] == "applying"
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        result = pool.submit(engine.reconcile_pending, case["id"])
+        try:
+            assert read_started.wait(5)
+            _sync_authoritative_case(engine, won=False)
+            assert engine.get_case(case["id"], APPROVER)["reconciliation_required"] is True
+        finally:
+            allow_read.set()
+        if already_committed:
+            assert result.result(timeout=5)["status"] == "executed"
+            assert engine.get_case(case["id"], APPROVER)["reconciliation_required"] is True
+        else:
+            with pytest.raises(WorkbenchError, match="reconciliation_required"):
+                result.result(timeout=5)
+    assert provider.count() == int(already_committed)
+
+
+def test_sandbox_checks_authoritative_hold_inside_draft_transaction_after_restart(tmp_path, monkeypatch):
+    path = tmp_path / "workbench.sqlite3"
+    engine = Workbench(path, workspace=WORKSPACE,
+                       customers=[{**CUSTOMERS[0], "reference": "salesforce/eu/account"}],
+                       crm_sources=("salesforce/eu",), defer_execution=True)
+    _sync_authoritative_case(engine, won=True)
+    case = engine.cases(APPROVER)[0]
+    assert approve(engine, case)["status"] == "applying"
+
+    worker = Workbench(path, workspace=WORKSPACE)
+    create_draft = worker.store.create_draft
+
+    def hold_before_insert(external_ref, fields, **kwargs):
+        _sync_authoritative_case(engine, won=False)
+        return create_draft(external_ref, fields, **kwargs)
+
+    monkeypatch.setattr(worker.store, "create_draft", hold_before_insert)
+    with pytest.raises(WorkbenchError, match="reconciliation_required"):
+        worker.reconcile_pending(case["id"])
+    assert worker.store.draft_count() == 0 and worker.pending_execution_ids() == []
+
+
+@pytest.mark.parametrize("approved", [False, True])
+def test_injected_erp_rejects_simulated_ingress_and_old_simulated_work(tmp_path, monkeypatch, approved):
+    path = tmp_path / "workbench.sqlite3"
+    provider = FixtureERP(tmp_path / "provider.sqlite3")
+    engine = Workbench(path, workspace=WORKSPACE, connector=provider, customers=CUSTOMERS,
+                       crm_sources=("salesforce/eu",), defer_execution=True)
+    simulated = {**EVENT, "source": "crm-sim"}
+    with pytest.raises(WorkbenchError, match="simulated_crm_requires_sandbox"):
+        engine.submit(simulated, EDITOR)
+
+    # Simulate an earlier SDK persisting this proposal against the same bound target.
+    with monkeypatch.context() as patch:
+        patch.setattr(engine, "_allows_draft_source", lambda _source: True)
+        case = engine.submit(simulated, EDITOR)
+        if approved:
+            assert approve(engine, case)["status"] == "applying"
+
+    worker = Workbench(path, workspace=WORKSPACE, connector=provider)
+    assert worker.get_case(case["id"], APPROVER)["can_decide"] is False
+    with pytest.raises(WorkbenchError, match="simulated_crm_requires_sandbox"):
+        approve(worker, case)
+    assert worker.pending_execution_ids() == []
+    if approved:
+        with pytest.raises(WorkbenchError, match="simulated_crm_requires_sandbox"):
+            worker.reconcile_pending(case["id"])
+    assert provider.count() == 0
 
 
 def test_new_revision_supersedes_only_unclaimed_deferred_approval(tmp_path, monkeypatch):

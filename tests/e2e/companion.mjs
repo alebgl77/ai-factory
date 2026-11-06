@@ -46,6 +46,41 @@ async function checkNarrow(page) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
 }
 
+const caseList = cases => ({ json: { mode: 'protected_demo', cases, capabilities: { can_decide: true } } });
+
+async function decisionRace(context) {
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let listReply = caseList([caseFixture]);
+  const submitted = Promise.withResolvers();
+  const decisionReply = Promise.withResolvers();
+  await serve(page, async (route, url) => {
+    if (url.pathname.endsWith('/cases')) return route.fulfill(await listReply);
+    if (url.pathname.endsWith('/decisions')) {
+      submitted.resolve();
+      return route.fulfill({ json: await decisionReply.promise });
+    }
+    return route.fulfill({ status: 404 });
+  });
+  await page.goto('https://factory.test/project/companion/index.html?lang=en');
+  await page.getByLabel('Reason for the decision').fill('Reason for the submitted proposal.');
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
+  await submitted.promise;
+  return {
+    page,
+    async refresh(reply) {
+      listReply = reply;
+      const requested = page.waitForRequest(req => new URL(req.url()).pathname.endsWith('/cases'));
+      await page.locator('#refresh').click();
+      await requested;
+    },
+    async finishDecision(record) {
+      decisionReply.resolve(record);
+      await page.locator('#decision-form [aria-busy="true"]').waitFor({ state: 'detached' });
+    }
+  };
+}
+
 try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const demo = await context.newPage();
@@ -158,7 +193,7 @@ try {
     } });
     payloads.push(req.postDataJSON());
     if (url.pathname.endsWith('/decisions')) {
-      cases = [{ ...caseFixture, status: 'executed', receipt: { id: 'ERP-DRAFT-42' } }];
+      cases = [{ ...cases[0], status: 'executed', receipt: { id: 'ERP-DRAFT-42' } }];
       return route.fulfill({ json: cases[0] });
     }
     if (url.pathname.endsWith('/feedback')) {
@@ -220,7 +255,70 @@ try {
   releaseFeedback();
   await protectedPage.locator('#workspace-notice').getByText(/WK-42 · The workspace could not complete this request/).waitFor();
   await checkNarrow(protectedPage);
-  console.log('Companion passed desktop and mobile navigation, local fonts, QR, escalation, exact-revision decisions, feedback and protected mode.');
+
+  const applying = { ...caseFixture, status: 'applying', decision_rationale: 'Reason for the submitted proposal.' };
+  const executed = { ...caseFixture, status: 'executed', receipt: { id: 'ERP-DRAFT-RACE' }, can_decide: false };
+  const held = { ...applying, reconciliation_required: true, can_decide: false };
+
+  const revised = await decisionRace(context);
+  const newer = { ...caseFixture, title: 'New CRM proposal', revision: 5, proposal_hash: 'a'.repeat(64) };
+  await revised.refresh(caseList([newer]));
+  await revised.page.getByRole('heading', { name: newer.title }).waitFor();
+  await revised.page.getByLabel('Reason for the decision').fill('Draft for the new proposal.');
+  await revised.finishDecision(applying);
+  assert.equal(await revised.page.locator('#case-title').textContent(), newer.title);
+  assert.equal(await revised.page.getByLabel('Reason for the decision').inputValue(), 'Draft for the new proposal.');
+  await revised.page.locator('#case-notice').getByText(/Review the new revision before deciding/).waitFor();
+  await revised.page.close();
+
+  const heldFirst = await decisionRace(context);
+  await heldFirst.refresh(caseList([held]));
+  await heldFirst.page.locator('#case-status').getByText('ERP reconciliation required').waitFor();
+  await heldFirst.finishDecision({ ...applying, reconciliation_required: false });
+  assert.equal(await heldFirst.page.locator('#case-status').textContent(), 'ERP reconciliation required');
+  assert.equal(await heldFirst.page.locator('#decision-form').isVisible(), false);
+  await heldFirst.refresh(caseList([newer]));
+  await heldFirst.page.getByRole('heading', { name: newer.title }).waitFor();
+  assert.equal(await heldFirst.page.locator('#decision-form').isVisible(), true);
+  await heldFirst.page.close();
+
+  for (const [snapshot, status] of [[caseFixture, 'Executed'], [held, 'ERP reconciliation required']]) {
+    const decisionFirst = await decisionRace(context);
+    const delayed = Promise.withResolvers();
+    await decisionFirst.refresh(delayed.promise);
+    await decisionFirst.finishDecision(executed);
+    assert.equal(await decisionFirst.page.locator('#refresh').getAttribute('aria-disabled'), 'true');
+    delayed.resolve(caseList([snapshot]));
+    await decisionFirst.page.locator('#refresh[aria-disabled="false"]').waitFor();
+    assert.equal(await decisionFirst.page.locator('#case-status').textContent(), status);
+    assert.equal(await decisionFirst.page.locator('#receipt-id').textContent(), executed.receipt.id);
+    assert.equal(await decisionFirst.page.locator('#decision-form').isVisible(), false);
+    await decisionFirst.page.close();
+  }
+
+  const denied = await decisionRace(context);
+  const delayedDenial = Promise.withResolvers();
+  await denied.refresh(delayedDenial.promise);
+  await denied.finishDecision(executed);
+  delayedDenial.resolve({ status: 403, json: { detail: 'blocked' } });
+  await denied.page.locator('#connection').getByText('Workspace unavailable').waitFor();
+  assert.equal(await denied.page.locator('#case-detail').isVisible(), false);
+  assert.equal(await denied.page.locator('#cases button').count(), 0);
+  await denied.page.close();
+
+  for (const missing of [caseList([]), { status: 403, json: { detail: 'blocked' } }]) {
+    const reopened = await decisionRace(context);
+    await reopened.refresh(missing);
+    await reopened.page.locator('#case-detail').waitFor({ state: 'hidden' });
+    await reopened.refresh(caseList([caseFixture]));
+    await reopened.page.getByRole('heading', { name: caseFixture.title }).waitFor();
+    await reopened.finishDecision(executed);
+    assert.equal(await reopened.page.locator('#case-status').textContent(), 'Review required');
+    assert.equal(await reopened.page.locator('#receipt').isVisible(), false);
+    await reopened.page.close();
+  }
+
+  console.log('Companion passed desktop and mobile navigation, local fonts, QR, escalation, exact-revision decisions, delayed responses, feedback and protected mode.');
 } finally {
   await browser.close();
 }

@@ -245,6 +245,10 @@ def test_live_mcp_stdio_skill_discovery_and_proposal_only_tools(tmp_path):
             assert recorded.structured_content["status"] == "waiting_review"
             assert recorded.structured_content["can_decide"] is False
             assert recorded.structured_content["profile"] == get_profile().snapshot()
+            queue = await client.call_tool("workbench_list_cases", {"limit": 2})
+            top = await client.call_tool("workbench_list_cases", {"limit": 1})
+            assert len(queue.structured_content["cases"]) == 2
+            assert top.structured_content["cases"] == queue.structured_content["cases"][:1]
         engine = Workbench(database, workspace="governance-a")
         assert engine.store.draft_count() == 0
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -55,13 +56,19 @@ def validate_connector(connector: DraftConnector) -> str:
 
 def write_and_verify(
     connector: DraftConnector, target: str, external_ref: str, fields: dict[str, Any],
+    *, before_write: Callable[[], bool] | None = None,
 ) -> dict[str, str]:
     if connector.target != target:
         raise WorkbenchError("connector_target_mismatch", 409)
     expected = digest(fields)
     result = connector.read_draft(external_ref)
     if result is None:
-        connector.ensure_draft(external_ref, fields.copy())
+        # Another worker can complete the exact operation during the initial read.
+        # If so, verify its committed result without dispatching another write.
+        if before_write is None or before_write():
+            if connector.target != target:
+                raise WorkbenchError("connector_target_mismatch", 409)
+            connector.ensure_draft(external_ref, fields.copy())
         result = connector.read_draft(external_ref)
     if result is None:
         raise TimeoutError
