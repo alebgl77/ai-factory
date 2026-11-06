@@ -348,6 +348,8 @@ if (!process.env.E2E_BASE_URL) {
     await useCaseSelect.inputValue() === 'uc-04' && await useCaseSelect.locator('option').first().getAttribute('value') === '' &&
     (await useCaseSelect.locator('option:checked').textContent()).includes(`Sensible · ${codeMarkup} · ${frenchName} (API)`) &&
     await useCaseSelect.locator('[data-xss-probe]').count() === 0);
+  // The real scene was exercised above. The mocked console now needs no continuous software WebGL draws.
+  await mock.evaluate(() => { window.__twin.renderer.render = () => {}; });
   const openShadow = () => mock.evaluate(() => window.__twin.openConsole('shadow'));
   const shadowReady = () => mock.locator('[data-shadow-state="ready"]').waitFor();
   const refreshShadow = () => mock.locator('[data-shadow-action="refresh"]').click();
@@ -376,7 +378,14 @@ if (!process.env.E2E_BASE_URL) {
     proposedPolicy?.tool === 'external-ai' && proposedPolicy?.expected_revision === 0 && proposedPolicy?.status === 'restricted' &&
     proposedPolicy?.alternative === 'internal-ai' && await mock.locator('[data-shadow-action^="approve-"]').count() === 0);
   shadowRole = 'approver';
-  await refreshShadow();
+  const [approverRefresh] = await Promise.all([
+    mock.waitForResponse(r => r.url().endsWith('/api/v1/shadow-ai') && r.request().method() === 'GET'),
+    refreshShadow(),
+  ]);
+  const approverData = await approverRefresh.json();
+  if (!approverRefresh.ok() || approverData.capabilities?.decide !== true || !approverData.proposals?.some(p => p.id === shadowProposalId)) {
+    throw new Error('Observatory approver refresh did not return the pending proposal with decision access');
+  }
   await mock.locator(`[data-shadow-action="approve-${shadowProposalId}"]`).click();
   await mock.getByRole('table', { name: 'Gouvernance des outils' }).getByText('external-ai').waitFor();
   check('the dedicated approver refreshes the policy instead of assuming local approval',
