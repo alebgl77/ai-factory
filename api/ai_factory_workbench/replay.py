@@ -102,8 +102,8 @@ def _governed(scenario: Scenario, path: Path) -> dict:
     elif category == "lost_receipt":
         create_draft = workbench.store.create_draft
 
-        def lose_receipt(external_ref: str, fields: dict) -> dict:
-            create_draft(external_ref, fields)
+        def lose_receipt(external_ref: str, fields: dict, **kwargs) -> dict:
+            create_draft(external_ref, fields, **kwargs)
             raise TimeoutError
 
         workbench.store.create_draft = lose_receipt

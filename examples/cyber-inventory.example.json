@@ -1,0 +1,31 @@
+{
+  "v": 1,
+  "enabled": false,
+  "assets": [
+    {
+      "id": "llm-gateway",
+      "kind": "ai",
+      "packages": ["pkg:pypi/litellm@1.106.7"]
+    },
+    {
+      "id": "workbench-mcp",
+      "kind": "tool",
+      "packages": ["pkg:pypi/mcp@2.3.0"]
+    },
+    {
+      "id": "local-model-runtime",
+      "kind": "runtime",
+      "packages": []
+    },
+    {
+      "id": "crm-service",
+      "kind": "connector",
+      "packages": []
+    },
+    {
+      "id": "crm-to-erp-review",
+      "kind": "process",
+      "depends_on": ["llm-gateway", "workbench-mcp", "local-model-runtime", "crm-service"]
+    }
+  ]
+}

@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from app.audit import GENESIS, AuditContext, record_hash, scan
 from app.main import SWAGGER_UI_VERSION, create_app
+from app.seclog import reference
 from app.security import (ASSESSMENT, AUDIT_READ, AUTHENTICATED, MODEL_VERSION, PLACEMENT_DECIDE, READ, ROLES,
                           SPACES_WRITE, RateLimiter, SecurityConfig, roles_granting)
 from app.settings import Settings
@@ -634,7 +635,8 @@ def test_denials_are_logged_as_json_without_spoofed_values(tmp_path, capsys):
     denied = [x for x in lines if x.get("event") == "request.denied"]
     assert len(denied) == 1
     d = denied[0]
-    assert d["reason"] == "untrusted_source" and d["status"] == 401 and d["request_id"] == "rid-123456"
+    assert d["reason"] == "untrusted_source" and d["status"] == 401
+    assert d["request_ref"] == reference("request", "rid-123456") and "request_id" not in d
     assert d["forwarded_identity_present"] is True and d["client_ip"] == "192.0.2.10" and d["logger"] == \
         "factory.security"
     assert "mallory" not in json.dumps(d)

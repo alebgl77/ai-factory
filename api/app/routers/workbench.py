@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from collections.abc import Iterable
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
@@ -14,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from ai_factory_workbench import Workbench, WorkbenchError
 from ai_factory_workbench.approvals import ApprovalRelay, RelayAuthority
+from ai_factory_workbench.cyberlog import JournalError, journal_request
 from ai_factory_workbench.interface_models import CASE_ID_PATTERN, ReviewInput, SurfaceInput
 from ai_factory_workbench.profiles import WorkProfile, get_profile, list_profiles
 
@@ -64,13 +66,15 @@ class WorkbenchRoute(APIRoute):
             if request.method == "POST":
                 _check_browser_write(request)
             try:
-                return await handler(request)
+                request_id = getattr(request.state, "request_id", None) or uuid.uuid4().hex
+                with journal_request(request_id):
+                    return await handler(request)
             except RequestValidationError:
                 # FastAPI's default error includes input values (including chat text).
                 raise HTTPException(422, detail="invalid_request") from None
             except WorkbenchError as exc:
                 raise HTTPException(exc.status, detail=str(exc)) from None
-            except (sqlite3.Error, OSError):
+            except (sqlite3.Error, OSError, JournalError):
                 raise HTTPException(503, detail="workbench_unavailable") from None
 
         return handle

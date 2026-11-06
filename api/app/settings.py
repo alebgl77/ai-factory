@@ -88,6 +88,7 @@ class Settings:
     cost_fx: float = 1.0                     # FACTORY_COST_FX: native gateway unit to EUR
     workbench_mode: str = "off"              # off | demo | protected_demo
     workbench_chat_mode: str = "simulation"  # simulation | local
+    workbench_cyber_audit: str = "off"        # off | on
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_lang", normalize_lang(self.default_lang, DEFAULT_LANG))
@@ -97,6 +98,8 @@ class Settings:
             raise ValueError("invalid FACTORY_WORKBENCH_MODE")
         if self.workbench_chat_mode not in {"simulation", "local"}:
             raise ValueError("invalid FACTORY_WORKBENCH_CHAT_MODE")
+        if self.workbench_cyber_audit not in {"off", "on"}:
+            raise ValueError("invalid FACTORY_WORKBENCH_CYBER_AUDIT")
         if self.workbench_chat_mode == "local" and (
             self.workbench_mode != "protected_demo" or self.auth_mode != "proxy"
             or not self.litellm_url or not self.litellm_master_key
@@ -158,4 +161,5 @@ class Settings:
             cost_fx=cost_fx,
             workbench_mode=(_env("FACTORY_WORKBENCH_MODE", "off") or "off").lower(),
             workbench_chat_mode=(_env("FACTORY_WORKBENCH_CHAT_MODE", "simulation") or "simulation").lower(),
+            workbench_cyber_audit=os.environ.get("FACTORY_WORKBENCH_CYBER_AUDIT", "off"),
         )

@@ -19,6 +19,7 @@ from .adapters import OpportunityEvent, normalize_opportunity_event
 from .algorithms import MatchResult, ModelRoute, RoutePolicy, match_customer, review_priority, select_route
 from .connector import DraftConnector, validate_connector, write_and_verify
 from .crm import CRM_CONFLICT, CRMBlockedOpportunity, CRMError, validate_source
+from .cyberlog import append_event
 from .identity import ASSESSMENT, READ, Actor, WorkActor
 from .store import Store, WorkbenchError
 
@@ -150,7 +151,7 @@ class Workbench:
                  workspace: str = WORKSPACE, connector: DraftConnector | None = None,
                  customers: Sequence[Mapping[str, str]] | None = None, crm_source: str = _SIMULATED_CRM_SOURCE,
                  crm_sources: Sequence[str] = (),
-                 defer_execution: bool = False) -> None:
+                 defer_execution: bool = False, cyber_audit: bool = False) -> None:
         if not isinstance(workspace, str) or not _WORKSPACE_ID.fullmatch(workspace):
             raise ValueError("invalid workspace")
         if mode not in {"demo", "protected_demo"}:
@@ -185,7 +186,7 @@ class Workbench:
         self._crm_source = crm_source
         self._crm_sources = trusted_sources
         self._defer_execution = defer_execution
-        self.store = Store(path, workspace, self._target)
+        self.store = Store(path, workspace, self._target, cyber_audit=cyber_audit)
         self.mode = mode
         self.clock = clock or (lambda: dt.datetime.now(dt.timezone.utc))
         self.advisor = advisor
@@ -360,8 +361,20 @@ class Workbench:
                 evidence=evidence, actor=actor, revision=previous["revision"] + 1 if previous else 1,
                 source_payload_hash=fingerprint, profile=profile,
             )
-            self.store.put_case(connection, record)
+            self._save_proposal(connection, record, actor, previous=previous)
         return self._public(record, actor)
+
+    def _save_proposal(self, connection: sqlite3.Connection, record: dict[str, Any], actor: WorkActor, *,
+                       previous: dict[str, Any] | None = None, blocked_reason: str | None = None) -> None:
+        self.store.put_case(connection, record)
+        if blocked_reason is not None:
+            append_event(connection, "case.blocked", "blocked", case=record, actor=actor.actor,
+                         reason_code=blocked_reason)
+            return
+        event = "case.withdrawn" if record["status"] == "withdrawn" else (
+            "case.revised" if previous else "case.proposed"
+        )
+        append_event(connection, event, "success", case=record, actor=actor.actor)
 
     def submit(self, payload: dict[str, Any], actor: WorkActor, *,
                profile: dict[str, str] | None = None) -> dict[str, Any]:
@@ -438,7 +451,7 @@ class Workbench:
                 if previous and self._execution_claimed(previous):
                     raise WorkbenchError("reconciliation_required", 409)
                 record = self._opportunity_case(event, actor, previous, profile=profile)
-                self.store.put_case(connection, record)
+                self._save_proposal(connection, record, actor, previous=previous)
             connection.execute("INSERT INTO events(source,id,fingerprint,case_id) VALUES (?,?,?,?)",
                                (event.source, event.id, event.fingerprint, record["id"]))
         return self._public(record, actor)
@@ -503,16 +516,23 @@ class Workbench:
                 outcomes.append("blocked")
             if previous is not None and self._execution_claimed(previous):
                 if head is None or fingerprint != head["fingerprint"] or previous.get("crm_reconciliation_required"):
+                    already_held = previous.get("crm_reconciliation_required", False)
                     previous["crm_reconciliation_required"] = True
                     self.store.put_case(connection, previous)
+                    if not already_held:
+                        append_event(connection, "execution.hold", "blocked", case=previous, actor=actor.actor,
+                                     reason_code="crm_reconciliation")
                     outcomes.append("reconciliation_required")
             elif isinstance(event, CRMBlockedOpportunity) or unconfirmed:
                 if unconfirmed:
                     reason = "The CRM sync was incomplete. Finish the sync before approving this opportunity."
+                    reason_code = "crm_incomplete"
                 elif event == CRM_CONFLICT:
                     reason = "The CRM reported conflicting data at the same revision. Sync a newer consistent revision."
+                    reason_code = "crm_conflict"
                 else:
                     reason = "The CRM opportunity is won but its business data cannot prepare a draft. Correct the source and sync again."
+                    reason_code = "crm_invalid"
                 record = self._new_case(
                     case_id=previous["id"] if previous else uuid.uuid4().hex,
                     source=source, subject=subject, title="CRM opportunity requires review", kind="undocumented",
@@ -522,10 +542,10 @@ class Workbench:
                 )
                 if unconfirmed:
                     record["crm_unconfirmed"] = True
-                self.store.put_case(connection, record)
+                self._save_proposal(connection, record, actor, previous=previous, blocked_reason=reason_code)
             elif isinstance(event, OpportunityEvent):
                 record = self._opportunity_case(event, actor, previous, profile=profile, exact_reference=True)
-                self.store.put_case(connection, record)
+                self._save_proposal(connection, record, actor, previous=previous)
                 connection.execute("INSERT INTO events(source,id,fingerprint,case_id) VALUES (?,?,?,?)",
                                    (source, event.id, event.fingerprint, record["id"]))
                 outcomes.append("applied")
@@ -538,7 +558,7 @@ class Workbench:
                     source_payload_hash=fingerprint, profile=previous.get("profile"), private=True,
                 )
                 record["status"] = "withdrawn"
-                self.store.put_case(connection, record)
+                self._save_proposal(connection, record, actor, previous=previous)
                 outcomes.append("withdrawn")
             connection.execute(
                 """INSERT INTO crm_revisions(source,subject,record_version,fingerprint) VALUES (?,?,?,?)
@@ -618,6 +638,11 @@ class Workbench:
                         (proof["issuer"], proof["request_id"], case_id, revision, canonical(proof).decode()),
                     )
                 self.store.put_case(connection, record)
+                decision_outcome = {"approve": "approved", "reject": "rejected",
+                                    "request_changes": "changes_requested"}[decision]
+                append_event(connection, "decision.recorded", decision_outcome, case=record, actor=actor.actor,
+                             channel=proof["channel"] if proof else "direct",
+                             request_id=proof["request_id"] if proof else None)
         if record["status"] == "applying" and not self._defer_execution:
             record = self._apply(record)
         return self._public(record, actor)
@@ -680,18 +705,21 @@ class Workbench:
             if current.get("execution_started") is not True:
                 current["execution_started"] = True
                 self.store.put_case(connection, current)
-            authoritative = self._connector is None and connection.execute(
-                "SELECT 1 FROM crm_revisions WHERE source = ? AND subject = ?",
-                (current["source"], current["subject"]),
-            ).fetchone() is not None
+                append_event(connection, "execution.claimed", "success", case=current,
+                             actor=current.get("decision_actor"))
         record = current
 
-        def sandbox_write_allowed(connection: sqlite3.Connection) -> bool:
-            return self._write_candidate(connection, record)["status"] == "applying"
+        def authorize_dispatch(connection: sqlite3.Connection) -> bool:
+            candidate = self._write_candidate(connection, record)
+            if candidate["status"] != "applying":
+                return False
+            append_event(connection, "execution.dispatch_authorized", "success", case=candidate,
+                         actor=candidate.get("decision_actor"))
+            return True
 
         def connector_write_allowed() -> bool:
-            with self.store.transaction(write=False) as connection:
-                return sandbox_write_allowed(connection)
+            with self.store.transaction() as connection:
+                return authorize_dispatch(connection)
 
         # Connector writes are idempotent because a retry and a worker can overlap.
         external_ref = "wb-" + digest([self.workspace, record["source"], record["subject"], record["action"]["type"]])
@@ -700,25 +728,38 @@ class Workbench:
             if self._connector is not None:
                 receipt = write_and_verify(self._connector, self._target, external_ref, fields,
                                            before_write=connector_write_allowed)
-            elif authoritative:
-                receipt = self.store.create_draft(external_ref, fields, before_write=sandbox_write_allowed)
             else:
-                receipt = self.store.create_draft(external_ref, fields)
+                receipt = self.store.create_draft(external_ref, fields, before_write=authorize_dispatch)
         except TimeoutError:
-            raise WorkbenchError("outcome_unknown_retry_same_approval", 503) from None
+            uncertainty = WorkbenchError("outcome_unknown_retry_same_approval", 503)
+            try:
+                with self.store.transaction() as connection:
+                    current = self._read_exact_execution(connection, record)
+                    if current["status"] == "applying":
+                        append_event(connection, "execution.unknown", "unknown", case=current,
+                                     actor=current.get("decision_actor"), reason_code="erp_timeout")
+            except (sqlite3.Error, WorkbenchError) as audit_error:
+                # The ERP may already have written. Preserve the recovery signal.
+                raise uncertainty from audit_error
+            raise uncertainty from None
         except WorkbenchError as error:
             if str(error) in {"draft_readback_conflict", "draft_conflict"}:
                 with self.store.transaction() as connection:
                     current = self._read_exact_execution(connection, record)
                     # The existing reconciliation flag also holds definitive ERP conflicts.
-                    current["crm_reconciliation_required"] = True
-                    self.store.put_case(connection, current)
+                    if not current.get("crm_reconciliation_required"):
+                        current["crm_reconciliation_required"] = True
+                        self.store.put_case(connection, current)
+                        append_event(connection, "execution.hold", "blocked", case=current,
+                                     actor=current.get("decision_actor"), reason_code="erp_readback_conflict")
             raise
         with self.store.transaction() as connection:
             current = self._read_exact_execution(connection, record)
             if current["status"] == "applying":
                 current.update(status="executed", receipt=receipt)
                 self.store.put_case(connection, current)
+                append_event(connection, "execution.completed", "success", case=current,
+                             actor=current.get("decision_actor"))
         return current
 
     def feedback(self, case_id: str, actor: WorkActor, *, rating: str, comment: str) -> None:
@@ -781,7 +822,7 @@ class Workbench:
             record = self._new_case(case_id=uuid.uuid4().hex, source="workbench-review", subject=subject,
                                     title=title, kind=kind, reason=reason, evidence=evidence, actor=actor,
                                     private=private)
-            self.store.put_case(connection, record)
+            self._save_proposal(connection, record, actor)
         return record
 
     def seed(self) -> None:

@@ -8,13 +8,46 @@ body, a query string or an identity header value sent by an untrusted source.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import logging
 import sys
+from collections.abc import Mapping
 from typing import Any
 
 SECURITY_LOGGER = "factory.security"
 AUDIT_LOGGER = "factory.audit"
+API_LOGGER = "factory.api"
+HTTP_METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"})
+
+
+def reference(kind: str, value: str | None) -> str | None:
+    """Correlate operational events without emitting the original identifier."""
+    if value is None:
+        return None
+    data = json.dumps(["factory-operational-ref-v1", kind, value], ensure_ascii=True).encode("ascii")
+    return hashlib.sha256(data).hexdigest()
+
+
+def route_label(scope: Mapping[str, Any]) -> str:
+    """Read the application-defined route template, never the incoming path."""
+    template = getattr(scope.get("route"), "path", None)
+    return template if isinstance(template, str) else "unresolved"
+
+
+def _scrub_asgi_exception(record: logging.LogRecord) -> bool:
+    # Starlette re-raises after the generic HTTP 500, causing Uvicorn to log the exception again.
+    if record.msg == "Exception in ASGI application\n":
+        record.msg = "Exception in ASGI application"
+        record.args = ()
+        record.exc_info = None
+        record.exc_text = None
+        record.stack_info = None
+    return True
+
+
+def protect_uvicorn_errors() -> None:
+    logging.getLogger("uvicorn.error").addFilter(_scrub_asgi_exception)
 
 
 class _StderrHandler(logging.StreamHandler):  # type: ignore[type-arg]

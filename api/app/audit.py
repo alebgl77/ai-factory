@@ -254,8 +254,8 @@ class AuditLog:
         with self._mutex:
             self._cache = (self._stat_key(), new)
         seclog.emit(seclog.AUDIT_LOGGER, "audit.appended", logging.INFO, seq=record["seq"], action=action,
-                    target=target, outcome=outcome, hash=record["hash"], prev_hash=record["prev_hash"],
-                    request_id=ctx.request_id)
+                    target_ref=seclog.reference("target", target), outcome=outcome, hash=record["hash"],
+                    prev_hash=record["prev_hash"], request_ref=seclog.reference("request", ctx.request_id))
         return record
 
 
