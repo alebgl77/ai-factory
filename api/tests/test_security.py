@@ -21,8 +21,8 @@ from app.main import SWAGGER_UI_VERSION, create_app
 from app.security import (ASSESSMENT, AUDIT_READ, AUTHENTICATED, MODEL_VERSION, PLACEMENT_DECIDE, READ, ROLES,
                           SPACES_WRITE, RateLimiter, SecurityConfig, roles_granting)
 from app.settings import Settings
-from app.state import SeparationOfDuties, StateStore
-from tests.conftest import FIXTURE_DIR, NOW, TODAY
+from app.state import SeparationOfDuties, StateStore, apply_registry_overrides
+from tests.conftest import FIXTURE_DIR, NOW, TODAY, review_body
 
 API_DIR = Path(__file__).resolve().parents[1]
 TRUSTED_PEER = ("10.0.0.5", 41000)
@@ -88,6 +88,10 @@ EXPECTED_PERMISSIONS = {(m, p): perm for m, p, _, perm in ENDPOINTS}
 
 def call(client: TestClient, method: str, path: str, body: dict[str, Any] | None, headers: dict[str, str] | None = None,
          **kwargs: Any):
+    if body is not None and path.endswith("/assessment"):
+        proposal = client.get(path.removesuffix("/assessment"), headers=headers)
+        revision = proposal.json()["review_revision"] if proposal.is_success else "0" * 64
+        body = {**body, "expected_review_revision": revision}
     return client.request(method, path, json=body, headers=headers, **kwargs)
 
 
@@ -277,25 +281,25 @@ def test_four_eyes_refuses_self_approval_and_records_the_reviewer(tmp_path):
     alice = who("alice", "grp-maintainer", "grp-approver")  # holds both duties on purpose
     assert client.post("/api/v1/registry/uc-02/model-version", json={"version": "2026-11"},
                        headers=alice).status_code == 200
-    r = client.post("/api/v1/registry/uc-02/assessment", json={"decision": "approved", "reviewer": "p07"},
-                    headers=alice)
+    body = review_body(client, "uc-02", headers=alice)
+    r = client.post("/api/v1/registry/uc-02/assessment", json=body, headers=alice)
     assert r.status_code == 403 and r.json()["code"] == "separation_of_duties"
     assert "2026-11" in r.json()["detail"]
     fr = client.post("/api/v1/registry/uc-02/assessment", params={"lang": "fr"},
-                     json={"decision": "approved_with_conditions", "reviewer": "p07"}, headers=alice)
+                     json={**body, "decision": "approved_with_conditions"}, headers=alice)
     assert fr.status_code == 403 and fr.json()["detail"].startswith("séparation des tâches")
     # nothing changed: the deployment gate stays blocked
     assert client.get("/api/v1/registry/uc-02", headers=alice).json()["risk"]["reevaluation_required"] is True
     # the same person, through another account carrying the same e-mail, is still refused
-    r = client.post("/api/v1/registry/uc-02/assessment", json={"decision": "approved", "reviewer": "p07"},
+    r = client.post("/api/v1/registry/uc-02/assessment", json=body,
                     headers=who("alice.admin", "grp-approver", email="ALICE@example.org"))
     assert r.status_code == 403
     # rejecting or keeping pending stays possible (the gate stays closed)
-    r = client.post("/api/v1/registry/uc-02/assessment", json={"decision": "pending", "reviewer": "p07"},
+    r = client.post("/api/v1/registry/uc-02/assessment", json={**body, "decision": "pending"},
                     headers=alice)
     assert r.status_code == 200 and r.json()["assessment"]["separation_of_duties"] == "not_required"
     # an independent approver can approve; the authenticated reviewer is recorded
-    r = client.post("/api/v1/registry/uc-02/assessment", json={"decision": "approved", "reviewer": "p07"},
+    r = client.post("/api/v1/registry/uc-02/assessment", json=body,
                     headers=who("bob", "grp-approver"))
     assert r.status_code == 200, r.text
     a = r.json()["assessment"]
@@ -307,15 +311,16 @@ def test_four_eyes_refuses_self_approval_and_records_the_reviewer(tmp_path):
 
 
 def test_four_eyes_version_defined_in_git_has_no_api_recorder(tmp_path):
-    r = proxy(tmp_path).post("/api/v1/registry/uc-01/assessment", json={"decision": "approved", "reviewer": "p07"},
-                             headers=who("bob", "grp-approver"))
+    client = proxy(tmp_path)
+    bob = who("bob", "grp-approver")
+    r = client.post("/api/v1/registry/uc-01/assessment", json=review_body(client, "uc-01", headers=bob), headers=bob)
     assert r.status_code == 200 and r.json()["assessment"]["separation_of_duties"] == "unknown_recorder"
 
 
 def test_four_eyes_not_enforced_in_demo_mode_but_recorded(tmp_path):
     client = build(tmp_path)
     client.post("/api/v1/registry/uc-02/model-version", json={"version": "2026-11"})
-    r = client.post("/api/v1/registry/uc-02/assessment", json={"decision": "approved", "reviewer": "p07"})
+    r = client.post("/api/v1/registry/uc-02/assessment", json=review_body(client, "uc-02"))
     assert r.status_code == 200 and r.json()["assessment"]["separation_of_duties"] == "not_enforced"
     assert r.json()["assessment"]["reviewed_by"] == "anonymous"
 
@@ -326,9 +331,46 @@ def test_four_eyes_is_checked_under_the_state_lock(tmp_path, cfg):
     alice = AuditContext(actor="alice@example.org", role="maintainer", auth_mode="proxy", request_id="r1",
                          client_ip="10.0.0.9", ids=frozenset({"alice", "alice@example.org"}), authenticated=True)
     store.set_model_version(uc, "2026-11", None, TODAY, audit=alice)
-    uc2 = {**uc, "model": {**uc["model"], "version": "2026-11"}}
+    proposal = apply_registry_overrides([uc], store.registry_overrides())[0]
     with pytest.raises(SeparationOfDuties):
-        store.record_assessment(uc2, "approved", "p07", TODAY, audit=alice, enforce_four_eyes=True)
+        store.record_assessment(uc, "approved", "p07", TODAY, expected_review_revision=proposal["review_revision"],
+                                audit=alice, enforce_four_eyes=True)
+
+
+def test_stale_assessment_cannot_approve_new_or_reused_model_version(tmp_path):
+    client = proxy(tmp_path)
+    maintainer, approver = who("maya", "grp-maintainer"), who("amir", "grp-approver")
+    path = "/api/v1/registry/uc-02"
+    old = review_body(client, "uc-02", headers=approver)
+    original_version = client.get(path, headers=approver).json()["model"]["version"]
+    proposal = client.post(f"{path}/model-version", json={"version": "2026-11", "name": "private-model-label"},
+                           headers=maintainer)
+    assert proposal.status_code == 200
+    overlay = tmp_path / "state" / "registry_overrides.json"
+    before = overlay.read_bytes()
+    stale = client.post(f"{path}/assessment", params={"lang": "fr"}, json=old, headers=approver)
+    assert stale.status_code == 409 and stale.json()["code"] == "stale_review_revision"
+    assert stale.json()["detail"].startswith("la proposition a changé")
+    assert overlay.read_bytes() == before
+    denied = audit_lines(tmp_path)[-1]
+    assert denied["action"] == "registry.assessment" and denied["outcome"] == "denied"
+    assert denied["before_hash"] == denied["after_hash"]
+    assert denied["details"] == {"decision": "approved", "reason": "stale_review_revision"}
+    assert "private-model-label" not in stale.text
+    assert "private-model-label" not in json.dumps(denied)
+    assert old["expected_review_revision"] not in json.dumps(denied)
+    assert client.get(path, headers=approver).json()["pipeline"]["blocked_by"] == "risk_reassessment"
+
+    returned = client.post(f"{path}/model-version", json={"version": original_version}, headers=maintainer)
+    assert returned.status_code == 200
+    assert returned.json()["review_revision"] != old["expected_review_revision"]
+    assert client.post(f"{path}/assessment", json=old, headers=approver).status_code == 409
+    fresh = review_body(client, "uc-02", headers=approver)
+    approved = client.post(f"{path}/assessment", json=fresh, headers=approver)
+    assert approved.status_code == 200
+    assert approved.json()["assessment"]["reviewed_revision"] == fresh["expected_review_revision"]
+    assert approved.json()["deploy_gate"] == "open"
+    assert client.get("/api/v1/audit/verify", headers=approver).json()["ok"] is True
 
 
 # ------------------------------------------------------------------------------------ audit log
@@ -338,7 +380,7 @@ def test_every_write_is_audited_with_a_valid_chain(tmp_path):
     rid = "req-0001-abc"
     assert client.post("/api/v1/registry/uc-02/model-version", json={"version": "2026-11", "name": "Secret name"},
                        headers={**m, "X-Request-ID": rid}).status_code == 200
-    assert client.post("/api/v1/registry/uc-02/assessment", json={"decision": "approved", "reviewer": "p07"},
+    assert client.post("/api/v1/registry/uc-02/assessment", json=review_body(client, "uc-02", headers=a),
                        headers=a).status_code == 200
     assert client.put("/api/v1/spaces/state", json={"version": 0, "state": {"bookings": [{"note": "BODY-SENTINEL"}]}},
                       headers=e).status_code == 200

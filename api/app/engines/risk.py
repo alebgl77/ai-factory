@@ -82,6 +82,8 @@ def reevaluation(uc: dict[str, Any], lang: str = DEFAULT_LANG) -> tuple[bool, st
     if version is not None and str(version) != str(reviewed):
         last = reviewed if reviewed is not None else msg(lang, "risk.reason.no_review")
         reasons.append(msg(lang, "risk.reason.model_not_reviewed", version=str(version), last=str(last)))
+    elif assessment.get("reviewed_revision") and assessment["reviewed_revision"] != uc.get("review_revision"):
+        reasons.append(msg(lang, "risk.reason.proposal_changed"))
     if decision == "pending" or decision is None:
         reasons.append(msg(lang, "risk.reason.assessment_pending"))
     if not reasons:
@@ -213,6 +215,7 @@ def evaluate_registry(usecases: list[dict[str, Any]], factory_cfg: dict[str, Any
                 "history": list(model.get("history") or []),
             },
             "assessment": dict(uc.get("assessment") or {}),
+            "review_revision": uc.get("review_revision"),
             "squad": squad_of(uc, people),
             "kpis": dict(uc.get("kpis") or {}),
             "rag": dict(uc.get("rag") or {}) if uc.get("rag") else None,

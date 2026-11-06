@@ -132,6 +132,11 @@ gate closed). Every assessment records `reviewed_by`, `reviewed_by_role` and
 `separation_of_duties`: `verified`, `unknown_recorder` (version defined in Git and reviewed
 there), `not_required` or `not_enforced` (demo mode).
 
+Registry reads and the snapshot expose `review_revision`, an opaque SHA-256 value. Send it as
+`expected_review_revision` in the assessment request together with `decision` and `reviewer`.
+A missing or malformed revision returns 422. A stale revision returns 409 with
+`code: stale_review_revision`. Read the current proposal and review it again before resubmitting.
+
 ### Tamper-evident audit log
 
 Every write (model version, assessment, bookings, placement decision) appends one JSON line to

@@ -2,6 +2,8 @@ import json
 
 import pytest
 
+from tests.conftest import review_body
+
 SNAPSHOT_KEYS = {"meta", "factory", "profiles", "registry", "costs", "pipeline", "dataloop", "placement",
                  "agentops", "catalog", "skills", "rnd", "gpu", "grafana"}
 
@@ -110,19 +112,22 @@ def test_post_model_version_flips_reevaluation(client):
 
 def test_post_assessment_clears_flag(client):
     assert client.get("/api/v1/registry/uc-01").json()["risk"]["reevaluation_required"] is True
-    r = client.post("/api/v1/registry/uc-01/assessment", json={"decision": "approved", "reviewer": "p07"})
+    body = review_body(client, "uc-01")
+    r = client.post("/api/v1/registry/uc-01/assessment", json=body)
     assert r.status_code == 200, r.text
     assert r.json()["reevaluation_required"] is False
     item = client.get("/api/v1/registry/uc-01").json()
     assert item["assessment"]["reviewed_model_version"] == "2026-09"
+    assert item["assessment"]["reviewed_revision"] == body["expected_review_revision"]
     assert item["pipeline"]["blocked_by"] != "risk_reassessment"
-    r = client.post("/api/v1/registry/uc-01/assessment", json={"decision": "pending", "reviewer": "p07"})
+    r = client.post("/api/v1/registry/uc-01/assessment", json={**body, "decision": "pending"})
     assert r.json()["reevaluation_required"] is True
 
 
 def test_model_version_then_assessment_unblocks(client):
     client.post("/api/v1/registry/uc-02/model-version", json={"version": "2026-12"})
-    client.post("/api/v1/registry/uc-02/assessment", json={"decision": "approved_with_conditions", "reviewer": "p07"})
+    client.post("/api/v1/registry/uc-02/assessment",
+                json=review_body(client, "uc-02", decision="approved_with_conditions"))
     item = client.get("/api/v1/registry/uc-02").json()
     assert item["risk"]["reevaluation_required"] is False
     assert item["pipeline"]["blocked_by"] is None
@@ -135,11 +140,14 @@ def test_model_version_validation(client, payload):
 
 
 def test_assessment_validation(client):
-    assert client.post("/api/v1/registry/uc-01/assessment", json={"decision": "ok", "reviewer": "p07"}).status_code == 422
+    body = review_body(client, "uc-01")
+    assert client.post("/api/v1/registry/uc-01/assessment", json={**body, "decision": "ok"}).status_code == 422
+    assert client.post("/api/v1/registry/uc-01/assessment", json={**body, "reviewer": "p99"}).status_code == 422
     assert client.post("/api/v1/registry/uc-01/assessment",
-                       json={"decision": "approved", "reviewer": "p99"}).status_code == 422
-    assert client.post("/api/v1/registry/uc-99/assessment",
-                       json={"decision": "approved", "reviewer": "p07"}).status_code == 404
+                       json={**body, "expected_review_revision": "x" * 64}).status_code == 422
+    assert client.post("/api/v1/registry/uc-01/assessment",
+                       json={"decision": "approved", "reviewer": "p07"}).status_code == 422
+    assert client.post("/api/v1/registry/uc-99/assessment", json=body).status_code == 404
 
 
 def test_state_persists_across_app_instances(make_client):

@@ -169,8 +169,12 @@ kpis: { adoption_target: 0.6, value_metric: "Temps de recherche documentaire", v
 - `nist_progress`: share of the 4 functions with `done` (partial counts 0.5).
 - `POST /api/v1/registry/{id}/model-version {version, name?}` appends to history, sets the new
   version, and therefore flips `reevaluation_required` to true (the response says so).
-- `POST /api/v1/registry/{id}/assessment {decision, reviewer}` records a review of the current
-  version (clears the flag when `decision` is `approved*`).
+- Registry reads and the snapshot expose `review_revision`, an opaque SHA-256 value for the
+  proposal being reviewed. `POST /api/v1/registry/{id}/assessment` requires
+  `{decision, reviewer, expected_review_revision}` with the value seen by the reviewer. A missing
+  or malformed value returns 422. A stale value returns 409 with `code: stale_review_revision`.
+  Read the proposal again before submitting a new decision. An accepted `approved*` review clears
+  the re-evaluation flag.
 - With authentication on, an approving `POST /assessment` by the identity that recorded the
   current model version through the API is refused with 403 `separation_of_duties` (four-eyes).
   The assessment records `reviewed_by`, `reviewed_by_role` and `separation_of_duties`
@@ -345,7 +349,7 @@ of each section. A snapshot with only demo or unavailable telemetry omits the co
   "profiles": { "roles": [ ... ], "people": [ ... ] },
   "registry": [ { "id": "uc-01", "code": "UC-01", "name": "...", "stage": "mvp", "sensitivity": "C3",
                   "sensitive": true, "color": "#0072b2", "owner": "p02", "cost_center": "cc-ops",
-                  "task_type": "rag_qa",
+                  "task_type": "rag_qa", "review_revision": "<opaque SHA-256 hex>",
                   "risk": { "tier": "limited", "gpai": true, "annex_iii_area": null,
                             "applicable_from": "2026-08-02", "days_left": -93,
                             "reevaluation_required": true, "reason": "model 2026-09 not reviewed (last 2026-06)",
@@ -525,7 +529,8 @@ Requests carry `metadata.usecase` (and `metadata.agent`) for cost attribution.
 - Supply chain: every Python dependency installs from a hash-pinned lock (`requirements*.txt`
   compiled from `requirements*.in` by pip-compile, `pip install --require-hashes`); Dockerfile
   base images and the Dockerfile frontend are pinned as `tag@sha256:digest`.
-- Releases (tag `v*`): images built from this repository are published as
+- Releases (tag `v*`) require successful latest `push` runs of CI, security and CodeQL on the
+  default branch for the exact tagged commit. Images built from this repository are published as
   `ghcr.io/<owner>/<name>` (api, dashboard, mock-llm, traffic, gpu-sim, grafana-bootstrap;
   linux/amd64), signed keyless with cosign, with SLSA build provenance and SBOM attestations
   (SPDX 2.3, CycloneDX); verify with `.github/scripts/verify_image.sh`.

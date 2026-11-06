@@ -5,46 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="AI Factory companion for agent conversations and human decisions.">
   <title>Companion · AI Factory</title>
+  <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="companion.css">
   <script defer src="demo.js"></script>
   <script defer src="companion.js"></script>
 </head>
 <body>
   <header class="top">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">AF</span><span>AI FACTORY <small>COMPANION</small></span></div>
-    <div class="top-links">
-      <a id="return-factory" href="../index.html">Factory</a>
-      <label class="sr-only" for="language">Language</label>
-      <select id="language"><option value="en" lang="en">EN</option><option value="fr" lang="fr">FR</option></select>
+    <div class="top-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 15.5 8 4h3l5 11.5M5 11h9M16 4h5m-3 0v7h3M3 20h18" stroke-linecap="square"/></svg></span><span>AI Factory <small>Companion</small></span></div>
+      <div class="top-links">
+        <a id="return-factory" href="../index.html"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span data-i18n="factory">Factory</span></a>
+        <label class="sr-only" for="language" data-i18n="language">Language</label>
+        <select id="language"><option value="en" lang="en">EN</option><option value="fr" lang="fr">FR</option></select>
+      </div>
     </div>
   </header>
 
   <main class="workspace">
     <section class="intro" aria-labelledby="page-title">
-      <p class="eyebrow" data-i18n="eyebrow">HUMAN DECISION DESK</p>
-      <h1 id="page-title" data-i18n="title">Take a decision.</h1>
-      <p class="lede" data-i18n="intro">Inspect what an agent proposes, ask a question and leave a reasoned decision.</p>
+      <div>
+        <p class="eyebrow" data-i18n="eyebrow">HUMAN OVERSIGHT</p>
+        <h1 id="page-title" data-i18n="title">Decision desk</h1>
+        <p class="lede" data-i18n="intro">Review agent proposals, ask questions and record your decisions.</p>
+      </div>
       <p id="connection" class="mode" role="status"></p>
     </section>
-    <nav class="switcher" aria-label="Workspace">
-      <button id="queue-tab" type="button" aria-pressed="true"><span data-i18n="queue">Decision inbox</span> <span id="queue-count" class="count" aria-hidden="true">0</span></button>
-      <button id="chat-tab" type="button" aria-pressed="false" data-i18n="chat">Agent conversation</button>
+    <nav class="switcher" id="workspace-nav" aria-label="Workspace">
+      <button id="queue-tab" type="button" aria-controls="queue-view" aria-pressed="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5h16l2 9v5H2v-5l2-9Zm-2 9h6l2 2h4l2-2h6"/></svg><span data-i18n="queue">Decision inbox</span><span id="queue-count" class="count" aria-hidden="true">0</span></button>
+      <button id="chat-tab" type="button" aria-controls="chat-view" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 4h18v12H9l-6 4V4Zm4 5h10m-10 3h7"/></svg><span data-i18n="chat">Agent conversation</span></button>
     </nav>
+    <p id="workspace-notice" class="notice" role="status"></p>
 
-    <section id="queue-view" class="desk" aria-labelledby="queue-tab">
-      <aside class="inbox">
+    <section id="queue-view" class="desk" data-screen="inbox" aria-labelledby="queue-tab">
+      <aside class="inbox" aria-labelledby="inbox-title">
         <div class="inbox-head">
-          <h2 data-i18n="cases">Cases</h2>
-          <button type="button" id="refresh" class="text-button" data-i18n="refresh">Refresh</button>
+          <h2 id="inbox-title" data-i18n="cases">Cases</h2>
+          <button type="button" id="refresh" class="text-button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 10a8 8 0 1 0 0 5m0-10v5h-5"/></svg><span data-i18n="refresh">Refresh</span></button>
         </div>
-        <p id="empty" class="muted" hidden></p>
+        <p id="inbox-notice" class="notice" role="status"></p>
+        <p id="empty" class="empty-state muted" hidden></p>
         <ul id="cases" class="case-list"></ul>
       </aside>
-      <article class="case-detail" id="case-detail" hidden>
-        <p id="case-label" class="eyebrow"></p>
-        <h2 id="case-title"></h2>
-        <div class="case-meta"><span class="pill" id="case-status"></span><span id="case-revision"></span></div>
-        <p id="case-reason"></p>
+      <article class="case-detail" id="case-detail" aria-labelledby="case-title" hidden>
+        <div class="mobile-case-nav">
+          <button id="back-to-cases" class="text-button" type="button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span data-i18n="back">Back to cases</span></button>
+          <button id="refresh-case" class="text-button" type="button" data-i18n="refresh">Refresh</button>
+        </div>
+        <div class="case-head">
+          <p id="case-label" class="eyebrow"></p>
+          <h2 id="case-title" tabindex="-1"></h2>
+          <div class="case-meta"><span class="pill" id="case-status"></span><span id="case-revision"></span></div>
+          <p id="case-reason"></p>
+          <p id="case-notice" class="notice" role="status"></p>
+        </div>
         <section id="action" class="detail-section" aria-labelledby="action-title" hidden>
           <h3 id="action-title" data-i18n="proposal">Proposed action</h3>
           <p id="action-type" class="mono"></p>
@@ -55,21 +69,26 @@
           <ul id="evidence-items" class="evidence-list"></ul>
         </section>
         <section id="receipt" class="receipt" aria-labelledby="receipt-title" hidden>
-          <h3 id="receipt-title" data-i18n="receipt">Execution receipt</h3>
-          <p id="receipt-id" class="mono"></p>
-          <p id="receipt-time" class="muted"></p>
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 3h14v18l-3-2-4 2-4-2-3 2V3Zm3 9 3 3 5-6"/></svg>
+          <div>
+            <h3 id="receipt-title" data-i18n="receipt">Execution receipt</h3>
+            <p id="receipt-id" class="mono"></p>
+            <p id="receipt-time" class="muted"></p>
+          </div>
         </section>
         <p id="case-decision-time" class="muted" hidden></p>
         <section class="detail-section" aria-labelledby="history-title">
-          <h3 id="history-title" data-i18n="history">Decision history</h3>
-          <button id="history-toggle" type="button" aria-controls="history-panel" aria-expanded="false" data-i18n="openHistory">Show history</button>
+          <div class="section-head">
+            <h3 id="history-title" data-i18n="history">Decision history</h3>
+            <button id="history-toggle" class="text-button" type="button" aria-controls="history-panel" aria-expanded="false" data-i18n="openHistory">Show history</button>
+          </div>
           <div id="history-panel" hidden>
             <p id="history-status" class="muted" role="status"></p>
             <ul id="history-items" class="evidence-list"></ul>
             <p id="history-feedback" class="muted"></p>
           </div>
         </section>
-        <form id="decision-form" class="detail-section">
+        <form id="decision-form" class="detail-section decision-form">
           <h3 data-i18n="decision">Human decision</h3>
           <p id="approval-expiry" class="muted" hidden></p>
           <label for="rationale" data-i18n="rationale">Reason for the decision</label>
@@ -80,6 +99,7 @@
             <button type="submit" name="decision" value="reject" data-i18n="reject">Reject</button>
           </div>
         </form>
+        <p id="decision-notice" class="notice" role="status" tabindex="-1"></p>
         <p id="decision-readonly" class="muted" hidden></p>
         <form id="feedback-form" class="detail-section">
           <h3 data-i18n="feedback">Give feedback</h3>
@@ -89,6 +109,7 @@
             <button type="submit" name="rating" value="helpful" data-i18n="helpful">Helpful</button>
             <button type="submit" name="rating" value="needs_work" data-i18n="needs_work">Needs work</button>
           </div>
+          <p id="feedback-notice" class="notice" role="status"></p>
         </form>
       </article>
     </section>
@@ -108,8 +129,11 @@
           </select>
         </div>
       </div>
-      <p id="chat-context" class="context"></p>
-      <p class="muted" data-i18n="chatHelp">Ask for evidence or request a human review for a strategic or undocumented choice.</p>
+      <div class="chat-context">
+        <p id="chat-context" class="context"></p>
+        <p class="muted" data-i18n="chatHelp">Ask for evidence or request a human review for a strategic or undocumented choice.</p>
+      </div>
+      <p id="chat-empty" class="empty-state muted" data-i18n="chatEmpty">Start with a question about the proposal.</p>
       <ol id="messages" class="messages" role="log" aria-live="polite" aria-relevant="additions"></ol>
       <button type="button" id="escalation" class="escalation" data-i18n="openReview" hidden>Open the human review</button>
       <form id="chat-form">
@@ -117,9 +141,9 @@
         <textarea id="message" maxlength="1000" rows="3" aria-describedby="chat-privacy" required></textarea>
         <p id="chat-privacy" class="muted privacy" data-i18n="privacy">Questions sent for human review are shared with workspace reviewers. Use only information appropriate for this workspace.</p>
         <div class="buttons"><button type="submit" class="primary" data-i18n="send">Send</button></div>
+        <p id="chat-notice" class="notice" role="status"></p>
       </form>
     </section>
-    <p id="notice" role="status" class="notice" hidden></p>
     <noscript>Enable JavaScript to open the Companion. Activez JavaScript pour ouvrir le Compagnon.</noscript>
   </main>
 </body>
