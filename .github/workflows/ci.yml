@@ -47,7 +47,7 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: api/requirements*.txt
-      - run: pip install --require-hashes -r api/requirements-dev.txt
+      - run: pip install --require-hashes -r api/requirements-dev.txt -r api/requirements-mcp.txt
       - run: python -m pytest
         working-directory: api
 

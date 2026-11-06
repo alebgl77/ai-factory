@@ -40,6 +40,8 @@ Le métier, le risque et la plateforme examinent une mise en service fictive, si
 
 Ouvrez le **Compagnon de décision** depuis le tableau de bord ou l’atelier pour utiliser le Workbench sur un téléphone. Le [guide Workbench](docs/fr/WORKBENCH.md) décrit la démo hors ligne, les approbations et le contrat d’intégration.
 
+Intégrez le **Workbench adaptatif** à un agent ou à une application avec `python -m pip install ./api`, puis lancez `python examples/adaptive_workbench.py`. Le [guide d’intégration](docs/fr/ADAPTIVE_WORKBENCH.md) couvre les méthodes de travail, le skill MCP, les canaux d’approbation et la reprise ERP.
+
 ### Démarrage local (sans aucune clé)
 
 Prérequis : Docker 24+ avec Compose v2, 4 vCPU, 8 Go de RAM libres, ports 80 et 443 disponibles.

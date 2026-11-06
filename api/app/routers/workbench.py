@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from ..security import READ, Access, require
-from ..workbench.service import Workbench
-from ..workbench.store import WorkbenchError
+from ai_factory_workbench import Workbench, WorkbenchError
+from ai_factory_workbench.approvals import ApprovalRelay, RelayAuthority
+from ai_factory_workbench.interface_models import CASE_ID_PATTERN, ReviewInput, SurfaceInput
+from ai_factory_workbench.profiles import WorkProfile, get_profile, list_profiles
 
-CaseID = Annotated[str, Path(pattern=r"^[0-9a-f]{32}$")]
+from ..security import READ, Access, require
+
+CaseID = Annotated[str, Path(pattern=CASE_ID_PATTERN)]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
 RequiredText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
 Reader = Annotated[Access, Depends(require(READ))]
@@ -96,8 +100,57 @@ class ChatIn(BaseModel):
     case_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
 
 
+class SignedApprovalIn(SurfaceInput):
+    envelope: dict[Annotated[str, StringConstraints(max_length=40)],
+                   Annotated[str, StringConstraints(min_length=1, max_length=1000)] | int] = Field(max_length=16)
+    signature: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+def configure_workbench_surfaces(
+    app: FastAPI, *, profile: str | WorkProfile = "governance", engine: Workbench | None = None,
+    authorities: Iterable[RelayAuthority] = (),
+) -> None:
+    """Bind an operator-selected engine, profile and signed relay at startup.
+
+    Use with an app whose Workbench routes were explicitly enabled. The injected
+    engine keeps the configured HTTP access mode. Relays require proxy auth.
+    """
+    current = getattr(app.state, "workbench", None)
+    if current is None:
+        raise ValueError("Enable Workbench routes before configuring their surfaces")
+    selected = engine if engine is not None else current
+    if selected.mode != current.mode:
+        raise ValueError("Injected Workbench must use the configured access mode")
+    selected_profile = profile if isinstance(profile, WorkProfile) else get_profile(profile)
+    trusted = tuple(authorities)
+    if trusted and (selected.mode != "protected_demo" or not app.state.service.guard.config.enforced):
+        raise ValueError("Signed relays require protected Workbench mode and proxy authentication")
+    relay = ApprovalRelay(selected, selected_profile, trusted) if trusted else None
+    app.state.workbench = selected
+    app.state.workbench_profile = selected_profile
+    app.state.workbench_approval_relay = relay
+    app.state.workbench_machine_actor_ids = relay.machine_actor_ids if relay is not None else frozenset()
+
+
 def _workbench(request: Request) -> Workbench:
     return request.app.state.workbench
+
+
+def _profile(request: Request) -> WorkProfile:
+    configured = getattr(request.app.state, "workbench_profile", None)
+    return configured if configured is not None else get_profile()
+
+
+def _signed_service_only(request: Request, access: Access) -> bool:
+    machine_ids = getattr(request.app.state, "workbench_machine_actor_ids", frozenset())
+    ids = access.principal.ids | {access.principal.actor}
+    aliases = ids | {alias.lower() for alias in ids if "@" in alias}
+    return not machine_ids.isdisjoint(aliases)
+
+
+def _hide_direct_decision(case: dict[str, Any]) -> None:
+    case["can_decide"] = False
+    case.pop("decision_rationale", None)
 
 
 @router.get("/cases")
@@ -105,12 +158,48 @@ def cases(request: Request, access: Reader):
     workbench = _workbench(request)
     capabilities = workbench.capabilities(access.principal)
     workbench.seed()
-    return {"mode": workbench.mode, "cases": workbench.cases(access.principal), "capabilities": capabilities}
+    queue = workbench.cases(access.principal)
+    if _signed_service_only(request, access):
+        capabilities["can_decide"] = False
+        for case in queue:
+            _hide_direct_decision(case)
+    return {"mode": workbench.mode, "cases": queue, "capabilities": capabilities}
 
 
 @router.post("/events")
 def submit(request: Request, event: dict[str, Any], access: Writer):
-    return _workbench(request).submit(event, access.principal)
+    profile = _profile(request).snapshot() if access.principal.authenticated else None
+    return _workbench(request).submit(event, access.principal, profile=profile)
+
+
+@router.get("/profiles")
+def profiles(request: Request, access: Reader):
+    engine = _workbench(request)
+    engine.check_access(access.principal)
+    return {"workspace": engine.workspace, "active": _profile(request).describe(),
+            "available": [profile.describe() for profile in list_profiles()]}
+
+
+@router.post("/reviews", status_code=201)
+def prepare_review(request: Request, proposal: ReviewInput, access: Writer):
+    return _profile(request).prepare(_workbench(request), access.principal, **proposal.model_dump())
+
+
+@router.get("/cases/{case_id}")
+def case_detail(request: Request, case_id: CaseID, access: Reader):
+    case = _workbench(request).get_case(case_id, access.principal)
+    if _signed_service_only(request, access):
+        _hide_direct_decision(case)
+    return case
+
+
+@router.post("/approval-relay")
+def relay_approval(request: Request, approval: SignedApprovalIn, access: Writer):
+    relay = getattr(request.app.state, "workbench_approval_relay", None)
+    if relay is None:
+        raise HTTPException(404, detail="approval_relay_disabled")
+    _workbench(request).check_access(access.principal)
+    return relay.decide(approval.envelope, approval.signature)
 
 
 @router.get("/cases/{case_id}/history")
@@ -120,6 +209,8 @@ def history(request: Request, case_id: CaseID, access: Reader):
 
 @router.post("/cases/{case_id}/decisions")
 def decide(request: Request, case_id: CaseID, decision: DecisionIn, access: Writer):
+    if _signed_service_only(request, access):
+        raise HTTPException(403, detail="signed_service_approval_required")
     return _workbench(request).decide(case_id, access.principal, **decision.model_dump())
 
 

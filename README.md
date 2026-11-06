@@ -38,6 +38,8 @@ Business, risk and platform review a fictional release, simulate a GPU outage an
 
 Use the **Decision Companion** from the dashboard or workshop to open the Workbench on a phone. See the [Workbench guide](docs/WORKBENCH.md) for the offline demo, approval flow and integration contract.
 
+Embed the **adaptive Workbench** in an agent or application with `python -m pip install ./api`, then run `python examples/adaptive_workbench.py`. The [integration guide](docs/ADAPTIVE_WORKBENCH.md) covers working methods, the MCP skill, approval channels and ERP recovery.
+
 ### Local quick start (no key at all)
 
 Requirements: Docker 24+ with Compose v2, 4 vCPUs, 8 GB of free RAM, ports 80 and 443 available.

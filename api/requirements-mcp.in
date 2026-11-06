@@ -1,0 +1,6 @@
+# Optional MCP server and protocol-test dependencies.
+# Compile with --no-emit-package httpx2-jsfetch: Emscripten cannot run the stdio server.
+-c requirements-dev.txt
+# The API development lock is generated on Linux; pytest also needs this on Windows.
+colorama==0.4.6 ; sys_platform == "win32"
+mcp==2.3.0
