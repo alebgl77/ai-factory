@@ -9,7 +9,7 @@ Two documents are stored:
 Every write made through the API passes an :class:`app.audit.AuditContext`: the state change and
 its hash-chained audit record (``audit.jsonl``) are written under the same lock, and the state
 change is rolled back if the audit record cannot be written (no unaudited write). The four-eyes
-rule of the risk assessments is checked under that lock too, so it cannot race a new version.
+rule and the reviewed proposal revision are checked under that lock too.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import datetime as dt
+import hashlib
 import json
 import os
 import tempfile
@@ -24,7 +25,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from .audit import AuditContext, AuditLog, digest
+from .audit import AuditContext, AuditLog, canonical, digest
 
 try:  # POSIX only; on other platforms the in-process lock is the only guard.
     import fcntl
@@ -53,28 +54,38 @@ class SeparationOfDuties(RuntimeError):
         self.version = version
 
 
+class ModelVersionUnchanged(RuntimeError):
+    """A model version cannot be proposed while it is already current."""
+
+
+class StaleReviewRevision(RuntimeError):
+    """The proposal changed since the reviewer read it."""
+
+
 class VersionConflict(RuntimeError):
     def __init__(self, current: dict[str, Any]) -> None:
         super().__init__("version conflict")
         self.current = current
 
 
+def _registry_item(uc: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
+    item = copy.deepcopy(uc)
+    for section in ("model", "assessment"):
+        if isinstance(entry.get(section), dict):
+            item[section] = {**(item.get(section) or {}), **copy.deepcopy(entry[section])}
+    # Bind to the untranslated proposal, including model history. The history grows under the
+    # write lock even when a previous version is reused. Review decisions do not change the proposal.
+    proposal = {key: value for key, value in item.items() if key not in ("assessment", "review_revision")}
+    item["review_revision"] = hashlib.sha256(canonical(proposal)).hexdigest()
+    return item
+
+
 def apply_registry_overrides(usecases: list[dict[str, Any]], overrides: dict[str, Any]) -> list[dict[str, Any]]:
     """Pure: return use cases with the stored model/assessment overrides applied."""
-    out: list[dict[str, Any]] = []
+    out = []
     for uc in usecases:
-        item = copy.deepcopy(uc)
-        ov = overrides.get(str(uc.get("id"))) if isinstance(overrides, dict) else None
-        if isinstance(ov, dict):
-            if isinstance(ov.get("model"), dict):
-                model = dict(item.get("model") or {})
-                model.update(copy.deepcopy(ov["model"]))
-                item["model"] = model
-            if isinstance(ov.get("assessment"), dict):
-                assessment = dict(item.get("assessment") or {})
-                assessment.update(copy.deepcopy(ov["assessment"]))
-                item["assessment"] = assessment
-        out.append(item)
+        entry = overrides.get(str(uc.get("id"))) if isinstance(overrides, dict) else None
+        out.append(_registry_item(uc, entry if isinstance(entry, dict) else {}))
     return out
 
 
@@ -232,19 +243,30 @@ class StateStore:
             data = self._read(REGISTRY_FILE, {})
         return data if isinstance(data, dict) else {}
 
+    def _registry_for_write(self, raw: bytes | None, uc_id: str) -> dict[str, Any]:
+        """Parse the locked snapshot; corrupted data cannot be treated as a new proposal."""
+        try:
+            data = json.loads(raw) if raw is not None else {}
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise StateError("registry state is invalid") from exc
+        if not isinstance(data, dict) or not isinstance(data.get(uc_id, {}), dict):
+            raise StateError("registry state is invalid")
+        return data
+
     def set_model_version(self, uc: dict[str, Any], version: str, name: str | None, today: dt.date,
                           audit: AuditContext | None = None) -> dict[str, Any]:
-        """Append a model version for a use case (uc = current effective use case)."""
+        """Append a model version on top of the configured use case and locked overlay."""
         uc_id = str(uc["id"])
         with self._locked():
             previous_raw = self._raw(REGISTRY_FILE)
-            data = self._read(REGISTRY_FILE, {})
-            if not isinstance(data, dict):
-                data = {}
-            before = copy.deepcopy(data.get(uc_id)) if isinstance(data.get(uc_id), dict) else None
-            entry = data.get(uc_id) if isinstance(data.get(uc_id), dict) else {}
-            previous_version = (uc.get("model") or {}).get("version")
-            model = copy.deepcopy(uc.get("model") or {})
+            data = self._registry_for_write(previous_raw, uc_id)
+            before = copy.deepcopy(data.get(uc_id))
+            entry = data.get(uc_id, {})
+            current = _registry_item(uc, entry)
+            model = current.get("model") or {}
+            previous_version = model.get("version")
+            if str(previous_version) == version:
+                raise ModelVersionUnchanged
             history = [h for h in (model.get("history") or []) if isinstance(h, dict)]
             history.append({"version": version, "from": today.isoformat()})
             model["history"] = history
@@ -254,7 +276,7 @@ class StateStore:
             entry["model"] = {"version": model["version"], "name": model.get("name"), "history": history}
             # A new model version always requires a fresh risk assessment (CONTRACT 2.4): the
             # decision becomes 'pending' so the flag flips even when re-using an old version.
-            assessment = copy.deepcopy(uc.get("assessment") or {})
+            assessment = current.get("assessment") or {}
             previous = assessment.get("decision")
             assessment["decision"] = "pending"
             if previous and previous != "pending":
@@ -267,16 +289,19 @@ class StateStore:
                 entry["model_recorded_by"] = {"actor": audit.actor, "ids": sorted(audit.ids), "role": audit.role,
                                               "authenticated": audit.authenticated, "version": version,
                                               "at": entry["updated_at"]}
+            else:
+                entry.pop("model_recorded_by", None)
             data[uc_id] = entry
             record = None if audit is None else (lambda: self._append(
                 audit, action="registry.model_version", target=f"usecase:{uc_id}", before=before, after=entry,
                 details={"version": version, "previous_version": previous_version}))
             self._commit(REGISTRY_FILE, data, previous_raw, record)
-            return copy.deepcopy(entry)
+            return _registry_item(uc, entry)
 
     def record_assessment(self, uc: dict[str, Any], decision: str, reviewer: str, today: dt.date,
-                          audit: AuditContext | None = None, enforce_four_eyes: bool = False) -> dict[str, Any]:
-        """Record a review of the current model version.
+                          *, expected_review_revision: str, audit: AuditContext | None = None,
+                          enforce_four_eyes: bool = False) -> dict[str, Any]:
+        """Record a review if the configured proposal and locked model overlay still match.
 
         With ``enforce_four_eyes`` an approving decision is refused (:class:`SeparationOfDuties`, and
         a ``denied`` audit record) when the approver shares an identity key with the authenticated
@@ -285,14 +310,21 @@ class StateStore:
         uc_id = str(uc["id"])
         with self._locked():
             previous_raw = self._raw(REGISTRY_FILE)
-            data = self._read(REGISTRY_FILE, {})
-            if not isinstance(data, dict):
-                data = {}
-            before = copy.deepcopy(data.get(uc_id)) if isinstance(data.get(uc_id), dict) else None
-            entry = data.get(uc_id) if isinstance(data.get(uc_id), dict) else {}
-            version = (uc.get("model") or {}).get("version")
+            data = self._registry_for_write(previous_raw, uc_id)
+            before = copy.deepcopy(data.get(uc_id))
+            entry = data.get(uc_id, {})
+            current = _registry_item(uc, entry)
+            revision = current["review_revision"]
+            version = (current.get("model") or {}).get("version")
+            if expected_review_revision != revision:
+                if audit is not None:
+                    self._append(audit, action="registry.assessment", target=f"usecase:{uc_id}", outcome="denied",
+                                 before=before, after=before,
+                                 details={"decision": decision, "reason": "stale_review_revision"})
+                raise StaleReviewRevision
             assessment = {
                 "reviewed_model_version": version,
+                "reviewed_revision": revision,
                 "last_reviewed": today.isoformat(),
                 "reviewer": reviewer,
                 "decision": decision,
@@ -313,9 +345,10 @@ class StateStore:
             record = None if audit is None else (lambda: self._append(
                 audit, action="registry.assessment", target=f"usecase:{uc_id}", before=before, after=entry,
                 details={"decision": decision, "reviewer": reviewer, "reviewed_model_version": version,
+                         "reviewed_revision": revision,
                          "separation_of_duties": assessment.get("separation_of_duties")}))
             self._commit(REGISTRY_FILE, data, previous_raw, record)
-            return copy.deepcopy(entry)
+            return _registry_item(uc, entry)
 
     @staticmethod
     def _separation_of_duties(entry: dict[str, Any], version: Any, decision: str, audit: AuditContext,

@@ -172,6 +172,14 @@ contrôle et écriture), le refus est lui-même audité, et `pending` / `rejecte
 Chaque évaluation enregistre `reviewed_by`, `reviewed_by_role` et `separation_of_duties`
 (`verified`, `unknown_recorder`, `not_required`, `not_enforced`).
 
+Avant d'ouvrir une revue, lisez `review_revision` dans le registre ou le snapshot. Envoyez cette
+valeur SHA-256 opaque dans `expected_review_revision`. L'API la compare sous le même verrou que
+la règle des quatre yeux. Si elle est périmée, l'API renvoie 409 `stale_review_revision`.
+Rechargez le dossier et reprenez la revue. Une valeur absente ou mal formée renvoie 422.
+La révision porte sur la proposition individuelle. Examinez les politiques partagées séparément.
+Les anciennes approbations restent liées à la version du modèle jusqu'à une nouvelle revue.
+À la migration, faites revoir les dossiers actifs avant la mise en service.
+
 Limite : une version de modèle définie dans Git (`config/usecases/*.yaml`) n'a pas d'auteur
 enregistré par l'API (`unknown_recorder`) : son contrôle des quatre yeux est la revue du
 changement Git (protégez la branche par défaut et exigez une revue favorable, voir section 14,
@@ -410,7 +418,9 @@ n'ont pas été testés en exécution ici (pas de GPU).
   artefacts de CI (`security.yml`), pièces jointes des releases.
 - **Releases signées.** Les images `ghcr.io/alebgl77/<nom>` sont signées sans clé avec Sigstore
   cosign et portent des attestations de provenance SLSA et de SBOM ; les sommes de contrôle de la
-  release sont signées aussi. Vérification : [../../SECURITY.md](../../SECURITY.md#vérifier-une-release).
+  release sont signées aussi. Avant de construire les images, la release exige la réussite de la
+  dernière exécution `push` de CI, sécurité et CodeQL sur la branche par défaut, pour le commit
+  exact pointé par le tag. [Vérifier une release](../../SECURITY.md#vérifier-une-release)
 - **Politique de licences.** Uniquement des licences permissives dans le code livré ; les services
   AGPL (Grafana, Loki) tournent comme conteneurs séparés et non modifiés.
   `scripts/check_licenses.py` (job de CI `licenses`) vérifie chaque dépendance, image et
@@ -453,6 +463,30 @@ scripts sont testés unitairement.
   défaut.
 
 ## 14. Guide de durcissement pour la production
+
+La démo écoute sur la boucle locale (`EDGE_BIND=127.0.0.1`). Pour autoriser l'accès distant,
+choisissez explicitement l'interface d'écoute dans `EDGE_BIND`, configurez HTTPS et le SSO, puis
+lancez le précontrôle avec les mêmes fichiers Compose et profils que pour le déploiement.
+
+```sh
+docker compose --env-file /path/to/.env --profile sso config --format json | python scripts/check_production.py
+```
+
+Renseignez `GRAFANA_PUBLIC_URL` et `LANGFUSE_PUBLIC_URL` avec leurs URL HTTPS de production.
+Pour les services vLLM fournis, ajoutez `--profile local-gpu` au rendu et au déploiement. Pour
+un GPU accessible par DNS privé, passez `--private-gpu-host HOST` au précontrôle pour chaque nom
+exact. Vérifiez la résolution DNS et les règles de sortie sur la cible.
+
+Le JSON rendu peut contenir des secrets. Passez-le directement au script sans le consigner ni
+le stocker. Le précontrôle exige de désactiver le mode démo, le Workbench et le profil `sim`.
+Il rejette les modes réseau non autorisés et les destinations GPU de simulation ou sur IP
+publique. Vérifiez aussi TLS, l'identité, le trafic sortant réel et la reprise sur le tenant cible.
+[Revue de sécurité entreprise](../ENTERPRISE_SECURITY_REVIEW.md)
+
+Utilisez une version maintenue de Docker Engine à partir de 28.0.0. Les versions antérieures
+peuvent rendre les ports publiés sur la boucle locale accessibles à d'autres hôtes sur le même
+segment de niveau 2. Testez ces ports depuis un second hôte sur ce segment avant toute exposition.
+[Publication des ports Docker](https://docs.docker.com/engine/network/port-publishing/)
 
 À appliquer dans cet ordre. Chaque étape indique comment la vérifier.
 

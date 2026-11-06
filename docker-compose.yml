@@ -119,9 +119,17 @@ services:
       FACTORY_SECURITY_POLICY: ${FACTORY_SECURITY_POLICY:-https://github.com/alebgl77/ai-factory/security/policy}
       FACTORY_SECURITY_TXT_EXPIRES: ${FACTORY_SECURITY_TXT_EXPIRES:-2027-11-01T00:00:00Z}
     ports:
-      - "${EDGE_HTTP_PORT:-80}:80"
-      - "${EDGE_HTTPS_PORT:-443}:443"
-      - "${EDGE_HTTPS_PORT:-443}:443/udp"
+      # Keep the unauthenticated demo reachable only from the Docker host by default.
+      - target: 80
+        published: "${EDGE_HTTP_PORT:-80}"
+        host_ip: ${EDGE_BIND:-127.0.0.1}
+      - target: 443
+        published: "${EDGE_HTTPS_PORT:-443}"
+        host_ip: ${EDGE_BIND:-127.0.0.1}
+      - target: 443
+        published: "${EDGE_HTTPS_PORT:-443}"
+        host_ip: ${EDGE_BIND:-127.0.0.1}
+        protocol: udp
       - "${EDGE_ALT_BIND:-127.0.0.1}:${GRAFANA_ALT_PORT:-3001}:3001"
       - "${EDGE_ALT_BIND:-127.0.0.1}:${LANGFUSE_ALT_PORT:-3002}:3002"
     volumes:
