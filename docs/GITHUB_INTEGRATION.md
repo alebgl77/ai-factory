@@ -107,7 +107,7 @@ the two markers; use `--markdown docs/fr/GITHUB_INTEGRATION.md` for
 |---|---|---|---|---|
 | `integrations/grafana-llmops-forge` | `491fcac` | LLMOps and observability | MIT | Generates and deploys LLM Grafana dashboards (costs per provider, agents, quality, AI Act / ISO 42001 / NIST AI RMF evidence) from existing telemetry: complements the versioned dashboards of `compose/grafana/dashboards/`. |
 | `integrations/openspanguard` | `b1bcb3c` | Evaluation | Apache-2.0 | Online evaluation attached to OTLP spans and evaluation coverage in Prometheus: extends the evaluation gates (RAGAS, LLM-as-a-judge) after deployment. |
-| `integrations/open-shadow-ai` | `6aa329a` | Governance and security | Apache-2.0 | Discovery of undeclared AI usage (network, endpoints, directory) to complete the use-case register. |
+| `integrations/open-shadow-ai` | `6aa329a` | Governance and security | Apache-2.0 | Discovery evidence from network, endpoint and directory collectors. An opt-in read bridge feeds the protected AI Usage Observatory. |
 | `integrations/dsh-plugin-otel-genai` | `9610c0c` | LLMOps and observability | MIT | OpenTelemetry GenAI metrics (tokens, duration) of an agent harness, exported over OTLP to Alloy or Prometheus. |
 | `integrations/tierdecay` | `b836dad` | LLMOps and observability | MIT | Statistical certification of cheaper model tiers and recertification on every model change: feeds the data loop's "routing change" action and the "oversized model" alert, without retraining. |
 | `integrations/harnessmeter` | `ebad8f3` | LLMOps and observability | MIT | Token footprint of agent instructions and skills, budgets in CI: tokens per task and the `prompt_bloat` rule. |
@@ -117,6 +117,8 @@ The integration does not run any of these projects: the `docker compose` stack n
 runs the submodules. They appear in the **self-service catalog** (`GET /api/v1/catalog`, key
 `repos`, "Catalog" console of the 3D dashboard) with their pillar, license, scan status and
 pinned commit. Each team then decides whether to deploy them.
+
+When Open Shadow AI is deployed separately, an operator can connect its organization-wide evidence rollup to the Observatory over its authenticated read API. The Observatory manages separate monthly aggregates and Factory governance decisions. [Observatory runbook](SHADOW_AI.md)
 
 Notes per integrated repository (also in the `notes` field of the cards):
 

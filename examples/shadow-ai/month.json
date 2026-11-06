@@ -1,0 +1,27 @@
+{
+  "period": "2026-10",
+  "team_usage": [
+    {
+      "team": "support",
+      "tool": "assistant-externe",
+      "kind": "observation",
+      "people": 18,
+      "events": 86
+    },
+    {
+      "team": "operations",
+      "tool": "assistant-interne",
+      "kind": "usage",
+      "people": 12,
+      "events": 39
+    }
+  ],
+  "adoption": [
+    {
+      "team": "support",
+      "tool": "assistant-interne",
+      "active": 12,
+      "eligible": 23
+    }
+  ]
+}

@@ -64,7 +64,7 @@ requested format exactly. When I ask for a magenta background, use a perfectly f
 | `floor-oak.png` | floors of the coffee corner and the secure Lab |
 | `floor-carpet.png` | Delivery floor and Skills Lab |
 | `floor-concrete.png` | reception, R&D Lab, Agent Ops room |
-| `floor-terrazzo.png` | restrooms and War Room |
+| `floor-terrazzo.png` | AI Usage Observatory and War Room |
 | `wood-desk.png` | desktops, tables, counter |
 | `felt-acoustic.png` | focus pods, acoustic panels, seating |
 
