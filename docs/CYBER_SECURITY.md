@@ -89,3 +89,15 @@ The correlator uses exact versioned PURLs and follows declared dependencies to s
 ## Triage with an authorized analyst agent
 
 Install the [Cyber triage skill](../api/ai_factory_workbench/agent_skills/ai-factory-cyber-triage/SKILL.md) manually in an authorized analyst environment. Give the agent the verified normalized evidence exports and the approved inventory correlation report. The skill separates facts from inferences, cites evidence IDs, and produces a read-only brief for human review.
+
+### Reviewed analyst skills from GitHub favorites
+
+The [favorites snapshot](https://github.com/alebgl77/awesome-ai-architect/blob/ec2c06989ac22cb7993b632fc5b833f9c65f7585/data/repos.json) supplied the shortlist. GitHub verified the signatures on the three pinned upstream commits. A separate review of security, licensing, and operational usefulness approved these read-only adaptations. Each SDK directory contains the skill text and its original MIT notice. The frontmatter records the upstream repository, pinned revision, path, and SHA-256 of the original skill file. Review those details again before adopting a newer upstream revision.
+
+| SDK skill | Analyst task | Reviewed upstream |
+| --- | --- | --- |
+| [`ai-factory-skill-vetting`](../api/ai_factory_workbench/agent_skills/ai-factory-skill-vetting/SKILL.md) | Assess the provenance, license, and security of a quarantined skill snapshot. | [claude-inc](https://github.com/alebgl77/claude-inc/blob/3199e383aefa5f8364f3f7389d45e8c5b90b93ab/skills/skill-vetting/SKILL.md) · [MIT](https://github.com/alebgl77/claude-inc/blob/3199e383aefa5f8364f3f7389d45e8c5b90b93ab/LICENSE) |
+| [`ai-factory-agent-security-review`](../api/ai_factory_workbench/agent_skills/ai-factory-agent-security-review/SKILL.md) | Review permissions, trust boundaries, and external actions from sanitized agent configuration. | [ECC](https://github.com/affaan-m/ECC/blob/b38be6a7f6350964d59328b52f0624e1d1d552d1/skills/agent-security-hardening/SKILL.md) · [MIT](https://github.com/affaan-m/ECC/blob/b38be6a7f6350964d59328b52f0624e1d1d552d1/LICENSE) |
+| [`ai-factory-observability-review`](../api/ai_factory_workbench/agent_skills/ai-factory-observability-review/SKILL.md) | Assess signal coverage, data-source scope, and privacy from sanitized telemetry and dashboard evidence. | [Grafana LLMOps Forge](https://github.com/alebgl77/grafana-llmops-forge/blob/491fcac4f43318e6eda16d8496912ea441bf888b/SKILL.md) · [MIT](https://github.com/alebgl77/grafana-llmops-forge/blob/491fcac4f43318e6eda16d8496912ea441bf888b/LICENSE) |
+
+Install the selected directory manually in the authorized analyst environment. The adaptations ship as text and license notices without upstream scripts or bundles. The host governs tool permissions and transport. Workbench MCP discovery exposes its proposal skill, and the analyst runs these Cyber reviews separately using local, operator-supplied evidence.

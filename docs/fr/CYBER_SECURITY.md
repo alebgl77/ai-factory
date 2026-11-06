@@ -89,3 +89,15 @@ Le corrélateur utilise les PURL versionnées exactes et suit les dépendances d
 ## Triage assisté par un agent analyste habilité
 
 Installez manuellement le [skill de triage Cyber](../../api/ai_factory_workbench/agent_skills/ai-factory-cyber-triage/SKILL.md) dans un environnement analyste habilité. Fournissez à l’agent les exports de preuves vérifiés et normalisés ainsi que le rapport de corrélation approuvé. Le skill distingue les faits des inférences, cite les preuves et produit une note en lecture seule pour examen humain.
+
+### Skills d’analyse retenus dans les favoris GitHub
+
+L’[instantané des favoris](https://github.com/alebgl77/awesome-ai-architect/blob/ec2c06989ac22cb7993b632fc5b833f9c65f7585/data/repos.json) a servi de présélection. GitHub a vérifié les signatures des trois commits amont épinglés. Une revue distincte de la sécurité, des licences et de l’utilité a validé les adaptations en lecture seule. Chaque répertoire du SDK contient le texte du skill et sa notice MIT d’origine. L’en-tête indique le dépôt, la révision épinglée, le chemin et l’empreinte SHA-256 du fichier amont. Réexaminez ces éléments avant d’adopter une révision plus récente.
+
+| Skill du SDK | Usage analyste | Source amont examinée |
+| --- | --- | --- |
+| [`ai-factory-skill-vetting`](../../api/ai_factory_workbench/agent_skills/ai-factory-skill-vetting/SKILL.md) | Évaluer la provenance, la licence et les risques d’un skill isolé avant de l’approuver. | [claude-inc](https://github.com/alebgl77/claude-inc/blob/3199e383aefa5f8364f3f7389d45e8c5b90b93ab/skills/skill-vetting/SKILL.md) · [MIT](https://github.com/alebgl77/claude-inc/blob/3199e383aefa5f8364f3f7389d45e8c5b90b93ab/LICENSE) |
+| [`ai-factory-agent-security-review`](../../api/ai_factory_workbench/agent_skills/ai-factory-agent-security-review/SKILL.md) | Examiner les permissions, les frontières de confiance et les actions externes à partir d’une configuration expurgée. | [ECC](https://github.com/affaan-m/ECC/blob/b38be6a7f6350964d59328b52f0624e1d1d552d1/skills/agent-security-hardening/SKILL.md) · [MIT](https://github.com/affaan-m/ECC/blob/b38be6a7f6350964d59328b52f0624e1d1d552d1/LICENSE) |
+| [`ai-factory-observability-review`](../../api/ai_factory_workbench/agent_skills/ai-factory-observability-review/SKILL.md) | Examiner la couverture des signaux, le périmètre des sources et la confidentialité à partir de preuves de télémétrie et de tableaux de bord expurgées. | [Grafana LLMOps Forge](https://github.com/alebgl77/grafana-llmops-forge/blob/491fcac4f43318e6eda16d8496912ea441bf888b/SKILL.md) · [MIT](https://github.com/alebgl77/grafana-llmops-forge/blob/491fcac4f43318e6eda16d8496912ea441bf888b/LICENSE) |
+
+Installez manuellement le répertoire choisi dans l’environnement analyste habilité. Les adaptations sont distribuées sous forme de textes et de notices, sans scripts ni paquets amont. L’environnement hôte définit les permissions des outils et la politique de transport. Le serveur MCP Workbench publie son skill de proposition. L’analyste utilise ces skills Cyber séparément à partir de preuves locales fournies par l’opérateur.
