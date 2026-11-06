@@ -219,14 +219,20 @@ HIGH/CRITICAL only (fixable = a fixed version exists upstream):
 | `ollama/ollama:0.40.14` | 0 | 0 |
 | `vllm/vllm-openai:v0.33.0` | not scanned (10.9 GB image) | |
 
-The six images built from this repository pass the CI gate (no fixable HIGH or CRITICAL):
-the dashboard image (`nginx/nginx-unprivileged:1.30.6-alpine-slim`, which leaves out the
-optional modules and their libraries) has no HIGH or CRITICAL finding at all; the five Python
-images (`python:3.12.16-slim`, Debian 13.7) carry 45 HIGH without any fixed version yet.
+In the 2026-11-04 baseline, the six images built here passed the CI gate (no fixable HIGH or
+CRITICAL). The dashboard image then used `nginx/nginx-unprivileged:1.30.6-alpine-slim` and had
+no HIGH or CRITICAL findings. The five Python images (`python:3.12.16-slim`, Debian 13.7) had
+45 HIGH findings with no fixed version in that scan.
 
-Every image is on its latest release; the remaining findings need upstream rebuilds. The
-`postgres` findings are all in `gosu`, which is never executed (the container starts as the
-`postgres` user); `langfuse` ones are in its Next.js dependencies. Reproduce:
+For the current results on these six images, download `trivy-image-vulnerabilities-<image>` from
+the `security` workflow's artifacts. These reports include all vulnerability severities and
+findings without a fix and are retained for 30 days. GitHub Code Scanning lists image secrets
+and vulnerabilities with a fix. Findings available only in the artifacts can still affect the
+images.
+
+In that baseline, the `postgres` findings were all in `gosu`, which is never executed because
+the container starts as the `postgres` user. The `langfuse` findings were in its Next.js
+dependencies. Reproduce the scan with the current database:
 
 ```bash
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:ro aquasec/trivy:0.76.1 \
