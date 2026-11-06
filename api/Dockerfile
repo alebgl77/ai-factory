@@ -34,6 +34,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
     chown factory:factory /data
 
 COPY --chown=root:root app ./app
+COPY --chown=root:root ai_factory_workbench ./ai_factory_workbench
 
 USER 10001
 EXPOSE 8000

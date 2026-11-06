@@ -1,0 +1,45 @@
+{
+  "profile": "governance",
+  "sources": [
+    {
+      "provider": "salesforce",
+      "instance": "sales-sandbox",
+      "base_url": "https://example.my.salesforce.com",
+      "token_env": "AI_FACTORY_SALESFORCE_TOKEN",
+      "api_version": "61.0",
+      "default_currency": "EUR"
+    },
+    {
+      "provider": "hubspot",
+      "instance": "eu-portal",
+      "token_env": "AI_FACTORY_HUBSPOT_TOKEN",
+      "won_stages": ["closedwon"],
+      "default_currency": "EUR"
+    },
+    {
+      "provider": "twenty",
+      "instance": "operations",
+      "base_url": "https://api.twenty.com",
+      "token_env": "AI_FACTORY_TWENTY_TOKEN",
+      "won_stages": ["WON"],
+      "default_currency": "EUR"
+    }
+  ],
+  "customers": [
+    {
+      "id": "erp-account-1",
+      "name": "Example Manufacturing",
+      "reference": "salesforce/sales-sandbox/001000000000001AAA"
+    },
+    {
+      "id": "erp-account-1",
+      "name": "Example Manufacturing",
+      "reference": "hubspot/eu-portal/1234567890"
+    },
+    {
+      "id": "erp-account-1",
+      "name": "Example Manufacturing",
+      "reference": "twenty/operations/00000000-0000-0000-0000-000000000001"
+    }
+  ]
+}

@@ -82,7 +82,7 @@ jobs:
             echo "## pip-audit"
             echo
           } >> "$GITHUB_STEP_SUMMARY"
-          for f in api/requirements.txt api/requirements-dev.txt scripts/requirements-assets.txt \
+          for f in api/requirements.txt api/requirements-dev.txt api/requirements-mcp.txt scripts/requirements-assets.txt \
                    sim/mock-llm/requirements.txt sim/traffic/requirements.txt \
                    compose/litellm/tests/requirements.txt \
                    .github/tools/pip-audit/requirements.txt .github/tools/zizmor/requirements.txt; do

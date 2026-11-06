@@ -24,6 +24,8 @@
       action: 'Business action', strategic: 'Strategic choice', undocumented: 'Undocumented choice',
       revision: 'Revision', priority: 'Priority', waiting_review: 'Review required', applying: 'Applying',
       changes_requested: 'Changes requested', rejected: 'Rejected', executed: 'Executed', decided: 'Decided',
+      withdrawn: 'Withdrawn by CRM', reconciliationRequired: 'ERP reconciliation required',
+      reconciliationReadOnly: 'Check the existing ERP operation before taking another action.',
       readOnly: 'This decision is read-only for your current role or case state.',
       refreshRequired: 'The proposal changed. Refresh the case and review the new revision.',
       proposalUpdated: 'The proposal changed. Review the new revision before deciding.',
@@ -59,6 +61,8 @@
       action: 'Action métier', strategic: 'Choix stratégique', undocumented: 'Choix non documenté',
       revision: 'Révision', priority: 'Priorité', waiting_review: 'Revue requise', applying: 'Exécution en cours',
       changes_requested: 'Modification demandée', rejected: 'Refusé', executed: 'Exécuté', decided: 'Décidé',
+      withdrawn: 'Retiré par le CRM', reconciliationRequired: 'Rapprochement ERP requis',
+      reconciliationReadOnly: 'Vérifiez l’opération existante dans l’ERP avant toute nouvelle action.',
       readOnly: 'Ce dossier est en lecture seule pour votre rôle ou son état actuel.',
       refreshRequired: 'La proposition a changé. Actualisez le dossier et examinez la nouvelle révision.',
       proposalUpdated: 'La proposition a changé. Examinez la nouvelle révision avant de décider.',
@@ -91,6 +95,9 @@
   const show = (id, visible) => { byId(id).hidden = !visible; };
   const setText = (id, value) => { byId(id).textContent = String(value ?? ''); };
   const current = () => cases.find(item => item.id === selectedId);
+  const caseStatus = item => t(item.reconciliation_required === true ? 'reconciliationRequired' : item.status);
+  const canDecide = item => capabilities.can_decide === true && item.can_decide !== false &&
+    item.reconciliation_required !== true && ['waiting_review', 'applying'].includes(item.status);
 
   function displayNotice(id, key = '', error = false, caseId = '') {
     const notice = byId(id);
@@ -156,7 +163,7 @@
       meta.textContent = `${item.id} · ${t(item.kind)}`;
       status.className = 'case-list-status';
       status.dataset.status = item.status;
-      status.textContent = t(item.status);
+      status.textContent = caseStatus(item);
       button.append(meta, heading, status);
       entry.append(button);
       list.append(entry);
@@ -184,7 +191,7 @@
     if (!item) return;
     setText('case-label', `${item.id} · ${t(item.kind)}`);
     setText('case-title', item.title);
-    setText('case-status', t(item.status));
+    setText('case-status', caseStatus(item));
     byId('case-status').dataset.status = item.status;
     setText('case-revision', `${t('revision')} ${item.revision} · ${t('priority')} ${item.priority ?? '—'}`);
     setText('case-reason', item.reason);
@@ -211,11 +218,10 @@
     const decisionTime = formatTime(item.decided_at || item.decision_at);
     show('case-decision-time', Boolean(decisionTime));
     setText('case-decision-time', `${t('decidedAt')} · ${decisionTime}`);
-    const allowed = capabilities.can_decide === true && item.can_decide !== false &&
-      ['waiting_review', 'applying'].includes(item.status);
+    const allowed = canDecide(item);
     show('decision-form', allowed);
     show('decision-readonly', !allowed);
-    setText('decision-readonly', t('readOnly'));
+    setText('decision-readonly', t(item.reconciliation_required === true ? 'reconciliationReadOnly' : 'readOnly'));
     const applying = item.status === 'applying';
     const approve = byId('decision-form').querySelector('[value="approve"]');
     approve.textContent = t(applying ? 'retry' : 'approve');
@@ -450,7 +456,7 @@
   byId('decision-form').addEventListener('submit', event => submit(event, 'decision-notice', async decision => {
     const item = current();
     const rationale = (item?.status === 'applying' ? item.decision_rationale ?? '' : byId('rationale').value).trim();
-    if (!item || !['approve', 'request_changes', 'reject'].includes(decision)) return;
+    if (!item || !canDecide(item) || !['approve', 'request_changes', 'reject'].includes(decision)) return;
     if (!rationale) return displayNotice('decision-notice', 'reasonRequired', true);
     const input = { decision, revision: item.revision, proposal_hash: item.proposal_hash, rationale };
     const updated = demo ? demo.decide(item.id, input, lang) :
