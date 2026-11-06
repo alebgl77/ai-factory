@@ -7,6 +7,11 @@ ready-to-paste prompt for each one. The images are **optional**: if one is missi
 keeps its current procedural rendering. The prompts below are in English; the original French
 prompts are kept in [fr/ASSETS.md](fr/ASSETS.md). Either set produces the same files.
 
+The current bundle contains seven materials generated with ChatGPT. The scene uses oak, carpet,
+concrete and terrazzo for the floors, wood and acoustic felt for the furniture, and a landscaped
+surface for the plaza. The Observatory uses terrazzo. See the [source hashes and rebuild
+instructions](../dashboard/assets/PROVENANCE.md).
+
 ## Procedure (≈ 30 min)
 
 1. Open **a single** ChatGPT conversation and paste the framing message below first: the style

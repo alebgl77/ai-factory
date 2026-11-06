@@ -7,6 +7,11 @@ Ce document liste les 15 images qui enrichissent le rendu du dashboard 3D, avec 
 son rendu procédural actuel. Les prompts ci-dessous sont en français ; la
 [version anglaise](../ASSETS.md) donne les mêmes prompts en anglais, pour les mêmes fichiers.
 
+Le pack actif contient sept matériaux générés avec ChatGPT. La scène utilise du chêne, de la
+moquette, du béton et du terrazzo pour les sols, du bois et du feutre acoustique pour le mobilier,
+et une surface paysagère pour le parvis. Le sol de l’Observatoire est en terrazzo. Les [empreintes
+des sources et la procédure de reconstruction](../../dashboard/assets/PROVENANCE.md) sont disponibles.
+
 ## Mode opératoire (≈ 30 min)
 
 1. Ouvrir **une seule conversation** ChatGPT et y coller d'abord le message de cadrage
