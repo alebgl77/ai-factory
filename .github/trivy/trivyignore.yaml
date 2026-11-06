@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
 # Accepted findings of Trivy. Every entry states why it is accepted and expires: an expired
-# entry is reported again and must be re-assessed. Vulnerabilities without a fixed version are
-# not listed here: CI gates use --ignore-unfixed and report them in code scanning instead.
+# entry is reported again and must be re-assessed. CI gates filter out vulnerabilities without a
+# fixed version. Those findings remain in the full image vulnerability artifacts and the
+# repository scan's Code Scanning report, depending on where they were detected.
 misconfigurations:
   - id: DS-0026
     paths:
