@@ -24,9 +24,11 @@ from . import metrics as metrics_mod
 from . import seclog
 from .i18n import DEFAULT_LANG, msg, normalize_lang
 from .routers import audit, core, grafana, placement, registry, spaces, workbench
+from .routers.shadow_ai import router as shadow_ai_router
 from .security import READ, Access, SecurityDenied, SecurityMiddleware, require
 from .service import FactoryService
 from .settings import API_VERSION, Settings
+from .shadow_ai import Observatory
 from .workbench.service import Workbench, local_advisor
 
 
@@ -186,6 +188,12 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
     def openapi_docs(_: Access = Depends(require(READ))) -> HTMLResponse:
         page, csp = docs_page(f"{app.title} — OpenAPI", "./openapi.json", secrets.token_urlsafe(18))
         return HTMLResponse(page, headers={"Content-Security-Policy": csp})
+
+    if settings.shadow_ai_enabled:
+        if not service.guard.config.trusted_networks:
+            raise ValueError("Shadow AI requires a trusted identity proxy")
+        app.state.shadow_ai = Observatory(settings.state_dir, settings.shadow_ai_privacy_threshold, clock=clock)
+        app.include_router(shadow_ai_router)
 
     @app.get("/metrics", include_in_schema=False)
     def prometheus_metrics() -> Response:

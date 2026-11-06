@@ -66,7 +66,7 @@ dégradé. Réponds uniquement par l'image.
 | `floor-oak.png` | sols du coin café et du Lab sécurisé |
 | `floor-carpet.png` | Delivery floor et Skills Lab |
 | `floor-concrete.png` | accueil, R&D Lab, salle Agent Ops |
-| `floor-terrazzo.png` | sanitaires et War Room |
+| `floor-terrazzo.png` | Observatoire des usages IA et War Room |
 | `wood-desk.png` | plateaux de bureaux, tables, comptoir |
 | `felt-acoustic.png` | focus pods, panneaux acoustiques, assises |
 

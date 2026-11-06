@@ -42,6 +42,8 @@ Ouvrez le **Compagnon de décision** depuis le tableau de bord ou l’atelier po
 
 Intégrez le **Workbench adaptatif** à un agent ou à une application avec `python -m pip install ./api`, puis lancez `python examples/adaptive_workbench.py`. Le [guide d’intégration](docs/fr/ADAPTIVE_WORKBENCH.md) couvre les méthodes de travail, le skill MCP, les canaux d’approbation et la reprise ERP.
 
+Ouvrez l’**Observatoire des usages IA** depuis la carte ou l’onglet Usine. Le mode protégé relie le bilan Open Shadow AI, cartographie les usages mensuels par équipe, suit l’adoption des alternatives et enregistre les décisions de gouvernance avec une validation séparée. [Guide de l’Observatoire](docs/SHADOW_AI.md#démarrage-en-français)
+
 ### Démarrage local (sans aucune clé)
 
 Prérequis : Docker 24+ avec Compose v2, 4 vCPU, 8 Go de RAM libres, ports 80 et 443 disponibles.

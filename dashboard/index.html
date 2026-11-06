@@ -194,6 +194,9 @@ button svg{pointer-events:none}
 .tag[data-st="free"] .dot{--c:var(--free)} .tag[data-st="busy"] .dot{--c:var(--busy)}
 .tag[data-st="soon"] .dot{--c:var(--soon)} .tag[data-st="later"] .dot{--c:var(--later)}
 .zone{pointer-events:none;font:700 10px/1 var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);opacity:.85;white-space:nowrap;text-shadow:0 0 6px var(--stage),0 0 2px var(--stage)}
+.zone.zone-shadow{pointer-events:auto;min-height:32px;padding:6px 11px;border:1px solid #17706b;border-radius:8px;background:#123e3c;color:#e4faf1;opacity:1;text-shadow:none;letter-spacing:.035em;text-transform:none;box-shadow:0 3px 10px #123e3c55}
+.zone-shadow:hover{background:#18514b}
+.zone-shadow:focus-visible{outline:2px solid #8ee6bb;outline-offset:2px}
 
 /* ---------- Drawer ---------- */
 .drawer{position:absolute;top:10px;right:10px;bottom:10px;width:min(390px,calc(100% - 20px));display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:8;transform:translateX(calc(100% + 24px));visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility .28s}
@@ -346,9 +349,44 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .c-head h2{margin:2px 0 0;font-size:18px}
 .c-src{align-self:center}
 .c-tabs{display:flex;flex-wrap:wrap;gap:2px 4px;overflow-x:auto;padding:0 12px 8px;border-bottom:1px solid var(--border);scrollbar-width:thin}
+.console.is-shadow .c-tabs{flex:none}
 .ctab{border:0;background:transparent;padding:6px 10px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
 .ctab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
 .c-body{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px}
+.shadow-console{--shadow-ink:#e6f7ee;--shadow-field:#0e3735;display:grid;gap:17px;min-width:0}
+.shadow-hero{background:var(--shadow-field);color:var(--shadow-ink);border-radius:12px;padding:17px;display:grid;gap:8px;overflow-wrap:anywhere}
+.shadow-hero h3{margin:0;font-size:clamp(19px,3.6vw,25px);line-height:1.15;letter-spacing:-.026em}
+.shadow-kicker{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:#b5e5d2}
+.shadow-kicker::before{content:'';width:8px;height:8px;flex:none;background:#8ee6bb;border-radius:2px;transform:rotate(45deg)}
+.shadow-hero p,.shadow-section p{margin:0;font-size:12.5px;line-height:1.5}
+.shadow-hero p{color:#d2ece0}
+.shadow-section{display:grid;gap:8px;min-width:0}
+.shadow-section h3{margin:0;font-size:15px;letter-spacing:-.012em}
+.shadow-section>p{color:var(--muted)}
+.shadow-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.shadow-metrics div{border-top:2px solid #458478;padding-top:7px;min-width:0}
+.shadow-metrics dt{color:var(--muted);font-size:11.5px}
+.shadow-metrics dd{margin:2px 0 0;font-size:20px;font-weight:730;font-variant-numeric:tabular-nums}
+.shadow-tools,.shadow-form{display:flex;align-items:end;gap:7px 11px;flex-wrap:wrap}
+.shadow-field{display:grid;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.shadow-field input,.shadow-field select{max-width:100%;min-height:34px;padding:4px 8px;border:1px solid var(--border);border-radius:7px;background:var(--panel-2);color:var(--text);font-size:12px}
+.shadow-tools .btn,.shadow-form .btn,.shadow-actions .btn{min-height:34px;font-size:12px;white-space:normal}
+.shadow-table{overflow:auto;border-block:1px solid var(--border)}
+.shadow-table .ctable th,.shadow-table .ctable td{padding-inline:6px}
+.shadow-table .ctable td{overflow-wrap:anywhere}
+.shadow-cell-label{display:none}
+.shadow-actions{display:flex;flex-wrap:wrap;gap:6px}
+.shadow-message{font-size:12.5px;color:var(--muted);min-height:0}
+.shadow-message:empty{display:none}
+@media(max-width:660px){
+  .console.is-shadow .c-tabs{flex-wrap:nowrap}
+  .shadow-table .ctable,.shadow-table tbody{display:block}
+  .shadow-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .shadow-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;padding:10px 6px;border-bottom:1px solid var(--border)}
+  .shadow-table tbody tr:last-child{border-bottom:0}
+  .shadow-table .ctable td{display:block;min-width:0;border:0;padding:0}
+  .shadow-cell-label{display:block;margin-bottom:2px;color:var(--muted);font-size:10.5px;font-weight:650}
+}
 .csec h3{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .csec h3 em{font-style:normal;background:var(--panel-3);color:var(--muted);border-radius:999px;padding:0 7px;font-size:11px}
 .cnote{margin:6px 0 0;font-size:12px;color:var(--muted)}
@@ -508,6 +546,7 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 }
 @media (max-width:480px){
   #app{grid-template-rows:auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto}
+  .top-right{flex-basis:100%}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kpi-sub{display:none}
   .kpi .kl{display:none}
@@ -515,6 +554,9 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
   .vsep{display:none}
   .hint{top:84px}
   .clock-time{font-size:20px}
+  .clock-date{white-space:normal}
+  .timeline{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"day day" "play live" "track track";gap:8px}
+  .live-btn{justify-self:end}
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
@@ -792,6 +834,7 @@ const mqDark = matchMedia('(prefers-color-scheme: dark)');
 const $ = id => document.getElementById(id);
 let language = 'fr';
 const ui = (en, fr) => language === 'en' ? en : fr;
+const shadowTitle = () => ui('AI Usage Observatory', 'Observatoire des usages IA');
 const locale = () => ui('en-US', 'fr-FR');
 const pad = n => String(n).padStart(2, '0');
 const fmt = m => { m = Math.max(0, Math.floor(m + 1e-6)); return `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`; };
@@ -1327,6 +1370,23 @@ function zoneLabel(text, x, z) {
   const el = document.createElement('div'); el.className = 'zone'; el.textContent = text;
   const o = new CSS2DObject(el); o.position.set(x, 0.05, z); scene.add(o); ZONE_LABELS.push(o);
 }
+function buildShadowObservatory() {
+  const screen = makeScreen('shadow', 3.35, 1.44, 760);
+  B(scene, [3.51, 1.59, 0.10], MATS.dark, [9.76, 0.78, -8.84]);
+  screen.position.set(9.76, 1.57, -8.77);
+  screen.userData = { kind: 'console', id: 'shadow' };
+  scene.add(screen); PICK.push(screen);
+  B(scene, [2.8, 0.47, 0.47], MATS.woodDark, [11.21, 0, -5.22]);
+  B(scene, [0.44, 0.82, 1.55], MATS.counter, [12.62, 0, -7.42]);
+  plant(12.23, -8.32, 0.78);
+  const button = document.createElement('button');
+  button.type = 'button'; button.id = 'shadowMapOpen'; button.className = 'zone zone-shadow';
+  button.setAttribute('aria-controls', 'console');
+  button.textContent = shadowTitle();
+  button.addEventListener('click', event => { event.stopPropagation(); openConsole('shadow'); });
+  const label = new CSS2DObject(button); label.position.set(9.81, 0.7, -6.67);
+  scene.add(label); ZONE_LABELS.push(label);
+}
 
 /* ---------- Status visuals (halo + pin + label) ---------- */
 function statusVisual(r, { x, z, hw, hd, pinY, haloOp = 0.85, focus, px = x, pz = z }) {
@@ -1655,8 +1715,8 @@ function buildBuilding() {
   solidWall(11, 9, E, 9, [0, 1]);
   const wW = solidWall(-13, -N, -13, N, [-1, 0]);
   solidWall(13, -N, 13, N, [1, 0]);
-  // Sanitary block
-  const wSan = solidWall(7, -9, 7, -4 - WALL_T / 2, [-1, 0]);
+  // AI Usage Observatory. Keep the south entrance and the existing floor footprint.
+  solidWall(7, -9, 7, -4 - WALL_T / 2, [-1, 0]);
   solidWall(7 - WALL_T / 2, -4, 8.0, -4, [0, 1]);
   solidWall(9.1, -4, 13, -4, [0, 1]);
   // Glass partitions: meeting room & closed office
@@ -1715,23 +1775,7 @@ function buildBuilding() {
   bulb.position.set(tx, 1.88, tz); scene.add(bulb);
   plant(0.95, -5.0, 0.8);
 
-  // Sanitary
-  B(scene, [0.55, 0.85, 2.2], MATS.counter, [7.37, 0, -7.6]);
-  for (const z of [-8.1, -7.1]) {
-    B(scene, [0.42, 0.1, 0.38], MATS.ceramic, [7.4, 0.85, z], { cast: false });
-    C(scene, 0.02, 0.02, 0.2, MATS.metal, [7.18, 0.9, z], 8, { cast: false });
-  }
-  attachToWall([B(scene, [0.03, 0.9, 2.0], MATS.mirror, [7.11, 1.15, -7.6], { cast: false })], wSan);
-  MATS.mirror.metalness = 0.6; MATS.mirror.roughness = 0.15;
-  for (const [x1, x2] of [[10.0, 10.25], [11.15, 11.62], [12.52, 12.91]]) B(scene, [x2 - x1, 2.0, 0.05], MATS.felt, [(x1 + x2) / 2, 0.05, -7.3]);
-  B(scene, [0.05, 2.0, 1.62], MATS.felt, [10.0, 0.05, -8.1]);
-  B(scene, [0.05, 2.0, 1.62], MATS.felt, [11.5, 0.05, -8.1]);
-  for (const x of [10.75, 12.2]) {
-    B(scene, [0.42, 0.48, 0.18], MATS.ceramic, [x, 0.35, -8.8]);
-    C(scene, 0.2, 0.17, 0.4, MATS.ceramic, [x, 0, -8.48], 18);
-    C(scene, 0.21, 0.21, 0.03, MATS.ceramic, [x, 0.4, -8.48], 18, { cast: false });
-  }
-  attachToWall([B(scene, [0.12, 0.3, 0.3], MATS.ceramic, [9.6, 1.1, -8.85], { cast: false })], wN);
+  buildShadowObservatory();
 
   // Phone booths
   buildBooth('C1', 10.3, -2.6, Math.PI / 2, -1);
@@ -1758,7 +1802,6 @@ function buildBuilding() {
   zoneLabel('War Room', -9.25, -3.15);
   zoneLabel('Lab sécurisé', -2.6, -4.1);
   zoneLabel('Coin café', 4.4, -5.0);
-  zoneLabel('Sanitaires', 8.6, -7.9);
   zoneLabel('Focus pods', 11.2, -0.5);
   zoneLabel('Delivery floor', -0.7, 1.45);
   zoneLabel('R&D Lab', -11.6, 4.4);
@@ -2218,11 +2261,14 @@ const POV_BOUNDS = { x0: -12.9, x1: 12.9, z0: -8.9, z1: 8.9 };
 const POV_ENTRY = { x: 10, z: 7.7, yaw: Math.PI / 4 };  // reception, facing into the building
 const POV_CODES = { KeyW: 'fwd', ArrowUp: 'fwd', KeyS: 'back', ArrowDown: 'back', ArrowLeft: 'left', ArrowRight: 'right', KeyA: 'sl', KeyD: 'sr', ShiftLeft: 'run', ShiftRight: 'run' };
 const POV_ZONES = [
-  ['War Room', -13, -9, -5.5, -2.5], ['Lab sécurisé', -5.5, -9, 0.5, -3.5], ['Coin café', 0.5, -9, 7, -4.5], ['Sanitaires', 7, -9, 13, -4],
+  ['War Room', -13, -9, -5.5, -2.5], ['Lab sécurisé', -5.5, -9, 0.5, -3.5], ['Coin café', 0.5, -9, 7, -4.5], ['shadow', 7, -9, 13, -4],
   ['R&D Lab', -13, -2.5, -8.6, 9], ['Skills Lab', -8.6, 5.6, -0.4, 9], ['Salle Agent Ops', -0.4, 5.6, 6.3, 9], ['Delivery floor', -8.6, 0.6, 0.5, 5.6],
   ['Focus pods', 9.2, -4, 13, 1.2], ['Entrée · casiers', 7, 1.2, 13, 9],
 ];
-const povZone = (x, z) => POV_ZONES.find(([, x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)?.[0] || 'Circulation';
+function povZone(x, z) {
+  const key = POV_ZONES.find(([, x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)?.[0];
+  return key === 'shadow' ? shadowTitle() : key || 'Circulation';
+}
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
 const POV_CENTER = new THREE.Vector2(0, 0), povPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), povHitV = new THREE.Vector3(), povLook = new THREE.Vector3();
 
@@ -2420,7 +2466,7 @@ function povHintHtml(t) {
     return `<b>${esc(e?.name || '')}</b> · ${esc(e?.role || '')}${b?.ucId && UC[b.ucId] ? ` · ${esc(UC[b.ucId].code)}` : ''} — ${k}voir son poste`;
   }
   if (t.kind === 'rack') { const d = RACK?.dev; return `<b>Rack GPU local</b>${d ? ` · ${Math.round(d.util_pct)} % · ${Math.round(d.temp_c)} °C` : ''} — ${k}placement hybride`; }
-  if (t.kind === 'console') return `<b>${esc(CONSOLE_SECTIONS[t.id]?.title || 'Console')}</b> — ${k}ouvrir la console`;
+  if (t.kind === 'console') return `<b>${esc(consoleTitle(t.id))}</b> — ${k}${ui('open console', 'ouvrir la console')}`;
   if (t.kind === 'board') return `<b>Board portefeuille</b> — ${k}ouvrir le Pilotage`;
   if (t.kind === 'locker') { const e = Store.employees.find(x => x.locker === t.id); return `<b>Casier ${pad(t.id)}</b>${e ? ` · ${esc(e.name)}` : ''} — ${k}afficher`; }
   return '';
@@ -2758,9 +2804,28 @@ function drawRnDWall(sc) {
   });
   sc.tex.needsUpdate = true;
 }
+function drawShadowWall(sc) {
+  const { ctx: g, canvas: { width: W, height: H } } = sc;
+  screenBg(g, W, H, '#0e3534', '#0e3534');
+  g.strokeStyle = '#357267'; g.lineWidth = 2;
+  for (const radius of [27, 51, 75, 99]) {
+    g.beginPath(); g.arc(W - 126, H / 2, radius, 0, Math.PI * 2); g.stroke();
+  }
+  g.beginPath(); g.moveTo(W - 126, H / 2); g.lineTo(W - 67, H / 2 - 72); g.stroke();
+  g.fillStyle = '#8ee6bb';
+  for (const [x, y] of [[W - 68, H / 2 - 71], [W - 159, H / 2 + 38], [W - 143, H / 2 - 19]]) {
+    g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill();
+  }
+  g.font = screenFont(700, 18); g.fillText('OPEN SHADOW AI', 37, 62);
+  g.fillStyle = '#e6f7ee'; g.font = screenFont(720, 42);
+  wrapText(g, shadowTitle(), 36, 131, W - 276, 49, 2);
+  g.fillStyle = '#b5e5d2'; g.font = screenFont(500, 19);
+  g.fillText(ui('Map signals · Measure adoption · Govern', 'Cartographier · Mesurer l’adoption · Gouverner'), 38, H - 49, W - 257);
+  sc.tex.needsUpdate = true;
+}
 function drawFactoryScreens() {
   const k = SNAP?.meta?.generated_at || '';
-  for (const [key, fn] of [['agentops', drawAgentOpsWall], ['skills', drawSkillsScreen], ['rnd', drawRnDWall]]) {
+  for (const [key, fn] of [['agentops', drawAgentOpsWall], ['skills', drawSkillsScreen], ['rnd', drawRnDWall], ['shadow', drawShadowWall]]) {
     const sc = SCREENS[key]; if (!sc) continue;
     const kk = k + '|' + language + '|' + SNAP_SOURCE + '|' + (key === 'skills' ? todayISO() : '');
     if (sc.last !== kk) { sc.last = kk; fn(sc); }
@@ -3005,9 +3070,11 @@ const CONSOLE_SECTIONS = {
   catalog: { title: 'Catalogue libre-service', icon: 'desk' },
   skills: { title: 'Skills Lab & R&D Lab', icon: 'users' },
   rnd: { title: 'Skills Lab & R&D Lab', icon: 'users', alias: 'skills' },
+  shadow: { icon: 'shield' },
   grafana: { title: 'Grafana', icon: 'info' },
 };
-const CONSOLE_ORDER = ['registry', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'catalog', 'skills', 'grafana'];
+const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'catalog', 'skills', 'grafana'];
+const consoleTitle = key => key === 'shadow' ? shadowTitle() : CONSOLE_SECTIONS[key]?.title || 'Console';
 const TIER_BADGES = new Map([
   ['prohibited', { className: 't-prohibited', label: 'Interdit (art. 5)' }],
   ['high', { className: 't-high', label: 'Haut risque' }],
@@ -3054,21 +3121,30 @@ function tierChip(r) {
 }
 
 let consoleKey = null, consoleReturn = null, catalogFilter = 'models';
+let shadowView = null;
+function selectConsole(key) {
+  if (key === consoleKey) return;
+  consoleKey = key;
+  shadowView = key === 'shadow' ? { status: apiReachable() ? 'loading' : 'demo', filters: {}, revision: 0, draft: { tool: '', status: 'reviewing', alternative: '' } } : null;
+  if (shadowView?.status === 'loading') void loadShadow(shadowView);
+}
 function openConsole(key) {
   key = CONSOLE_SECTIONS[key]?.alias || key;
   if (!CONSOLE_SECTIONS[key]) key = 'registry';
   if (S.selected) closeDrawer();
   if (!consoleKey) consoleReturn = document.activeElement;
-  consoleKey = key;
+  selectConsole(key);
   const c = $('console'); c.classList.add('open'); c.setAttribute('aria-hidden', 'false');
   renderConsole(); c.querySelector('.c-body').scrollTop = 0; c.focus({ preventScroll: true });
 }
 function closeConsole() {
   if (!consoleKey) return;
-  consoleKey = null;
+  const wasShadow = consoleKey === 'shadow';
+  selectConsole(null);
   const c = $('console'), had = c.contains(document.activeElement);
   c.classList.remove('open'); c.setAttribute('aria-hidden', 'true');
   if (had) (consoleReturn?.isConnected ? consoleReturn : $('tabFactory')).focus({ preventScroll: true });
+  if (wasShadow) { $('cBody').replaceChildren(); $('cBody').__html = ''; }
 }
 function sourceBadge() {
   const m = SNAP?.meta || {}, src = m.sources || {};
@@ -3083,13 +3159,176 @@ function sourceBadge() {
 }
 function renderConsole() {
   if (!consoleKey) return;
-  $('cTitle').textContent = CONSOLE_SECTIONS[consoleKey].title;
-  $('cSrc').innerHTML = sourceBadge();
-  setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(CONSOLE_SECTIONS[k].title.split(' ·')[0].replace(' & risques', ''))}</button>`).join(''));
+  $('console').classList.toggle('is-shadow', consoleKey === 'shadow');
+  $('cTitle').textContent = consoleTitle(consoleKey);
+  $('cSrc').innerHTML = consoleKey === 'shadow' ? '' : sourceBadge();
+  setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(k === 'shadow' ? ui('Observatory', 'Observatoire') : consoleTitle(k).split(' ·')[0].replace(' & risques', ''))}</button>`).join(''));
+  if (consoleKey === 'shadow') {
+    const stamp = `${language}:${shadowView.revision}`;
+    if (shadowView.rendered !== stamp) {
+      shadowView.rendered = stamp;
+      setHTMLKeepFocus($('cBody'), secShadow());
+    }
+    return;
+  }
   const fn = { registry: secRegistry, finops: secFinops, pipeline: secPipeline, dataloop: secDataloop, placement: secPlacement, agentops: secAgentops, catalog: secCatalog, skills: secSkills, grafana: secGrafana }[consoleKey];
   setHTMLKeepFocus($('cBody'), fn ? fn() : '');
 }
 const apiOnly = () => SNAP_SOURCE === 'api' ? '' : ' disabled title="Nécessite l’API d’agrégation (stack déployée)"';
+
+/* Isolated Observatory data. Only the explicitly static edition uses these fictional rows. */
+const SHADOW_DEMO = {
+  privacy_threshold: 5,
+  evidence: { window_start: '2026-09-01', window_end: '2026-10-01', events: 387, unique_users: 41 },
+  team_usage: [
+    { period: '2026-09', team: 'delivery', tool: 'demo-writing-assistant', kind: 'observation', people: 14, events: 31 },
+    { period: '2026-09', team: 'platform', tool: 'demo-code-assistant', kind: 'usage', people: 12, events: 83 },
+    { period: '2026-09', team: 'platform', tool: 'internal-ai-studio', kind: 'usage', people: 18, events: 127 },
+  ],
+  adoption: [
+    { period: '2026-09', team: 'delivery', tool: 'internal-ai-studio', active: 15, eligible: 29 },
+    { period: '2026-09', team: 'platform', tool: 'internal-ai-studio', active: 18, eligible: 24 },
+  ],
+  policies: [
+    { tool: 'demo-writing-assistant', status: 'restricted', alternative: 'internal-ai-studio' },
+    { tool: 'demo-code-assistant', status: 'pilot', alternative: null },
+    { tool: 'internal-ai-studio', status: 'approved', alternative: null },
+  ],
+  proposals: [], capabilities: { propose: false, decide: false },
+};
+const SHADOW_POLICY = new Map([['reviewing', ['Under review', 'En revue']], ['pilot', ['Pilot', 'Pilote']], ['approved', ['Approved', 'Approuvé']], ['restricted', ['Restricted', 'Restreint']]]);
+const SHADOW_KIND = new Map([['inventory', ['Inventory', 'Inventaire']], ['observation', ['Observation', 'Observation']], ['usage', ['Measured use', 'Usage mesuré']]]);
+const shadowLabel = (labels, key) => labels.has(key) ? ui(...labels.get(key)) : '—';
+const shadowNumber = value => Number.isSafeInteger(value) ? new Intl.NumberFormat(language).format(value) : '—';
+const shadowDate = value => {
+  const day = String(value || '').slice(0, 10);
+  const instant = Date.parse(day);
+  return Number.isNaN(instant) ? '—' : new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeZone: 'UTC' }).format(instant);
+};
+function shadowTable(title, headers, rows, empty) {
+  if (!rows.length) return `<p>${esc(empty)}</p>`;
+  return `<div class="shadow-table"><table class="ctable" role="table" aria-label="${esc(title)}"><thead role="rowgroup"><tr role="row">${headers.map(h => `<th role="columnheader" scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody role="rowgroup">${rows.map(row => `<tr role="row">${row.map((cell, index) => `<td role="cell"><span class="shadow-cell-label" aria-hidden="true">${esc(headers[index])}</span>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function shadowOptions(options, selected) {
+  return options.map(([key, label]) => `<option value="${esc(key)}"${key === selected ? ' selected' : ''}>${esc(label)}</option>`).join('');
+}
+function shadowDataSections(view, data) {
+  const { evidence, team_usage, adoption, policies } = data;
+  const rows = [...team_usage, ...adoption];
+  const periods = [...new Set(rows.map(r => r.period))].sort().reverse();
+  const { filters } = view;
+  const period = periods.includes(filters.period) ? filters.period : periods[0];
+  const monthRows = rows.filter(r => r.period === period);
+  const teams = [...new Set(monthRows.map(r => r.team))].sort();
+  const team = teams.includes(filters.team) ? filters.team : '';
+  const tools = [...new Set(monthRows.filter(r => !team || r.team === team).map(r => r.tool))].sort();
+  const tool = tools.includes(filters.tool) ? filters.tool : '';
+  const inScope = r => r.period === period && (!team || r.team === team) && (!tool || r.tool === tool);
+  const usageTitle = ui('Signals by team and tool', 'Signaux par équipe et outil');
+  const adoptionTitle = ui('Measured adoption', 'Adoption mesurée');
+  const policyTitle = ui('Tool governance', 'Gouvernance des outils');
+  const empty = ui('No publishable data for this selection.', 'Aucune donnée publiable pour cette sélection.');
+  const common = [ui('Team', 'Équipe'), ui('Tool', 'Outil')];
+  return `<section class="shadow-section"><h3>${ui('Enterprise signals', 'Signaux de l’entreprise')}</h3>
+    ${evidence ? `<dl class="shadow-metrics"><div><dt>${ui('Evidence events', 'Événements collectés')}</dt><dd>${shadowNumber(evidence.events)}</dd></div>
+    <div><dt>${ui('Distinct observed identities', 'Identités distinctes observées')}</dt><dd>${shadowNumber(evidence.unique_users)}</dd></div></dl>
+    <p>${shadowDate(evidence.window_start)} → ${shadowDate(evidence.window_end)} · Open Shadow AI</p>` : `<p>${ui('No publishable Open Shadow AI aggregate.', 'Aucun agrégat Open Shadow AI publiable.')}</p>`}
+    <p>${ui('Enterprise totals may include inventory and observations. They do not measure adoption.', 'Le bilan global peut inclure des inventaires et des observations. L’adoption est mesurée séparément.')}</p></section>
+    <section class="shadow-section"><h3>${esc(usageTitle)}</h3>
+    ${periods.length ? `<div class="shadow-tools"><label class="shadow-field">${ui('Month (UTC)', 'Mois (UTC)')}<select data-shadow-filter="period">${shadowOptions(periods.map(v => [v, v]), period)}</select></label>
+    <label class="shadow-field">${ui('Team', 'Équipe')}<select data-shadow-filter="team">${shadowOptions([['', ui('All teams', 'Toutes les équipes')], ...teams.map(v => [v, v])], team)}</select></label>
+    <label class="shadow-field">${ui('Tool', 'Outil')}<select data-shadow-filter="tool">${shadowOptions([['', ui('All tools', 'Tous les outils')], ...tools.map(v => [v, v])], tool)}</select></label></div>` : ''}
+    <p>${ui(`Privacy threshold: ${shadowNumber(data.privacy_threshold)} people. Small cohorts are hidden.`, `Seuil de confidentialité de ${shadowNumber(data.privacy_threshold)} personnes. Les petits groupes sont masqués.`)}</p>
+    ${shadowTable(usageTitle, [...common, ui('Evidence', 'Type de signal'), ui('People', 'Personnes'), ui('Events', 'Événements')], team_usage.filter(inScope).map(r => [esc(r.team), esc(r.tool), esc(shadowLabel(SHADOW_KIND, r.kind)), shadowNumber(r.people), shadowNumber(r.events)]), empty)}</section>
+    <section class="shadow-section"><h3>${esc(adoptionTitle)}</h3>
+    <p>${ui('Active users among eligible users in the selected month. Both active and inactive groups must meet the privacy threshold.', 'Utilisateurs actifs parmi les personnes éligibles sur le mois sélectionné. Les groupes actifs et inactifs doivent atteindre le seuil.')}</p>
+    ${shadowTable(adoptionTitle, [...common, ui('Active / eligible', 'Actifs / éligibles'), ui('Rate', 'Taux')], adoption.filter(inScope).map(r => [esc(r.team), esc(r.tool), `${shadowNumber(r.active)} / ${shadowNumber(r.eligible)}`, r.eligible > 0 ? new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(r.active / r.eligible) : '—']), empty)}</section>
+    <section class="shadow-section"><h3>${esc(policyTitle)}</h3>
+    ${shadowTable(policyTitle, [ui('Tool', 'Outil'), ui('Status', 'Statut'), ui('Approved alternative', 'Alternative approuvée')], policies.map(r => [esc(r.tool), esc(shadowLabel(SHADOW_POLICY, r.status)), esc(r.alternative || '—')]), ui('No governance decisions recorded yet.', 'Aucune décision de gouvernance enregistrée.'))}
+    ${view.status === 'ready' ? shadowGovernance(view, data) : ''}</section>`;
+}
+function shadowGovernance(view, data) {
+  const { propose, decide } = data.capabilities || {};
+  if (propose !== true && decide !== true) return '';
+  const { draft, busy } = view, disabled = busy ? ' disabled' : '';
+  const alternatives = data.policies.filter(r => r.status === 'approved').map(r => [r.tool, r.tool]);
+  const queue = ui('Decisions pending', 'Décisions en attente');
+  return `<p>${ui('A proposal changes the policy only after approval by a different authorized person.', 'Une autre personne habilitée doit approuver la proposition avant toute modification de la politique.')}</p>
+    ${propose === true ? `<form id="shadowProposal" class="shadow-form"><label class="shadow-field">${ui('Tool ID', 'Identifiant de l’outil')}<input data-shadow-field="tool" name="tool" value="${esc(draft.tool)}" maxlength="64" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="internal-ai-studio" required></label>
+    <label class="shadow-field">${ui('Proposed status', 'Statut proposé')}<select data-shadow-field="status" name="status">${shadowOptions([...SHADOW_POLICY].map(([key, value]) => [key, ui(...value)]), draft.status)}</select></label>
+    <label class="shadow-field">${ui('Alternative', 'Alternative')}<select data-shadow-field="alternative" name="alternative">${shadowOptions([['', ui('None', 'Aucune')], ...alternatives], draft.alternative)}</select></label>
+    <button class="btn" type="submit"${disabled}>${ui('Submit proposal', 'Soumettre la proposition')}</button></form>` : ''}
+    ${shadowTable(queue, [ui('Tool', 'Outil'), ui('Proposed status', 'Statut proposé'), ui('Alternative', 'Alternative'), ...(decide === true ? [ui('Decision', 'Décision')] : [])], data.proposals.map(r => [esc(r.tool), esc(shadowLabel(SHADOW_POLICY, r.status)), esc(r.alternative || '—'), ...(decide === true ? [`<div class="shadow-actions"><button type="button" class="btn" data-shadow-action="approve-${esc(r.id)}"${disabled}>${ui('Approve', 'Approuver')}</button><button type="button" class="btn" data-shadow-action="reject-${esc(r.id)}"${disabled}>${ui('Reject', 'Rejeter')}</button></div>`] : [])]), ui('No pending proposals.', 'Aucune proposition en attente.'))}`;
+}
+function secShadow() {
+  const view = shadowView, demo = view.status === 'demo';
+  const states = {
+    demo: ['Fictional demo', 'Démo fictive'], ready: ['Protected workspace', 'Espace protégé'],
+    loading: ['Loading', 'Chargement'], off: ['Observatory disabled', 'Observatoire désactivé'],
+    blocked: ['Access restricted', 'Accès restreint'], error: ['Service unavailable', 'Service indisponible'],
+  };
+  const details = {
+    demo: ['This sample uses fictional teams, tools and measurements. The demonstration is read-only.', 'Cet exemple présente des équipes, outils et mesures fictifs. La démonstration est en lecture seule.'],
+    ready: ['Review detected signals, adoption of alternatives and decisions by authorized reviewers.', 'Consultez les signaux détectés, l’adoption des alternatives et les décisions des personnes habilitées.'],
+    loading: ['Loading aggregate evidence and governance decisions…', 'Chargement des agrégats et des décisions de gouvernance…'],
+    off: ['An administrator can enable the Observatory on this deployment.', 'L’administrateur peut activer l’Observatoire sur ce déploiement.'],
+    blocked: ['Access requires an authorized account on the enterprise deployment.', 'L’accès nécessite un compte habilité sur le déploiement de l’entreprise.'],
+    error: ['Unable to load the Observatory. Try refreshing this view.', 'Impossible de charger l’Observatoire. Actualisez cette vue pour réessayer.'],
+  };
+  return `<div class="shadow-console" data-shadow-state="${view.status}"><header class="shadow-hero">
+    <span class="shadow-kicker">Open Shadow AI · ${ui(...states[view.status])}</span><h3>${ui('From evidence to decisions', 'Des signaux aux décisions')}</h3>
+    <p>${ui(...details[view.status])}</p></header>
+    ${demo || view.status === 'ready' ? shadowDataSections(view, demo ? SHADOW_DEMO : view.data) : ''}
+    ${!demo && view.status !== 'loading' ? `<div class="shadow-tools"><button type="button" class="btn" data-shadow-action="refresh"${view.busy ? ' disabled' : ''}>${ui('Refresh', 'Actualiser')}</button></div>` : ''}
+    <div class="shadow-message" role="status">${view.notice ? ui(...view.notice) : ''}</div></div>`;
+}
+async function loadShadow(view, clearNotice = false) {
+  const r = await apiFetch('/shadow-ai');
+  if (shadowView !== view) return;
+  const data = r.body;
+  const valid = r.ok && data && Number.isSafeInteger(data.privacy_threshold) && ['team_usage', 'adoption', 'policies', 'proposals'].every(k => Array.isArray(data[k]));
+  view.data = valid ? data : null;
+  view.status = valid ? 'ready' : r.status === 404 ? 'off' : r.status === 401 || r.status === 403 ? 'blocked' : 'error';
+  view.busy = false;
+  if (clearNotice) view.notice = null;
+  repaintShadow();
+}
+function repaintShadow() { shadowView.revision++; renderConsole(); }
+async function shadowMutation(path, payload) {
+  const view = shadowView;
+  if (!view || view.status !== 'ready' || view.busy) return;
+  view.busy = true;
+  view.notice = ['Saving…', 'Enregistrement…'];
+  repaintShadow();
+  const r = await apiFetch(path, { method: 'POST', body: JSON.stringify(payload) });
+  if (shadowView !== view) return;
+  if (r.ok && path.endsWith('/proposals')) view.draft = { tool: '', status: 'reviewing', alternative: '' };
+  view.notice = r.ok ? ['Saved.', 'Enregistré.'] : r.status === 409 ? ['The policy changed. Review the updated state before retrying.', 'La politique a changé. Vérifiez l’état actualisé avant de réessayer.'] : r.status === 403 ? ['This action requires a different authorized approver.', 'Cette action requiert une autre personne habilitée.'] : ['Unable to confirm the action. Review the updated state before retrying.', 'Action non confirmée. Vérifiez l’état actualisé avant de réessayer.'];
+  await loadShadow(view);
+}
+function shadowAction(action) {
+  const view = shadowView;
+  if (!view || view.busy || view.status === 'demo') return;
+  if (action === 'refresh') {
+    view.busy = true;
+    view.notice = ['Refreshing…', 'Actualisation…'];
+    repaintShadow();
+    void loadShadow(view, true);
+    return;
+  }
+  const match = /^(approve|reject)-([a-f0-9]{32})$/.exec(action);
+  if (match && view.data?.capabilities?.decide === true) {
+    void shadowMutation(`/shadow-ai/policies/proposals/${match[2]}/decision`, { decision: match[1] });
+  }
+}
+function submitShadowProposal(form) {
+  const view = shadowView;
+  if (view?.data?.capabilities?.propose !== true) return;
+  const fields = new FormData(form), tool = fields.get('tool'), status = fields.get('status');
+  const alternative = fields.get('alternative') || null;
+  const expected_revision = view.data.policies.find(r => r.tool === tool)?.revision ?? 0;
+  void shadowMutation('/shadow-ai/policies/proposals', { tool, status, alternative, expected_revision });
+}
 
 // Milestones sharing a date are shown together (e.g. Art. 5 prohibitions and Art. 4 literacy)
 function milestoneGroups(ms) {
@@ -3230,6 +3469,7 @@ function renderFactoryPanel() {
   const sn = SNAP || {}, reg = sn.registry || [], c = sn.costs || {}, p = sn.pipeline || {}, a = sn.agentops?.global || {}, slo = sn.agentops?.slo || {}, k = sn.skills || {};
   const rows = [
     ['registry', `${reg.length} use cases · ${reg.filter(u => u.risk?.tier === 'high').length} haut risque · ${reg.filter(u => u.risk?.reevaluation_required).length} réévaluation(s)`],
+    ['shadow', ui('Shadow AI signals, adoption and governance', 'Signaux Shadow AI, adoption et gouvernance')],
     ['finops', `${eur(c.totals?.total_eur)} / ${num(c.days || 30)} j · ${(c.alerts || []).length} alerte(s) de gaspillage`],
     ['pipeline', `${(p.items || []).filter(i => i.blocked_by).length} déploiement(s) bloqué(s) · ${(p.rollbacks || []).length} rollback(s)`],
     ['dataloop', `${(sn.dataloop?.events || []).length} événement(s) · réentraînement désactivé`],
@@ -3240,7 +3480,7 @@ function renderFactoryPanel() {
     ['grafana', sn.grafana?.available ? `${(sn.grafana.dashboards || []).length} tableaux provisionnés` : 'non joignable (démo)'],
   ];
   setHTMLKeepFocus($('factoryPanel'), `<div class="grp"><div class="grp-h">Console de l’usine ${sourceBadge()}</div><ul class="plist">${rows.map(([key, txt]) =>
-    `<li><button type="button" class="srow-btn" data-csec="${key}">${icon(CONSOLE_SECTIONS[key].icon)}<span class="pmain"><span class="pname">${esc(CONSOLE_SECTIONS[key].title)}</span><small>${esc(txt)}</small></span></button></li>`).join('')}</ul></div>`);
+    `<li><button type="button" class="srow-btn" data-csec="${key}">${icon(CONSOLE_SECTIONS[key].icon)}<span class="pmain"><span class="pname">${esc(consoleTitle(key))}</span><small>${esc(txt)}</small></span></button></li>`).join('')}</ul></div>`);
 }
 async function consoleAction(btn) {
   const act = btn.dataset.cact;
@@ -3294,6 +3534,7 @@ function setLanguage(lang) {
   $('viewTop').textContent = ui('Floor plan', 'Plan');
   $('viewLabels').textContent = ui('Labels', 'Étiquettes');
   $('pegBtn').querySelector('span').textContent = ui('Visit', 'Visite');
+  if ($('shadowMapOpen')) $('shadowMapOpen').textContent = shadowTitle();
   const url = new URL(location.href);
   if (url.searchParams.has('lang') && url.searchParams.get('lang') !== lang) {
     url.searchParams.set('lang', lang);
@@ -3380,10 +3621,13 @@ function setHTMLKeepFocus(root, html) {
   if (root.__html === html) return;
   root.__html = html;
   const a = document.activeElement;
-  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f'].find(x => a.dataset[x] !== undefined) : null;
+  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter'].find(x => a.dataset[x] !== undefined) : null;
   const v = k && a.dataset[k];
   root.innerHTML = html;
-  if (k) (root.querySelector(`[data-${k}="${CSS.escape(v)}"]`) || (k === 'rec' ? root.querySelector('.recs') : null))?.focus({ preventScroll: true });
+  if (k) {
+    const attr = k.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+    (root.querySelector(`[data-${attr}="${CSS.escape(v)}"]`) || (k === 'rec' ? root.querySelector('.recs') : null))?.focus({ preventScroll: true });
+  }
 }
 
 function renderKpis(sn) {
@@ -3571,7 +3815,7 @@ function showTooltip(h, e) {
     const d = RACK?.dev, n = RACK?.sensitive || 0;
     html = `<b>GPU local · inférence des données sensibles</b><div class="tt-sub">${d ? `${esc(gpuName(d))} · ${Math.round(d.util_pct)} % · ${Math.round(d.temp_c)} °C · ${Math.round(d.power_w)} W · ${(+d.mem_used_gb).toFixed(1)}/${(+d.mem_total_gb).toFixed(0)} Go` : 'Pas de télémétrie'}<br>source : ${RACK?.source === 'dcgm' ? 'DCGM (réel)' : 'simulateur'}${n ? ` · ${n} poste${n > 1 ? 's' : ''} Lab sur UC sensible` : ''}</div><div class="tt-sub" style="opacity:.75">Cliquer pour la console Placement</div>`;
   } else if (h.kind === 'console') {
-    html = `<b>${esc(CONSOLE_SECTIONS[h.id]?.title || 'Console')}</b><div class="tt-sub">Cliquer pour ouvrir la console de l’usine</div>`;
+    html = `<b>${esc(consoleTitle(h.id))}</b><div class="tt-sub">${ui('Click to open the factory console', 'Cliquer pour ouvrir la console de l’usine')}</div>`;
   } else if (h.kind === 'board') {
     html = `<b>Board portefeuille AI Factory</b><div class="tt-sub">Use cases par phase et présence des squads — cliquer pour ouvrir le Pilotage</div>`;
   } else if (h.kind === 'person') {
@@ -3980,14 +4224,28 @@ function bindUI() {
   $('factoryPanel').addEventListener('click', e => { const b = e.target.closest('[data-csec]'); if (b) openConsole(b.dataset.csec); });
   $('cClose').innerHTML = icon('x');
   $('cClose').addEventListener('click', closeConsole);
-  $('cTabs').addEventListener('click', e => { const b = e.target.closest('[data-csec]'); if (b) { consoleKey = b.dataset.csec; renderConsole(); $('cBody').scrollTop = 0; } });
+  $('cTabs').addEventListener('click', e => { const b = e.target.closest('[data-csec]'); if (b) { selectConsole(b.dataset.csec); renderConsole(); $('cBody').scrollTop = 0; } });
   $('cTabs').addEventListener('keydown', e => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.stopPropagation(); e.preventDefault();
     const i = CONSOLE_ORDER.indexOf(consoleKey), k = CONSOLE_ORDER[(i + (e.key === 'ArrowRight' ? 1 : CONSOLE_ORDER.length - 1)) % CONSOLE_ORDER.length];
-    consoleKey = k; renderConsole(); $('cTabs').querySelector(`[data-csec="${k}"]`)?.focus();
+    selectConsole(k); renderConsole(); $('cTabs').querySelector(`[data-csec="${k}"]`)?.focus();
   });
   $('cBody').addEventListener('click', e => { const b = e.target.closest('[data-cact]'); if (b && !b.disabled) consoleAction(b); });
+  $('cBody').addEventListener('click', e => { const b = e.target.closest('[data-shadow-action]'); if (b && !b.disabled) shadowAction(b.dataset.shadowAction); });
+  $('cBody').addEventListener('change', e => {
+    if (!shadowView || !e.target.matches('[data-shadow-filter]')) return;
+    const key = e.target.dataset.shadowFilter, { filters } = shadowView;
+    if (key === 'period') filters.team = '';
+    if (key !== 'tool') filters.tool = '';
+    filters[key] = e.target.value;
+    repaintShadow();
+  });
+  $('cBody').addEventListener('input', e => { if (shadowView && e.target.matches('[data-shadow-field]')) shadowView.draft[e.target.dataset.shadowField] = e.target.value; });
+  $('cBody').addEventListener('submit', e => {
+    if (e.target.id !== 'shadowProposal') return;
+    e.preventDefault(); submitShadowProposal(e.target);
+  });
   $('pilotPanel').addEventListener('click', e => {
     const d = e.target.closest('[data-day]');
     if (d) { const t = timeForDay(d.dataset.day); stopPlay(); S.live = false; changeDay(d.dataset.day, t); return; }

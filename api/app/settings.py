@@ -62,6 +62,9 @@ class Settings:
     demo_seed: int = 42
     demo_date: str | None = None  # optional ISO anchor date override (FACTORY_DEMO_DATE)
     state_dir: str = "/data"
+    shadow_ai_enabled: bool = field(default=False, kw_only=True)
+    shadow_ai_groups: tuple[str, ...] = field(default=(), kw_only=True)
+    shadow_ai_privacy_threshold: int = field(default=5, kw_only=True)
     prometheus_url: str | None = None
     grafana_url: str | None = None
     grafana_token_file: str | None = None
@@ -94,6 +97,10 @@ class Settings:
         object.__setattr__(self, "default_lang", normalize_lang(self.default_lang, DEFAULT_LANG))
         if not math.isfinite(self.cost_fx) or self.cost_fx <= 0:
             raise ValueError("FACTORY_COST_FX must be a finite positive rate")
+        if self.shadow_ai_enabled and (self.auth_mode != "proxy" or not self.shadow_ai_groups):
+            raise ValueError("Shadow AI requires proxy authentication and FACTORY_SHADOW_AI_GROUPS")
+        if type(self.shadow_ai_privacy_threshold) is not int or not 5 <= self.shadow_ai_privacy_threshold <= 100:
+            raise ValueError("FACTORY_SHADOW_AI_PRIVACY_THRESHOLD must be between 5 and 100")
         if self.workbench_mode not in {"off", "demo", "protected_demo"}:
             raise ValueError("invalid FACTORY_WORKBENCH_MODE")
         if self.workbench_chat_mode not in {"simulation", "local"}:
@@ -130,12 +137,22 @@ class Settings:
             cost_fx = float(_env("FACTORY_COST_FX", "1.0") or "1.0")
         except ValueError:
             raise ValueError("FACTORY_COST_FX must be a finite positive rate") from None
+        shadow_ai = (_env("FACTORY_SHADOW_AI_ENABLED", "off") or "off").lower()
+        if shadow_ai not in {"on", "off"}:
+            raise ValueError("invalid FACTORY_SHADOW_AI_ENABLED")
+        try:
+            shadow_threshold = int(_env("FACTORY_SHADOW_AI_PRIVACY_THRESHOLD", "5") or "5")
+        except ValueError:
+            raise ValueError("FACTORY_SHADOW_AI_PRIVACY_THRESHOLD must be between 5 and 100") from None
         return cls(
             config_dir=_env("FACTORY_CONFIG_DIR", "/config") or "/config",
             demo_mode=mode,
             demo_seed=_env_int("FACTORY_DEMO_SEED", 42),
             demo_date=_env("FACTORY_DEMO_DATE"),
             state_dir=_env("FACTORY_STATE_DIR", "/data") or "/data",
+            shadow_ai_enabled=shadow_ai == "on",
+            shadow_ai_groups=_env_list("FACTORY_SHADOW_AI_GROUPS"),
+            shadow_ai_privacy_threshold=shadow_threshold,
             prometheus_url=_env("PROMETHEUS_URL"),
             grafana_url=_env("GRAFANA_URL"),
             grafana_token_file=_env("GRAFANA_TOKEN_FILE"),

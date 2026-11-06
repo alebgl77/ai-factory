@@ -2,6 +2,7 @@
 //   node tests/e2e/run.mjs                                  -> file:// mode with the embedded demo snapshot
 //   E2E_BASE_URL=http://localhost:8080 node tests/e2e/run.mjs -> deployed stack (API mode)
 // THREE_VENDOR_DIR=/path/to/three/package serves Three.js locally instead of the CDN (offline CI).
+// E2E_VISUAL_DIR=/path/to/output saves Observatory screenshots using the fictional sample.
 import { createRequire } from 'node:module';
 // ESM imports ignore NODE_PATH: fall back to require() so a global Playwright install also works
 let chromium;
@@ -14,6 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const dashboardPath = path.join(root, 'dashboard/index.html');
 const base = process.env.E2E_BASE_URL || pathToFileURL(dashboardPath).href;
 const vendor = process.env.THREE_VENDOR_DIR;
+const visualDir = process.env.E2E_VISUAL_DIR;
 const results = [];
 const check = (name, ok, info = '') => {
   results.push({ name, ok: !!ok, info });
@@ -52,7 +54,37 @@ for (const id of ['S1', 'X1', 'X2', 'X3', 'O1', 'O2']) check(`3D space ${id} pre
 
 await page.click('#tabFactory');
 await page.waitForTimeout(200);
-check('Usine tab lists 9 console sections', (await page.$$('#factoryPanel [data-csec]')).length === 9);
+check('Usine tab lists 10 console sections', (await page.$$('#factoryPanel [data-csec]')).length === 10);
+const shadowMap = page.locator('#shadowMapOpen');
+if (!process.env.E2E_BASE_URL && visualDir) await page.screenshot({ path: path.join(visualDir, 'ai-factory-observatoire-carte.png'), animations: 'disabled' });
+await shadowMap.focus();
+await page.keyboard.press('Enter');
+check('Observatory map label opens its console with the keyboard',
+  await page.locator('#cTitle').textContent() === 'Observatoire des usages IA');
+await page.keyboard.press('Escape');
+check('closing the Observatory restores focus to its map label', await shadowMap.evaluate(el => document.activeElement === el));
+await shadowMap.click();
+check('the 3D map label also opens the Observatory with the pointer', await page.locator('#cTitle').textContent() === 'Observatoire des usages IA');
+await page.keyboard.press('Escape');
+await page.locator('#factoryPanel [data-csec="shadow"]').click();
+check('Observatory has a second entry in the Factory panel', await page.locator('#console').getAttribute('aria-hidden') === 'false');
+if (!process.env.E2E_BASE_URL) {
+  check('the embedded Observatory sample is labelled fictional and is read-only',
+    await page.locator('[data-shadow-state="demo"]').count() === 1 &&
+    await page.getByText('Démo fictive', { exact: false }).count() > 0 && await page.locator('#shadowProposal').count() === 0);
+  await page.locator('[data-shadow-filter="team"]').selectOption('delivery');
+  const teamUsage = page.getByRole('table', { name: 'Signaux par équipe et outil' });
+  check('team filter scopes usage without changing the enterprise signal summary',
+    await teamUsage.locator('tbody tr').count() === 1 && (await teamUsage.textContent()).includes('demo-writing-assistant') &&
+    (await page.locator('.shadow-metrics').textContent()).includes('387'));
+  await page.locator('[data-shadow-filter="team"]').selectOption('');
+  await page.locator('[data-shadow-filter="tool"]').selectOption('internal-ai-studio');
+  check('tool filter applies to observed signals and separately measured adoption', await teamUsage.locator('tbody tr').count() === 1 &&
+    await page.getByRole('table', { name: 'Adoption mesurée' }).locator('tbody tr').count() === 2);
+  await page.locator('[data-shadow-filter="tool"]').selectOption('');
+  if (visualDir) await page.screenshot({ path: path.join(visualDir, 'ai-factory-observatoire-desktop.png'), animations: 'disabled' });
+}
+await page.keyboard.press('Escape');
 for (const sec of ['registry', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'catalog', 'skills', 'grafana']) {
   await page.evaluate(k => window.__twin.openConsole(k), sec);
   await page.waitForTimeout(150);
@@ -124,6 +156,16 @@ await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__twin.pov.active && !window.__twin.pov.animating, null, { timeout: 8000 }).catch(() => {});
   const cam = await page.evaluate(() => ({ y: window.__twin.camera.position.y, fov: window.__twin.camera.fov, ctrl: window.__twin.controls.enabled }));
   check('visit mode: Escape leaves and restores the overview camera', !(await pov()).active && cam.y > 8 && cam.fov === 38 && cam.ctrl, JSON.stringify(cam));
+  const doorOpen = await page.evaluate(() => [-3.6, -4, -4.4, -4.8, -5.2, -5.6].every(z => !window.__twin.pov.blocked(8.55, z)));
+  await page.evaluate(() => window.__twin.pov.enter(8.55, -5.9, 0));
+  await page.waitForFunction(() => !window.__twin.pov.animating && window.__twin.pov.target?.id === 'shadow', null, { timeout: 8000 }).catch(() => {});
+  const observatory = await pov();
+  check('visit mode: the former entrance and the Observatory screen are reachable', doorOpen && observatory.zone === 'Observatoire des usages IA' && observatory.target?.id === 'shadow');
+  await page.keyboard.press('KeyE');
+  check('visit mode: E opens the Observatory', await page.locator('#console').getAttribute('aria-hidden') === 'false' && await page.locator('#cTitle').textContent() === 'Observatoire des usages IA');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !window.__twin.pov.active && !window.__twin.pov.animating, null, { timeout: 8000 });
 }
 
 for (const lens of ['uc', 'heat', 'status']) { await page.click(`[data-lens="${lens}"]`); await page.waitForTimeout(150); }
@@ -145,6 +187,10 @@ if (!process.env.E2E_BASE_URL) {
   }));
   check('offline EN switch updates the header, source badge and rendered registry immediately',
     switched.lang === 'en' && switched.payload === 'en' && switched.source === 'Offline demo' && switched.registry && switched.name !== frenchName && switched.workshop === 'exercise/index.html?lang=en');
+  await page.evaluate(() => window.__twin.openConsole('shadow'));
+  check('Observatory label and console are translated after switching to English',
+    await shadowMap.textContent() === 'AI Usage Observatory' && await page.locator('#cTitle').textContent() === 'AI Usage Observatory' &&
+    await page.getByRole('table', { name: 'Measured adoption' }).count() === 1);
   await page.reload();
   await page.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'en');
   check('saved locale survives a reload', await page.locator('#languageSelect').inputValue() === 'en');
@@ -157,6 +203,19 @@ if (!process.env.E2E_BASE_URL) {
   const mock = await ctx.newPage();
   mock.setDefaultTimeout(15000);
   await mock.clock.install();
+  let shadowStatus = 404, holdShadow = null, shadowReads = 0, shadowRole = 'viewer', proposedPolicy = null, policyDecision = null;
+  const shadowProposalId = '9'.repeat(32);
+  const shadowMarkup = '<em data-xss-probe="shadow">legal</em>';
+  const shadowFixture = () => ({
+    privacy_threshold: 5,
+    evidence: { window_start: '2026-09-01T00:00:00Z', window_end: '2026-10-01T00:00:00Z', events: 90, unique_users: 16 },
+    team_usage: [{ period: '2026-09', team: shadowMarkup, tool: 'external-ai', kind: 'observation', people: 8, events: 33 }],
+    adoption: [{ period: '2026-09', team: 'platform', tool: 'internal-ai', active: 10, eligible: 18 }],
+    policies: [{ tool: 'internal-ai', status: 'approved', alternative: null, revision: 2 },
+      ...(policyDecision ? [{ tool: 'external-ai', status: 'restricted', alternative: 'internal-ai', revision: 1 }] : [])],
+    proposals: proposedPolicy && !policyDecision ? [{ ...proposedPolicy, id: shadowProposalId }] : [],
+    capabilities: { propose: ['editor', 'admin'].includes(shadowRole), decide: shadowRole === 'approver' },
+  });
   let apiReady = false;
   let holdFrench = null;
   const snapshotCalls = [];
@@ -166,7 +225,7 @@ if (!process.env.E2E_BASE_URL) {
   const tierMarkup = 'high" data-xss-probe="tier"><em data-xss-probe="tier">probe</em>';
   const codeMarkup = '<em data-xss-probe="code">UC-04</em>';
   const metricMarkup = '<em data-xss-probe="metric">metric</em>';
-  await mock.route('http://factory.test/**', route => {
+  await ctx.route('http://factory.test/**', route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/') {
       return route.fulfill({ contentType: 'text/html; charset=utf-8', body: url.searchParams.has('static') ? html.replace('<html ', '<html data-static-demo="1" ') : html });
@@ -191,6 +250,19 @@ if (!process.env.E2E_BASE_URL) {
     if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
       assessmentCalls.push(route.request().postDataJSON());
       return route.fulfill({ status: 409, json: { code: 'stale_review_revision' } });
+    }
+    if (url.pathname === '/api/v1/shadow-ai') {
+      shadowReads++;
+      const reply = { status: shadowStatus, json: shadowStatus === 200 ? shadowFixture() : {} };
+      return holdShadow ? holdShadow.then(() => route.fulfill(reply)) : route.fulfill(reply);
+    }
+    if (url.pathname === '/api/v1/shadow-ai/policies/proposals') {
+      proposedPolicy = route.request().postDataJSON();
+      return route.fulfill({ status: 201, json: {} });
+    }
+    if (url.pathname === `/api/v1/shadow-ai/policies/proposals/${shadowProposalId}/decision`) {
+      policyDecision = route.request().postDataJSON();
+      return route.fulfill({ status: 200, json: {} });
     }
     const local = path.join(root, 'dashboard', url.pathname.slice(1));
     return fs.existsSync(local) ? route.fulfill({ path: local }) : route.fulfill({ status: 404 });
@@ -244,7 +316,8 @@ if (!process.env.E2E_BASE_URL) {
     await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
     (await mock.locator('#cBody').textContent()).includes(metricMarkup));
   await mock.evaluate(() => window.__twin.closeConsole());
-  await mock.click('.tag[data-res="X1"]');
+  await mock.locator('#tabSpaces').click();
+  await mock.locator('#spacePanel button[data-res="X1"]').click();
   await mock.selectOption('#fUc', 'uc-04');
   await mock.selectOption('#languageSelect', 'fr');
   await mock.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'fr');
@@ -253,12 +326,99 @@ if (!process.env.E2E_BASE_URL) {
     await useCaseSelect.inputValue() === 'uc-04' && await useCaseSelect.locator('option').first().getAttribute('value') === '' &&
     (await useCaseSelect.locator('option:checked').textContent()).includes(`Sensible · ${codeMarkup} · ${frenchName} (API)`) &&
     await useCaseSelect.locator('[data-xss-probe]').count() === 0);
-  const callsBeforeStatic = snapshotCalls.length;
-  await mock.goto('http://factory.test/?static');
-  await mock.waitForFunction(() => window.__twin?.source === 'embedded');
-  await mock.clock.fastForward(30000);
-  check('published static mode never requests the API, including after a poll interval', snapshotCalls.length === callsBeforeStatic);
+  const openShadow = () => mock.evaluate(() => window.__twin.openConsole('shadow'));
+  const shadowReady = () => mock.locator('[data-shadow-state="ready"]').waitFor();
+  const refreshShadow = () => mock.locator('[data-shadow-action="refresh"]').click();
+  await openShadow();
+  await mock.locator('[data-shadow-state="off"]').waitFor();
+  check('live disabled Observatory never displays fictional rows', await mock.locator('[data-shadow-state="demo"]').count() === 0 && await mock.locator('.shadow-metrics').count() === 0);
+  shadowStatus = 503;
+  await refreshShadow();
+  await mock.locator('[data-shadow-state="error"]').waitFor();
+  check('live outage displays a retryable error without sample data', await mock.locator('[data-shadow-state="demo"]').count() === 0 && await mock.locator('[data-shadow-action="refresh"]').isEnabled());
+  shadowStatus = 200;
+  await refreshShadow();
+  await shadowReady();
+  check('protected aggregates are rendered as text and remain outside the snapshot',
+    (await mock.locator('#cBody').textContent()).includes(shadowMarkup) && await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
+    await mock.evaluate(() => !JSON.stringify(window.__twin.SNAP).includes('external-ai')));
+  check('viewers see protected aggregates without write controls', await mock.locator('#shadowProposal').count() === 0 && await mock.locator('[data-shadow-action^="approve-"]').count() === 0);
+  shadowRole = 'editor';
+  await refreshShadow();
+  await mock.locator('#shadowProposal [name="tool"]').fill('external-ai');
+  await mock.locator('#shadowProposal [name="status"]').selectOption('restricted');
+  await mock.locator('#shadowProposal [name="alternative"]').selectOption('internal-ai');
+  await mock.locator('#shadowProposal button').click();
+  await mock.getByRole('table', { name: 'Décisions en attente' }).waitFor();
+  check('editor can propose a restricted tool and approved alternative but cannot decide',
+    proposedPolicy?.tool === 'external-ai' && proposedPolicy?.expected_revision === 0 && proposedPolicy?.status === 'restricted' &&
+    proposedPolicy?.alternative === 'internal-ai' && await mock.locator('[data-shadow-action^="approve-"]').count() === 0);
+  shadowRole = 'approver';
+  await refreshShadow();
+  await mock.locator(`[data-shadow-action="approve-${shadowProposalId}"]`).click();
+  await mock.getByRole('table', { name: 'Gouvernance des outils' }).getByText('external-ai').waitFor();
+  check('the dedicated approver refreshes the policy instead of assuming local approval',
+    policyDecision?.decision === 'approve' && await mock.locator('[data-shadow-action^="approve-"]').count() === 0);
+  shadowStatus = 403;
+  await refreshShadow();
+  await mock.locator('[data-shadow-state="blocked"]').waitFor();
+  check('loss of access removes previously displayed aggregates and governance actions',
+    await mock.locator('.shadow-metrics').count() === 0 && await mock.locator('#shadowProposal').count() === 0);
+  await mock.evaluate(() => window.__twin.closeConsole());
+  shadowStatus = 200;
+  let releaseShadow;
+  holdShadow = new Promise(resolve => { releaseShadow = resolve; });
+  const shadowRequest = mock.waitForRequest(/\/api\/v1\/shadow-ai$/);
+  await openShadow();
+  await shadowRequest;
+  await mock.evaluate(() => window.__twin.openConsole('catalog'));
+  const shadowResponse = mock.waitForResponse(/\/api\/v1\/shadow-ai$/);
+  releaseShadow();
+  await (await shadowResponse).finished();
+  check('a delayed Observatory response cannot repaint another console', await mock.locator('[data-shadow-state]').count() === 0 && (await mock.locator('#cTitle').textContent()).includes('Catalogue'));
   await mock.close();
+
+  // Test a fresh static boot after releasing the live renderer and its clock.
+  const callsBeforeStatic = snapshotCalls.length;
+  const shadowCallsBeforeStatic = shadowReads;
+  const staticPage = await ctx.newPage();
+  await staticPage.clock.install();
+  await staticPage.goto('http://factory.test/?static', { waitUntil: 'commit', timeout: 15000 });
+  await staticPage.waitForFunction(() => window.__appReady === true && window.__twin?.source === 'embedded', null, { timeout: 30000 });
+  await staticPage.evaluate(() => window.__twin.openConsole('shadow'));
+  await staticPage.locator('[data-shadow-state="demo"]').waitFor();
+  await staticPage.clock.fastForward(30000);
+  check('published static mode never requests either API, including after a poll interval',
+    snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic);
+  await staticPage.close();
+
+  const mobile = await ctx.newPage();
+  await mobile.setViewportSize({ width: 390, height: 844 });
+  await mobile.goto(pathToFileURL(dashboardPath).href + '?lang=fr');
+  await mobile.waitForFunction(() => window.__appReady === true, null, { timeout: 30000 });
+  await mobile.locator('#tabFactory').click();
+  await mobile.locator('#factoryPanel [data-csec="shadow"]').click();
+  const demoVisible = await mobile.locator('[data-shadow-state="demo"]').isVisible();
+  const mobileLayout = await mobile.locator('#cBody').evaluate(el => ({
+    consoleHeight: el.clientHeight,
+    consoleScrollHeight: el.scrollHeight,
+    documentWidth: document.documentElement.clientWidth,
+    documentScrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
+  check('mobile Factory route shows the demo with a scrollable console and no page overflow',
+    demoVisible && mobileLayout.consoleScrollHeight > mobileLayout.consoleHeight && mobileLayout.documentScrollWidth <= mobileLayout.documentWidth,
+    JSON.stringify({ demoVisible, ...mobileLayout }));
+  const mobileUsage = mobile.getByRole('table', { name: 'Signaux par équipe et outil' });
+  check('mobile usage rows keep their labels and fit without horizontal scrolling', await mobileUsage.evaluate(el => {
+    const row = el.querySelector('tbody tr'), label = row.querySelector('.shadow-cell-label');
+    return getComputedStyle(row).display === 'grid' && getComputedStyle(label).display === 'block' && el.parentElement.scrollWidth <= el.parentElement.clientWidth;
+  }));
+  if (visualDir) {
+    await mobile.getByRole('heading', { name: 'Signaux par équipe et outil' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
+    await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-observatoire-mobile.png'), animations: 'disabled' });
+  }
+  await mobile.close();
 }
 
 await browser.close();
