@@ -316,7 +316,8 @@ if (!process.env.E2E_BASE_URL) {
     await mock.locator('#cBody [data-xss-probe]').count() === 0 &&
     (await mock.locator('#cBody').textContent()).includes(metricMarkup));
   await mock.evaluate(() => window.__twin.closeConsole());
-  await mock.click('.tag[data-res="X1"]');
+  await mock.locator('#tabSpaces').click();
+  await mock.locator('#spacePanel button[data-res="X1"]').click();
   await mock.selectOption('#fUc', 'uc-04');
   await mock.selectOption('#languageSelect', 'fr');
   await mock.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'fr');

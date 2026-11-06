@@ -546,6 +546,7 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 }
 @media (max-width:480px){
   #app{grid-template-rows:auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto}
+  .top-right{flex-basis:100%}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kpi-sub{display:none}
   .kpi .kl{display:none}
@@ -554,6 +555,8 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
   .hint{top:84px}
   .clock-time{font-size:20px}
   .clock-date{white-space:normal}
+  .timeline{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"day day" "play live" "track track";gap:8px}
+  .live-btn{justify-self:end}
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
