@@ -59,9 +59,9 @@ RUN set -eu; \
       mkdir -p /build/site/vendor && cp -r /vendor/three /build/site/vendor/three; \
     fi
 
-# The stable nginx/alpine-slim image keeps UID 101 and carries the patched Alpine packages.
-# Upstream publishes stable images under nginx/ from nginx 1.30.6 onwards.
-FROM nginx/nginx-unprivileged:1.31.7-alpine-slim@sha256:9f239061cbd9cc83fa684c653a5e825a0726410364aa3401f9490d7dc8c35e77
+# This unprivileged nginx image uses UID 101 and includes Alpine fixes for CVE-2026-107891
+# (musl and musl-utils) and CVE-2026-85091 (zlib).
+FROM nginx/nginx-unprivileged:1.31.8-alpine-slim@sha256:633f37ad70b9fd48d4da573db1ebc9111a9ad174e5178e83bd2ef45381fde5e2
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --from=vendor --chown=root:root /build/site/ /usr/share/nginx/html/
 # Listens on port 80 as uid 101: docker-compose.yml sets

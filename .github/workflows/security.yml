@@ -9,8 +9,9 @@
 #     CycloneDX and SPDX JSON, kept as workflow artifacts.
 # Gate policy (blocking): known vulnerabilities rated HIGH or CRITICAL that have a fixed version,
 # misconfigurations and secrets rated HIGH or CRITICAL (gitleaks in ci.yml blocks on any secret).
-# Everything else is reported in code scanning (Security tab). Accepted risks live in .github/trivy/trivyignore.yaml, each with a
-# statement and an expiry date.
+# Code scanning receives repository findings, image vulnerabilities with an upstream fix, and
+# image secrets. Full image vulnerability reports are kept as workflow artifacts. Accepted risks
+# live in .github/trivy/trivyignore.yaml, each with a statement and an expiry date.
 name: security
 
 on:
@@ -31,7 +32,7 @@ env:
   TRIVY_VERSION: v0.76.1 # explicit: the trivy-action default (v0.70.0) is older
   SYFT_VERSION: v1.55.0
   # Code scanning uploads need a token that can write security events, which pull requests
-  # from forks never get: their findings stay in the job log and the gate.
+  # from forks never get. Their scans and gate still run and image reports are retained.
   CAN_UPLOAD_SARIF: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
 jobs:
@@ -165,7 +166,8 @@ jobs:
         env:
           CONTEXT: ${{ matrix.context }}
         run: docker build --pull --tag "$IMAGE_REF" "$CONTEXT"
-      - name: Scan (SARIF, every severity)
+      - name: Scan (SARIF, fixable vulnerabilities and secrets)
+        id: trivy-image-sarif
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: ${{ env.TRIVY_VERSION }}
@@ -173,10 +175,11 @@ jobs:
           image-ref: ${{ env.IMAGE_REF }}
           scanners: vuln,secret
           trivy-config: .github/trivy/trivy.yaml
+          ignore-unfixed: true
           format: sarif
           output: trivy-image.sarif
       - name: Upload to code scanning
-        if: ${{ !cancelled() && env.CAN_UPLOAD_SARIF == 'true' && hashFiles('trivy-image.sarif') != '' }}
+        if: ${{ !cancelled() && steps.trivy-image-sarif.outcome == 'success' && env.CAN_UPLOAD_SARIF == 'true' }}
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: trivy-image.sarif
@@ -219,6 +222,27 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           format: table
+      - name: Scan (SARIF, all image vulnerabilities)
+        id: trivy-image-full
+        if: ${{ !cancelled() && steps.trivy-image-sarif.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: image
+          image-ref: ${{ env.IMAGE_REF }}
+          scanners: vuln # Secret matches must stay out of downloadable artifacts.
+          trivy-config: .github/trivy/trivy.yaml
+          ignore-unfixed: false
+          format: sarif
+          output: ${{ runner.temp }}/trivy-image-full.sarif
+      - name: Retain full image vulnerability report
+        if: ${{ !cancelled() && steps.trivy-image-full.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: trivy-image-vulnerabilities-${{ matrix.image }}
+          path: ${{ runner.temp }}/trivy-image-full.sarif
+          if-no-files-found: error
+          retention-days: 30
 
   sbom-source:
     name: SBOM (source tree)

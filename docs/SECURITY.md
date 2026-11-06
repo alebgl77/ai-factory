@@ -372,8 +372,11 @@ without a read-only root filesystem and were not runtime-tested here (no GPU).
   pull request and weekly; pip-audit on every pinned requirements file; Trivy on the repository
   (dependencies, Dockerfile misconfigurations, secrets) and on every image built here, daily;
   gitleaks on the full history; OpenSSF Scorecard weekly. CI fails on known fixable HIGH or
-  CRITICAL vulnerabilities and on HIGH/CRITICAL misconfigurations or secrets. Accepted risks are
-  listed with a reason and an expiry date in
+  CRITICAL vulnerabilities and on HIGH/CRITICAL misconfigurations or secrets. GitHub Code
+  Scanning receives all repository findings, image secrets and image vulnerabilities with a
+  fix at any severity. Image vulnerabilities without an upstream fix remain open risks in the
+  vulnerability-only SARIF artifacts `trivy-image-vulnerabilities-*`, retained for 30 days by
+  the `security` workflow. Accepted risks are listed with a reason and an expiry date in
   [`.github/trivy/trivyignore.yaml`](../.github/trivy/trivyignore.yaml).
 - **SBOM.** CycloneDX and SPDX for the source tree and every image: `scripts/sbom.sh` locally,
   CI artifacts (`security.yml`), release assets.
