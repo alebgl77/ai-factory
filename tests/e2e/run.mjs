@@ -225,7 +225,7 @@ if (!process.env.E2E_BASE_URL) {
   const tierMarkup = 'high" data-xss-probe="tier"><em data-xss-probe="tier">probe</em>';
   const codeMarkup = '<em data-xss-probe="code">UC-04</em>';
   const metricMarkup = '<em data-xss-probe="metric">metric</em>';
-  await mock.route('http://factory.test/**', route => {
+  await ctx.route('http://factory.test/**', route => {
     const url = new URL(route.request().url());
     if (url.pathname === '/') {
       return route.fulfill({ contentType: 'text/html; charset=utf-8', body: url.searchParams.has('static') ? html.replace('<html ', '<html data-static-demo="1" ') : html });
@@ -375,16 +375,21 @@ if (!process.env.E2E_BASE_URL) {
   releaseShadow();
   await (await shadowResponse).finished();
   check('a delayed Observatory response cannot repaint another console', await mock.locator('[data-shadow-state]').count() === 0 && (await mock.locator('#cTitle').textContent()).includes('Catalogue'));
+  await mock.close();
+
+  // Test a fresh static boot after releasing the live renderer and its clock.
   const callsBeforeStatic = snapshotCalls.length;
   const shadowCallsBeforeStatic = shadowReads;
-  await mock.goto('http://factory.test/?static');
-  await mock.waitForFunction(() => window.__twin?.source === 'embedded');
-  await openShadow();
-  await mock.locator('[data-shadow-state="demo"]').waitFor();
-  await mock.clock.fastForward(30000);
+  const staticPage = await ctx.newPage();
+  await staticPage.clock.install();
+  await staticPage.goto('http://factory.test/?static', { waitUntil: 'commit', timeout: 15000 });
+  await staticPage.waitForFunction(() => window.__appReady === true && window.__twin?.source === 'embedded', null, { timeout: 30000 });
+  await staticPage.evaluate(() => window.__twin.openConsole('shadow'));
+  await staticPage.locator('[data-shadow-state="demo"]').waitFor();
+  await staticPage.clock.fastForward(30000);
   check('published static mode never requests either API, including after a poll interval',
     snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic);
-  await mock.close();
+  await staticPage.close();
 
   const mobile = await ctx.newPage();
   await mobile.setViewportSize({ width: 390, height: 844 });
