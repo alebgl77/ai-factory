@@ -108,15 +108,26 @@ def _check_origin(request: Request) -> None:
 
 def _observatory_roles(
     request: Request, access: Access, required: frozenset[str] | None = None,
-) -> frozenset[str]:
+) -> tuple[frozenset[str], frozenset[str] | None]:
     principal = access.principal
     allowed = request.app.state.settings.shadow_ai_groups
-    assigned_groups = set(allowed).intersection(principal.groups)
-    role_map = request.app.state.service.guard.config.role_map
+    assigned_groups = frozenset(allowed).intersection(principal.groups)
+    svc = request.app.state.service
+    role_map = svc.guard.config.role_map
     roles = frozenset(role for group, role in role_map if group in assigned_groups)
-    if not principal.authenticated or not roles or (required and (not principal.user or not roles & required)):
+    if not principal.authenticated or not roles:
         raise HTTPException(403, detail="observatory_forbidden")
-    return roles
+    teams = None
+    if svc.bu_policy is not None:
+        scope = svc.business_scope(access, groups=assigned_groups)
+        if not scope.all_units:
+            teams = scope.shadow_teams
+        # Global rights must come from the very same mapped group as the Shadow role.
+        roles = frozenset(role for group, role in role_map if group in assigned_groups
+                          and "*" in svc.bu_policy.groups.get(group, ()))
+    if required and (not principal.user or not roles & required):
+        raise HTTPException(403, detail="observatory_forbidden")
+    return roles, teams
 
 
 class ObservatoryRoute(APIRoute):
@@ -149,10 +160,10 @@ APPROVERS = frozenset({"approver"})
 
 @router.get("")
 def observatory(request: Request, access: Reader):
-    roles = _observatory_roles(request, access)
+    roles, teams = _observatory_roles(request, access)
     if not access.principal.user:
         roles = frozenset()
-    return request.app.state.shadow_ai.read(propose=bool(roles & EDITORS), decide=bool(roles & APPROVERS))
+    return request.app.state.shadow_ai.read(propose=bool(roles & EDITORS), decide=bool(roles & APPROVERS), teams=teams)
 
 
 @router.post("/evidence")

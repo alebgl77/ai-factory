@@ -190,6 +190,9 @@ rotation, backups, retention) are in the
 
 - [docs/SECURITY.md](docs/SECURITY.md): security architecture, hardening guide, incident response
 - [Cyber operations guide](docs/CYBER_SECURITY.md) for optional Workbench journaling, authenticated checkpoints, SIEM exports and CVE triage
+- [Business-unit security](docs/BU_SECURITY.md) for scoped access and bookings
+- [Gateway security](docs/GATEWAY_SECURITY.md) for key-bound routing and local handling of sensitive workloads
+- [Operating evidence](docs/OPERATING_EVIDENCE.md) for live deployment receipts and drift observations
 - [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md): data flows, STRIDE per component, LLM threats, residual risks
 - [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md): controls mapped to OWASP LLM Top 10 2025, OWASP ASVS 5.0, NIST SSDF, CIS Docker, ISO/IEC 27001:2022, with NIS2 and DORA pointers
 - [SECURITY.md](SECURITY.md): report a vulnerability (private reporting, acknowledgement within 72 h) and verify a release

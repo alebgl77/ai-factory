@@ -21,11 +21,10 @@ Loaded by the LiteLLM proxy through ``litellm_settings.callbacks`` in config.yam
    embed-default) even when a fallback served the request; ``deployment`` is where it ran
    (cloud, vps, local), read from ``model_info.factory_deployment``.
 
-2. enforces the placement rule of the factory at the gateway (pre-call hook): a request
-   whose ``metadata.sensitivity`` is a sensitive data class (C3, C4 by default) is
-   rerouted to ``chat-sensitive`` (local GPU only), and the prompt and completion of every
-   sensitive request are masked in Langfuse (``mask_input`` / ``mask_output``) and excluded
-   from every LiteLLM logging integration (``turn_off_message_logging``).
+2. enforces placement before dispatch. In strict mode the verified virtual key selects a
+   registered case, BU, minimum classification and model alias. C3/C4 use local-only aliases.
+   The demo uses synthetic request metadata and reroutes sensitive calls to ``chat-sensitive``.
+   Sensitive prompts and completions are masked in Langfuse and excluded from LiteLLM logging.
 
 3. runs the factory LLM guardrails (pre-call, before the request leaves the gateway):
 
@@ -44,16 +43,19 @@ Loaded by the LiteLLM proxy through ``litellm_settings.callbacks`` in config.yam
    prompt_injection | pii_email | pii_phone | pii_iban | pii_card | pii_nir and action in
    flagged | blocked | redacted (one event per request and type).
 
-Cost attribution reads ``metadata.usecase`` and ``metadata.agent`` from the request. Label
-values are validated and capped to keep the Prometheus cardinality bounded.
+Cost attribution uses the authorized case in strict mode and synthetic labels in demo mode.
+Metric label values are validated and capped to keep Prometheus cardinality bounded.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import math
 import os
 import re
+import ssl
 import sys
 import threading
 import types
@@ -61,6 +63,7 @@ import unicodedata
 from collections import Counter as Tally
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from litellm.integrations.custom_logger import CustomLogger
@@ -115,6 +118,242 @@ LOCAL_ALIASES = frozenset(a.strip() for a in os.environ.get(
 MAX_SCAN_CHARS = max(1024, int(os.environ.get("FACTORY_GUARDRAIL_MAX_SCAN_CHARS", "500000") or 500000))
 # Above this size the detectors run in a worker thread, off the event loop of the proxy.
 _THREAD_THRESHOLD_CHARS = 20_000
+
+# These exact proxy routes and call types are supported by the pinned LiteLLM image.
+_CHAT_ROUTES = frozenset({"/chat/completions", "/v1/chat/completions"})
+_EMBED_ROUTES = frozenset({"/embeddings", "/v1/embeddings"})
+_STRICT_SENSITIVE = frozenset({"C3", "C4"})
+_STRICT_CLASSES = frozenset({"C1", "C2"}) | _STRICT_SENSITIVE
+_STRICT_CHAT_ALIASES = frozenset({"chat-default", "chat-small", "chat-sensitive"})
+_OPENAI_LOCAL_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
+_KEY_DIGEST = re.compile(r"[0-9a-f]{64}")
+_RAW_VIRTUAL_KEY = re.compile(r"sk-[A-Za-z0-9_-]{16,253}")
+_AUTH_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
+_OVERRIDES = frozenset({
+    "api_base", "api_key", "api_type", "api_version", "aws_access_key_id", "aws_secret_access_key",
+    "azure_ad_token", "base_url", "context_window_fallbacks", "content_policy_fallbacks",
+    "custom_llm_provider", "default_fallbacks", "extra_body", "extra_headers", "extra_query",
+    "fallbacks", "fastest_response", "headers", "model_info", "model_list", "provider", "region_name",
+    "router_settings", "router_settings_override", "specific_deployment", "user_config",
+    "vertex_ai_project", "vertex_credentials", "_router_weights",
+})
+_STRICT_PAYLOAD_FIELDS = frozenset({
+    # Standard chat and embedding options, without provider-specific options.
+    "messages", "input", "stream", "stream_options", "temperature", "top_p", "n", "stop", "seed",
+    "max_tokens", "max_completion_tokens", "frequency_penalty", "presence_penalty", "logprobs", "top_logprobs",
+    "logit_bias", "response_format", "tools", "tool_choice", "parallel_tool_calls", "dimensions", "encoding_format",
+    # LiteLLM-owned request context. Both metadata channels are rebuilt below.
+    "litellm_call_id", "litellm_logging_obj", "proxy_server_request", "metadata", "litellm_metadata",
+})
+
+
+def _strict_mapping(pairs: list[tuple[Any, Any]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if not isinstance(key, str) or key in result:
+            raise ValueError("Invalid gateway policy mapping.")
+        result[key] = value
+    return result
+
+
+def _read_policy_text(path: Path) -> str:
+    with path.open(encoding="utf-8") as source:
+        contents = source.read(262_145)
+    if len(contents) > 262_144:
+        raise ValueError("Gateway policy input is too large.")
+    return contents
+
+
+def _load_gateway_policy(path: str, registry: str) -> dict:
+    # PyYAML ships with the pinned proxy. The strict loader prevents duplicate GitOps
+    # keys from changing which sensitivity or model the gateway sees.
+    import yaml
+
+    class RegistryLoader(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            return _strict_mapping(self.construct_pairs(node, deep=deep))
+
+    def identifier(value: Any) -> bool:
+        return isinstance(value, str) and _AUTH_IDENTIFIER.fullmatch(value) is not None
+
+    try:
+        policy = json.loads(_read_policy_text(Path(path)), object_pairs_hook=_strict_mapping)
+        if (not isinstance(policy, dict) or set(policy) != {"version", "bindings"}
+                or type(policy["version"]) is not int or policy["version"] != 1):
+            raise ValueError
+        entries = policy["bindings"]
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 1000:
+            raise ValueError
+        cases = {}
+        files = sorted(p for p in Path(registry).iterdir() if p.suffix in {".yml", ".yaml"})
+        if not 1 <= len(files) <= 1000:
+            raise ValueError
+        for file in files:
+            case = yaml.load(_read_policy_text(file), Loader=RegistryLoader)
+            case_id = case["id"]
+            center = case["cost_center"]
+            sensitivity = case["sensitivity"]
+            alias = case["model"]["alias"]
+            if (not identifier(case_id) or case_id in cases or not identifier(center)
+                    or sensitivity not in _STRICT_CLASSES or alias not in _STRICT_CHAT_ALIASES
+                    or (sensitivity in _STRICT_SENSITIVE and alias != "chat-sensitive")):
+                raise ValueError
+            cases[case_id] = (center, sensitivity, alias)
+        bindings = {}
+        team_centers = {}
+        for entry in entries:
+            fields = {"key_sha256", "team_id", "usecase"}
+            if not isinstance(entry, dict) or not fields <= set(entry) <= fields | {"allow_embeddings"}:
+                raise ValueError
+            digest, team, case_id = (entry[field] for field in ("key_sha256", "team_id", "usecase"))
+            embeddings = entry.get("allow_embeddings", False)
+            if (not isinstance(digest, str) or not _KEY_DIGEST.fullmatch(digest) or digest in bindings
+                    or not identifier(team) or not identifier(case_id) or type(embeddings) is not bool):
+                raise ValueError
+            center, sensitivity, alias = cases[case_id]
+            if team_centers.setdefault(team, center) != center:
+                raise ValueError
+            bindings[digest] = (team, case_id, center, sensitivity, alias, embeddings)
+        return bindings
+    except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError, RecursionError):
+        raise ValueError("Invalid or unavailable Factory gateway policy or registry.") from None
+
+
+def _gateway_policy() -> dict | None:
+    path = os.environ.get("FACTORY_GATEWAY_POLICY", "").strip()
+    if path:
+        if (not _ENFORCE or not _STRICT_SENSITIVE <= _SENSITIVE or _SENSITIVE_ALIAS != "chat-sensitive"
+                or _SENSITIVE_OK != {"chat-sensitive", "embed-default"}
+                or LOCAL_ALIASES != {"chat-sensitive", "embed-default"}):
+            raise ValueError("Strict gateway routing requires the Factory sensitive aliases.")
+        local_models = (os.environ.get(name, "") for name in ("LOCAL_CHAT_MODEL", "LOCAL_EMBED_MODEL"))
+        if not all(len(model) <= 256 and _OPENAI_LOCAL_MODEL.fullmatch(model) for model in local_models):
+            raise ValueError("Strict gateway routing requires explicit OpenAI-compatible local models.")
+        if os.environ.get("FACTORY_DEMO_MODE", "auto").strip().lower() == "never" and (
+            GUARDRAIL_MODE != "block" or not PII_REDACTION
+        ):
+            raise ValueError("Production gateway requires blocking guardrails and PII redaction.")
+        return _load_gateway_policy(path, os.environ.get("FACTORY_GATEWAY_REGISTRY", "/factory-usecases"))
+    if os.environ.get("FACTORY_DEMO_MODE", "auto").strip().lower() == "never":
+        raise ValueError("Factory gateway policy is required with demo mode disabled.")
+    return None
+
+
+def _install_strict_http_client():
+    import httpx
+    import litellm
+
+    # The pinned OpenAI adapters use a custom aclient_session in preference to
+    # their redirect-following default, and do not close this caller-owned client.
+    current = getattr(litellm, "aclient_session", None)
+    owned = getattr(litellm, "_factory_strict_http_client", None)
+    if owned is not None and current is owned and not owned.is_closed:
+        return owned
+    if current is not None or owned is not None:
+        raise ValueError("Strict gateway cannot use a preconfigured HTTP client.")
+    client = httpx.AsyncClient(follow_redirects=False, trust_env=False, verify=ssl.create_default_context())
+    litellm.aclient_session = client
+    litellm._factory_strict_http_client = client
+    return client
+
+
+def _gateway_denied() -> HTTPException:
+    return HTTPException(status_code=403, detail={"error": {
+        "message": "Request outside the Factory gateway policy.", "code": "factory_gateway_denied"}})
+
+
+def _text_chat(data: dict) -> bool:
+    messages = data.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return False
+    for message in messages:
+        if not isinstance(message, dict):
+            return False
+        content = message.get("content")
+        if isinstance(content, list):
+            if any(not isinstance(part, dict) or set(part) != {"type", "text"}
+                   or part["type"] != "text" or not isinstance(part["text"], str) for part in content):
+                return False
+        elif content is not None and not isinstance(content, str):
+            return False
+    tools = data.get("tools", [])
+    return isinstance(tools, list) and all(
+        isinstance(tool, dict) and set(tool) == {"type", "function"} and tool["type"] == "function"
+        for tool in tools
+    )
+
+
+def _bound_gateway_request(policy: dict, auth, data: dict, call_type) -> None:
+    if (getattr(auth, "via_virtual_key", False) is not True
+            or getattr(auth, "user_role", None) in {"proxy_admin", "proxy_admin_viewer"}
+            or getattr(auth, "aliases", None) or getattr(auth, "router_settings", None)):
+        raise _gateway_denied()
+    key = getattr(auth, "api_key", None)
+    if not isinstance(key, str):
+        raise _gateway_denied()
+    if _RAW_VIRTUAL_KEY.fullmatch(key):
+        digest = hashlib.sha256(key.encode("ascii")).hexdigest()
+    elif _KEY_DIGEST.fullmatch(key):
+        digest = key
+    else:
+        raise _gateway_denied()
+    binding = policy.get(digest)
+    if binding is None:
+        raise _gateway_denied()
+    team, case_id, center, sensitivity, alias, embeddings = binding
+    route = getattr(auth, "request_route", None)
+    routes = getattr(auth, "allowed_routes", None)
+    admitted = _CHAT_ROUTES | _EMBED_ROUTES if embeddings else _CHAT_ROUTES
+    models = getattr(auth, "models", None)
+    approved_models = {alias, "embed-default"} if embeddings else {alias}
+    call = getattr(call_type, "value", call_type)
+    if (getattr(auth, "team_id", None) != team or not isinstance(route, str)
+            or not isinstance(routes, (list, tuple)) or not routes
+            or any(not isinstance(item, str) or item not in admitted for item in routes) or route not in routes
+            or not isinstance(models, (list, tuple)) or any(not isinstance(item, str) for item in models)
+            or set(models) != approved_models
+            or not ((call == "acompletion" and route in _CHAT_ROUTES)
+                    or (call == "aembedding" and embeddings and route in _EMBED_ROUTES))
+            or any(data.get(field) is not None for field in _OVERRIDES)
+            or (call == "acompletion" and not _text_chat(data))):
+        raise _gateway_denied()
+    if call == "aembedding":
+        alias = "embed-default"
+    if data.get("model") != alias:
+        raise _gateway_denied()
+    channels = [(field, _as_dict(data.get(field))) for field in ("metadata", "litellm_metadata")
+                if field == "metadata" or field in data]
+    for _, current in channels:
+        if current.get("usecase") not in (None, "", case_id):
+            raise _gateway_denied()
+        requested = current.get("sensitivity")
+        if requested is not None:
+            if not isinstance(requested, str) or requested not in _STRICT_CLASSES:
+                raise _gateway_denied()
+            sensitivity = max(sensitivity, requested)
+    if sensitivity in _STRICT_SENSITIVE and alias not in {"chat-sensitive", "embed-default"}:
+        # A request may raise its classification, but that does not authorize a new model.
+        raise _gateway_denied()
+    for field, current in channels:
+        metadata = {}
+        # Preserve the proxy's accounting key only in its canonical hashed form.
+        for name in ("user_api_key", "user_api_key_hash"):
+            if current.get(name) == digest:
+                metadata[name] = current[name]
+        for attribute in ("key_alias", "user_id", "org_id", "project_id", "request_route"):
+            value = getattr(auth, attribute, None)
+            if isinstance(value, str):
+                field_name = "alias" if attribute == "key_alias" else attribute
+                metadata[f"user_api_key_{field_name}"] = value
+        metadata.update(usecase=case_id, sensitivity=sensitivity, factory_alias=alias,
+                        factory_business_unit=center, user_api_key_team_id=team)
+        if sensitivity in _STRICT_SENSITIVE or alias == "chat-sensitive":
+            metadata.update(mask_input=True, mask_output=True, turn_off_message_logging=True)
+        data[field] = metadata
+    for field in data.keys() - _STRICT_PAYLOAD_FIELDS:
+        data.pop(field)
+    data["model"] = alias
+    data["disable_fallbacks"] = True
 
 TTFT_BUCKETS = (0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0)
 LATENCY_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0, 30.0, 60.0, 120.0)
@@ -565,10 +804,26 @@ class FactoryMetrics(CustomLogger):
 
     def __init__(self) -> None:
         super().__init__()
+        self.gateway_policy = _gateway_policy()
+        self._strict_http_client = None
+        if self.gateway_policy is not None:
+            # LiteLLM constructs a logging object before the authorization callback,
+            # including for failed calls. Strict deployments never log message text.
+            import litellm
+            litellm.turn_off_message_logging = True
+            self._strict_http_client = _install_strict_http_client()
         self.rt = _runtime()
 
     # ---- proxy hook: placement rule, masking and guardrails -----------------------------
     async def async_pre_call_hook(self, user_api_key_dict, cache, data: dict, call_type):
+        if self.gateway_policy is not None:
+            import litellm
+            if (getattr(litellm, "aclient_session", None) is not self._strict_http_client
+                    or self._strict_http_client.is_closed):
+                raise HTTPException(status_code=503, detail="Factory gateway HTTP transport unavailable.")
+            if not isinstance(data, dict):
+                raise _gateway_denied()
+            _bound_gateway_request(self.gateway_policy, user_api_key_dict, data, call_type)
         if not isinstance(data, dict):
             return data
         key = "metadata" if isinstance(data.get("metadata"), dict) or "litellm_metadata" not in data \

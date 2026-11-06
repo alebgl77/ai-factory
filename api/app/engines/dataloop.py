@@ -89,7 +89,8 @@ def decide_action(signal: str, value: float, threshold: float, tier: str | None,
 
 
 def evaluate_signals(signals: list[dict[str, Any]], registry: list[dict[str, Any]],
-                     factory_cfg: dict[str, Any], lang: str = DEFAULT_LANG) -> dict[str, Any]:
+                     factory_cfg: dict[str, Any], lang: str = DEFAULT_LANG, *,
+                     verified: bool = False) -> dict[str, Any]:
     tiers = {item.get("id"): (item.get("risk") or {}).get("tier") for item in registry}
     thresholds = dict(DEFAULT_THRESHOLDS)
     thresholds.update({k: v for k, v in ((factory_cfg.get("dataloop") or {}).get("thresholds") or {}).items()
@@ -99,19 +100,19 @@ def evaluate_signals(signals: list[dict[str, Any]], registry: list[dict[str, Any
     for s in signals or []:
         signal = str(s.get("signal"))
         value = float(s.get("value") or 0)
-        threshold = float(s.get("threshold", thresholds.get(signal, 0)) or 0)
+        threshold = float((thresholds.get(signal) if verified else s.get("threshold", thresholds.get(signal))) or 0)
         if not is_breach(signal, value, threshold):
             continue
         action, rationale = decide_action(signal, value, threshold, tiers.get(s.get("usecase")), lang)
-        requested = s.get("requested_action")
+        requested = None if verified else s.get("requested_action")
         if requested:
             # A source may suggest an action: it is validated (retrain/fine-tune are refused).
             action = validate_action(requested, fine_tuning, lang)
         validate_action(action, fine_tuning, lang)
-        status = s.get("status") if s.get("status") in STATUSES else "proposed"
+        status = s.get("status") if not verified and s.get("status") in STATUSES else "proposed"
         if action == "human_review" and status == "done" and not s.get("reviewed_by"):
             status = "proposed"
-        events.append({
+        event = {
             "at": s.get("at"),
             "usecase": s.get("usecase"),
             "signal": signal,
@@ -119,9 +120,12 @@ def evaluate_signals(signals: list[dict[str, Any]], registry: list[dict[str, Any
             "threshold": threshold,
             "action": action,
             "status": status,
-            "detail": s.get("detail") or rationale,
+            "detail": rationale if verified else s.get("detail") or rationale,
             "rationale": rationale,
-        })
+        }
+        if verified:
+            event.update({key: s[key] for key in ("source", "observation_id", "review_revision")})
+        events.append(event)
     events.sort(key=lambda e: str(e.get("at") or ""), reverse=True)
     counts = {a: sum(1 for e in events if e["action"] == a) for a in ALLOWED_ACTIONS}
     return {

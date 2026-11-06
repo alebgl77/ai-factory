@@ -194,6 +194,9 @@ secrets, rotation, sauvegardes, rétention) sont dans le guide de durcissement d
 
 - [docs/fr/SECURITY.md](docs/fr/SECURITY.md) : architecture de sécurité, guide de durcissement, réponse à incident
 - [Guide Cyber](docs/fr/CYBER_SECURITY.md) pour le journal Workbench facultatif, les scellés authentifiés, les exports SIEM et le triage des CVE
+- [Sécurité par BU](docs/BU_SECURITY.md) pour le cloisonnement des accès et des réservations
+- [Sécurité de la passerelle](docs/GATEWAY_SECURITY.md) pour le routage lié aux clés et le traitement local des données sensibles
+- [Preuves d’exploitation](docs/OPERATING_EVIDENCE.md) pour les reçus de déploiement et les observations de dérive
 - [docs/fr/THREAT_MODEL.md](docs/fr/THREAT_MODEL.md) : flux de données, STRIDE par composant, menaces LLM, risques résiduels
 - [docs/fr/SECURITY_CONTROLS.md](docs/fr/SECURITY_CONTROLS.md) : contrôles rapprochés de l'OWASP Top 10 LLM 2025, de l'OWASP ASVS 5.0, du NIST SSDF, du CIS Docker, de l'ISO/IEC 27001:2022, avec des repères NIS2 et DORA
 - [SECURITY.md](SECURITY.md) : signaler une vulnérabilité (signalement privé, accusé de réception sous 72 h) et vérifier une release

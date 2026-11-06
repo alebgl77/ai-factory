@@ -15,6 +15,7 @@ IDENTITY_SERVICES = {"edge", "api", "oauth2-proxy"}
 EDGE_PORTS = {(80, "tcp"), (443, "tcp"), (443, "udp"), (3001, "tcp"), (3002, "tcp")}
 DEMO_SERVICES = {"mock-llm", "traffic", "gpu-sim"}
 GPU_SERVICES = {"vllm-local", "vllm-embed"}
+OPENAI_LOCAL_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7",
 ))
@@ -148,6 +149,15 @@ def _port_allowed(port):
     return 1 <= published <= 65535 and (target not in {3001, 3002} or host_ip.is_loopback)
 
 
+def _readonly_bind(service, target):
+    mounts = service.get("volumes", [])
+    if not isinstance(mounts, list):
+        return False
+    matching = [mount for mount in mounts if isinstance(mount, dict) and mount.get("target") == target]
+    return (len(matching) == 1 and matching[0].get("type") == "bind"
+            and matching[0].get("read_only") is True and bool(_value(matching[0], "source")))
+
+
 def production_errors(config, *, private_gpu_hosts=()):
     services = _object(_object(config).get("services"))
     required = IDENTITY_SERVICES | REQUIRED_CREDENTIALS.keys()
@@ -168,6 +178,12 @@ def production_errors(config, *, private_gpu_hosts=()):
     if (_value(api, "FACTORY_DEMO_MODE") != "never" or _value(api, "FACTORY_WORKBENCH_MODE") != "off"
             or DEMO_SERVICES.intersection(services)):
         errors.append("Disable demo mode, the Workbench and the sim profile for production.")
+    bu_policy = _value(api, "FACTORY_BU_POLICY")
+    if (not re.fullmatch(r"/config/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.ya?ml", bu_policy)
+            or re.search(r"\.example\.ya?ml$", bu_policy) or not _readonly_bind(services["api"], "/config")):
+        errors.append("Set FACTORY_BU_POLICY to an operator-owned policy in the read-only /config bind mount.")
+    if _value(edge, "FACTORY_PRIVATE_TELEMETRY") != "disabled":
+        errors.append("Disable direct Grafana and Langfuse edge routes for production BU scopes.")
 
     trusted = _edge_identity(services, _object(config.get("networks")))
     if (trusted is None or _value(api, "FACTORY_TRUSTED_PROXIES") != trusted
@@ -217,6 +233,12 @@ def production_errors(config, *, private_gpu_hosts=()):
             or not {"C3", "C4"}.issubset(part.strip().upper() for part in
                                          _value(gateway, "FACTORY_SENSITIVE_CLASSES").split(","))):
         errors.append("Enable blocking LiteLLM guardrails, PII redaction and sensitive routing for C3 and C4.")
+    if (_value(gateway, "FACTORY_DEMO_MODE") != "never"
+            or _value(gateway, "FACTORY_GATEWAY_POLICY") != "/run/factory-gateway/policy.json"
+            or _value(gateway, "FACTORY_GATEWAY_REGISTRY") != "/factory-usecases"
+            or not _readonly_bind(services["litellm"], "/run/factory-gateway/policy.json")
+            or not _readonly_bind(services["litellm"], "/factory-usecases")):
+        errors.append("Mount FACTORY_GATEWAY_POLICY and the use-case registry read-only for strict LiteLLM inference.")
     if (gateway.get("FACTORY_SENSITIVE_ALIAS", "chat-sensitive") != "chat-sensitive"
             or gateway.get("FACTORY_SENSITIVE_OK_ALIASES", "embed-default") != "embed-default"
             or gateway.get("FACTORY_LOCAL_ALIASES", "chat-sensitive,embed-default")
@@ -225,6 +247,10 @@ def production_errors(config, *, private_gpu_hosts=()):
     for key in ("LOCAL_API_BASE", "LOCAL_EMBED_API_BASE"):
         if not _local_gpu_url(_value(gateway, key), services, private_gpu_hosts):
             errors.append(f"Set {key} to an active local GPU service, a private IP or an approved private GPU DNS host.")
+    for key in ("LOCAL_CHAT_MODEL", "LOCAL_EMBED_MODEL"):
+        model = _value(gateway, key)
+        if len(model) > 256 or not OPENAI_LOCAL_MODEL.fullmatch(model):
+            errors.append(f"Set {key} to an explicit openai/ model name for the private GPU endpoint.")
 
     ports = services["edge"].get("ports", [])
     if not isinstance(ports, list) or not all(_port_allowed(port) for port in ports):

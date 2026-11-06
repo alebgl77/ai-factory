@@ -13,6 +13,8 @@ cible et de preuves de reprise. Cette revue couvre la pile Compose et les releas
   notamment le réseau de confiance du proxy, le groupe ou domaine autorisé, les cookies,
   les secrets de remplacement, les ports et le blocage du routage C3/C4 vers le cloud.
   Il exige `FACTORY_DEMO_MODE=never`, `FACTORY_WORKBENCH_MODE=off` et l'absence du profil `sim`.
+  Il exige aussi des politiques de BU et de routage des clés montées en lecture seule.
+  La politique de BU ferme les accès Grafana et Langfuse à l’edge. [Guide du routage](GATEWAY_SECURITY.md)
   Il rejette aussi les modes réseau non autorisés ainsi que les destinations GPU de simulation
   ou sur des IP publiques. Le contrôle des flux réels reste à faire sur la cible.
 - **Approbation du registre.** Les lectures de `/api/v1/registry`, du cas individuel et le

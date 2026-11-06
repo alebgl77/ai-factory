@@ -62,6 +62,7 @@ class Settings:
     demo_seed: int = 42
     demo_date: str | None = None  # optional ISO anchor date override (FACTORY_DEMO_DATE)
     state_dir: str = "/data"
+    bu_policy_path: str | None = field(default=None, kw_only=True)
     shadow_ai_enabled: bool = field(default=False, kw_only=True)
     shadow_ai_groups: tuple[str, ...] = field(default=(), kw_only=True)
     shadow_ai_privacy_threshold: int = field(default=5, kw_only=True)
@@ -107,6 +108,11 @@ class Settings:
             raise ValueError("invalid FACTORY_WORKBENCH_CHAT_MODE")
         if self.workbench_cyber_audit not in {"off", "on"}:
             raise ValueError("invalid FACTORY_WORKBENCH_CYBER_AUDIT")
+        if self.auth_mode == "proxy" and self.demo_mode == "never" and not self.bu_policy_path:
+            raise ValueError("live proxy mode requires FACTORY_BU_POLICY")
+        if self.bu_policy_path and (self.auth_mode != "proxy" or self.workbench_chat_mode == "local"
+                                    or self.workbench_mode == "demo"):
+            raise ValueError("FACTORY_BU_POLICY requires proxy auth and a protected Workbench mode")
         if self.workbench_chat_mode == "local" and (
             self.workbench_mode != "protected_demo" or self.auth_mode != "proxy"
             or not self.litellm_url or not self.litellm_master_key
@@ -150,6 +156,7 @@ class Settings:
             demo_seed=_env_int("FACTORY_DEMO_SEED", 42),
             demo_date=_env("FACTORY_DEMO_DATE"),
             state_dir=_env("FACTORY_STATE_DIR", "/data") or "/data",
+            bu_policy_path=_env("FACTORY_BU_POLICY"),
             shadow_ai_enabled=shadow_ai == "on",
             shadow_ai_groups=_env_list("FACTORY_SHADOW_AI_GROUPS"),
             shadow_ai_privacy_threshold=shadow_threshold,

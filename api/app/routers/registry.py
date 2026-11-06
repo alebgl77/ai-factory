@@ -11,7 +11,7 @@ from ..i18n import msg
 from ..security import ASSESSMENT, MODEL_VERSION, Access, require
 from ..service import FactoryService
 from ..state import AuditError, ModelVersionUnchanged, SeparationOfDuties, StaleReviewRevision, StateError
-from .deps import ID_PATTERN, READ_ONLY, not_found, response_lang, service, state_unavailable
+from .deps import ID_PATTERN, Reader, not_found, response_lang, service, state_unavailable
 
 router = APIRouter(prefix="/api/v1/registry", tags=["registry"])
 
@@ -34,15 +34,16 @@ class AssessmentIn(BaseModel):
 # Every write requires its own permission, is rate limited and appends a hash-chained audit record.
 
 
-@router.get("", dependencies=READ_ONLY, summary="Registry of evaluated use cases")
-def list_registry(svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> list[dict[str, Any]]:
-    return svc.snapshot(lang=lang)["registry"]
+@router.get("", summary="Registry of evaluated use cases")
+def list_registry(access: Reader, svc: FactoryService = Depends(service),
+                  lang: str = Depends(response_lang)) -> list[dict[str, Any]]:
+    return svc.snapshot(lang=lang, scope=svc.business_scope(access))["registry"]
 
 
-@router.get("/{uc_id}", dependencies=READ_ONLY, summary="Use case record")
-def get_registry(uc_id: str = Path(pattern=ID_PATTERN), svc: FactoryService = Depends(service),
+@router.get("/{uc_id}", summary="Use case record")
+def get_registry(access: Reader, uc_id: str = Path(pattern=ID_PATTERN), svc: FactoryService = Depends(service),
                  lang: str = Depends(response_lang)) -> dict[str, Any]:
-    snap = svc.snapshot(lang=lang)
+    snap = svc.snapshot(lang=lang, scope=svc.business_scope(access))
     for item in snap["registry"]:
         if item["id"] == uc_id:
             pipeline = next((p for p in snap["pipeline"]["items"] if p["usecase"] == uc_id), None)
@@ -55,9 +56,11 @@ def get_registry(uc_id: str = Path(pattern=ID_PATTERN), svc: FactoryService = De
 def post_model_version(body: ModelVersionIn, uc_id: str = Path(pattern=ID_PATTERN),
                        access: Access = Depends(require(MODEL_VERSION, write=True)),
                        svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
-    uc = svc.find_configured_usecase(uc_id)
+    uc, access = svc.scoped_case(uc_id, access)
     if uc is None:
         raise not_found(lang)
+    if svc.bu_policy is not None and not access.principal.user:
+        raise HTTPException(status_code=403, detail=msg(lang, "auth.forbidden"))
     try:
         current = svc.state.set_model_version(uc, body.version, body.name, svc.today(), audit=access.audit_context())
     except ModelVersionUnchanged:
@@ -83,16 +86,20 @@ def post_assessment(request: Request, body: AssessmentIn, uc_id: str = Path(patt
     approving decision by the identity that recorded the current model version is refused with 403
     ``separation_of_duties`` (and audited as ``denied``). The authenticated reviewer is recorded in
     the assessment (``reviewed_by``, ``reviewed_by_role``, ``separation_of_duties``)."""
-    uc = svc.find_configured_usecase(uc_id)
+    uc, access = svc.scoped_case(uc_id, access)
     if uc is None:
         raise not_found(lang)
     people = {str(p.get("id")) for p in (svc.config.get().get("profiles") or {}).get("people") or []}
+    if svc.bu_policy is not None and svc.bu_policy.identities.get(access.principal.user or "") != body.reviewer:
+        raise HTTPException(status_code=403, detail=msg(lang, "auth.forbidden"))
     if people and body.reviewer not in people:
         raise HTTPException(status_code=422, detail=msg(lang, "error.unknown_reviewer"))
     try:
         current = svc.state.record_assessment(uc, body.decision, body.reviewer, svc.today(),
                                               expected_review_revision=body.expected_review_revision,
-                                              audit=access.audit_context(), enforce_four_eyes=svc.guard.config.enforced)
+                                              audit=access.audit_context(), enforce_four_eyes=svc.guard.config.enforced,
+                                              review_subject_ref=svc.reviewer_subject_ref(access.principal),
+                                              review_clock=svc.now if svc.bu_policy is not None else None)
     except StaleReviewRevision:
         raise svc.guard.deny(request.scope, 409, "stale_review_revision", "error.stale_review_revision",
                              principal=access.principal, permission=ASSESSMENT) from None

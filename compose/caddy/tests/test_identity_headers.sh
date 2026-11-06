@@ -4,7 +4,7 @@
 # isolated from the running stack (own internal network, no published port, nothing pulled but
 # the edge image of docker-compose.yml and the Python image of the API).
 #
-#   compose/caddy/tests/test_identity_headers.sh [none|basic|sso ...]   # default: all three
+#   compose/caddy/tests/test_identity_headers.sh [none|basic|sso|sso-scoped ...]
 #
 # A stand-in upstream (upstream.py) answers for the dashboard, the API, Grafana, Langfuse and
 # oauth2-proxy and echoes what the edge forwards. client.py sends forged X-Forwarded-User /
@@ -28,7 +28,7 @@ CADDY_IMAGE=${CADDY_IMAGE:-$(docker compose config --format json | python3 -c "i
 BASIC_USER=factory-test
 BASIC_PASSWORD="idh-$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
 MODES=("$@")
-[ ${#MODES[@]} -gt 0 ] || MODES=(none basic sso)
+[ ${#MODES[@]} -gt 0 ] || MODES=(none basic sso sso-scoped)
 
 cleanup() {
   docker rm -f "$P-edge" "$P-up" >/dev/null 2>&1 || true
@@ -46,13 +46,17 @@ docker run -d --name "$P-up" --network "$NET" \
 BASIC_HASH="$(docker run --rm --network none "$CADDY_IMAGE" caddy hash-password --plaintext "$BASIC_PASSWORD")"
 
 rc=0
-for mode in "${MODES[@]}"; do
-  echo "== edge identity headers and CSP: FACTORY_AUTH=$mode"
+for variant in "${MODES[@]}"; do
+  mode="${variant%-scoped}"
+  private_telemetry=""
+  if [ "$variant" = sso-scoped ]; then private_telemetry=disabled; fi
+  echo "== edge identity headers and CSP: $variant"
   docker rm -f "$P-edge" >/dev/null 2>&1 || true
   docker run -d --name "$P-edge" --network "$NET" --ip "$EDGE_IP" \
     --user 10001:10001 --cap-drop ALL --cap-add NET_BIND_SERVICE --security-opt no-new-privileges:true \
     --read-only --tmpfs /data:uid=10001 --tmpfs /config:uid=10001 \
     -e FACTORY_SCHEME=http -e FACTORY_HOST=factory.test -e FACTORY_AUTH="$mode" \
+    -e FACTORY_PRIVATE_TELEMETRY="$private_telemetry" \
     -e FACTORY_BASIC_AUTH_USER="$BASIC_USER" -e FACTORY_BASIC_AUTH_HASH="$BASIC_HASH" \
     -v "$ROOT/compose/caddy/Caddyfile:/etc/caddy/Caddyfile:ro" "$CADDY_IMAGE" >/dev/null
   ready=0
@@ -75,6 +79,7 @@ for mode in "${MODES[@]}"; do
     rc=1
   fi
   docker run --rm --network "$NET" -e EDGE_IP="$EDGE_IP" -e MODE="$mode" \
+    -e FACTORY_PRIVATE_TELEMETRY="$private_telemetry" \
     -e BASIC_USER="$BASIC_USER" -e BASIC_PASSWORD="$BASIC_PASSWORD" \
     -v "$HERE/client.py:/client.py:ro" "$PY_IMAGE" python /client.py || { rc=1; docker logs "$P-edge" 2>&1 | tail -n 20 >&2; }
 done

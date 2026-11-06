@@ -3,20 +3,28 @@ the permission each route requires (``app/security.py``)."""
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import Depends, HTTPException, Query, Request
 
 from ..i18n import msg, normalize_lang
-from ..security import READ, require
+from ..security import READ, Access, SecurityDenied, require
 from ..service import FactoryService
 
 ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
 
-# Route-level dependency of every read endpoint: role ``viewer`` (or above) when auth is on.
-READ_ONLY = [Depends(require(READ))]
+# Route dependency for the functional read grant and its business-unit scope.
+Reader = Annotated[Access, Depends(require(READ))]
 
 
 def service(request: Request) -> FactoryService:
     return request.app.state.service
+
+
+def require_global(svc: FactoryService, access: Access) -> None:
+    scope = svc.business_scope(access)
+    if scope is not None and not scope.all_units:
+        raise SecurityDenied(403, "business_scope_forbidden", "auth.forbidden")
 
 
 def response_lang(request: Request,

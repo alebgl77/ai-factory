@@ -13,7 +13,7 @@ from ..i18n import msg
 from ..security import PLACEMENT_DECIDE, Access, require
 from ..service import FactoryService
 from ..state import StateError
-from .deps import ID_PATTERN, READ_ONLY, not_found, response_lang, service, state_unavailable
+from .deps import ID_PATTERN, Reader, not_found, response_lang, service, state_unavailable
 
 router = APIRouter(prefix="/api/v1/placement", tags=["placement"])
 
@@ -38,9 +38,10 @@ class PlacementIn(BaseModel):
     targets: TargetsOverride | None = None
 
 
-@router.get("", dependencies=READ_ONLY, summary="Hybrid placement: cloud / VPS / local")
-def get_placement(svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
-    return svc.snapshot(lang=lang)["placement"]
+@router.get("", summary="Hybrid placement: cloud / VPS / local")
+def get_placement(access: Reader, svc: FactoryService = Depends(service),
+                  lang: str = Depends(response_lang)) -> dict[str, Any]:
+    return svc.snapshot(lang=lang, scope=svc.business_scope(access))["placement"]
 
 
 @router.post("/decide", summary="Placement decision (outages can be simulated); role editor")
@@ -48,7 +49,14 @@ def post_decide(body: PlacementIn, access: Access = Depends(require(PLACEMENT_DE
                 svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
     """What-if decision; ``?lang=`` only selects the language of the reasons. No state is written,
     but the decision is audited (inputs and decision hashes, target, sensitivity)."""
-    snap = svc.snapshot(lang=lang)
+    scope = svc.business_scope(access)
+    if scope is not None and not body.usecase:
+        raise HTTPException(status_code=422, detail=msg(lang, "error.usecase_not_found"))
+    if body.usecase:
+        case, access = svc.scoped_case(body.usecase, access)
+        if case is None:
+            raise not_found(lang)
+    snap = svc.snapshot(lang=lang, scope=scope)
     placement = snap["placement"]
     workload: dict[str, Any] = {"id": "wl-what-if"}
     if body.usecase:
@@ -61,6 +69,8 @@ def post_decide(body: PlacementIn, access: Access = Depends(require(PLACEMENT_DE
     for key in ("sensitivity", "task_type", "params_b", "model_alias"):
         value = getattr(body, key)
         if value is not None:
+            if key == "sensitivity" and scope is not None and value < workload["sensitivity"]:
+                raise HTTPException(status_code=403, detail=msg(lang, "auth.forbidden"))
             workload[key] = value
     if not workload.get("sensitivity"):
         raise HTTPException(status_code=422, detail=msg(lang, "error.sensitivity_required"))

@@ -31,7 +31,7 @@ import threading
 import time
 import uuid
 from collections import Counter, OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Iterable
 from urllib.parse import parse_qs
 
@@ -402,17 +402,36 @@ def require(permission: str, *, write: bool = False) -> Callable[[Request], Acce
     """FastAPI dependency: authenticated principal holding ``permission`` (+ write throttling)."""
 
     def dependency(request: Request) -> Access:
-        guard: Guard = request.app.state.service.guard
+        service = request.app.state.service
+        guard: Guard = service.guard
         principal = getattr(request.state, "principal", None)
         if principal is None:  # route outside /api/ (or middleware bypassed): authenticate here
             principal = guard.authenticate(request.scope)
             request.state.principal = principal
         role = guard.authorize(request.scope, principal, permission)
+        access = Access(principal=principal, role=role, permission=permission,
+                        request_id=getattr(request.state, "request_id", None) or uuid.uuid4().hex,
+                        client_ip=getattr(request.state, "client_ip", None) or guard.client_ip(request.scope))
+        try:
+            scope = service.business_scope(access)
+            # A default HTTP Workbench store is shared by its readers and has no per-case BU key.
+            route_path = getattr(request.scope.get("route"), "path", request.url.path)
+            if scope is not None and route_path.startswith("/api/v1/workbench/"):
+                if not scope.all_units:
+                    raise SecurityDenied(403, "business_scope_forbidden", "auth.forbidden")
+                # Workbench evaluates roles again inside the SDK. Restrict that role set to
+                # the grants that can address this shared workspace, not a local BU role.
+                groups = service.bu_policy.groups
+                roles = frozenset(granted for group, granted in guard.config.role_map
+                                  if group in principal.groups and "*" in groups.get(group, ()))
+                principal = replace(principal, roles=roles)
+                access = replace(access, principal=principal, role=principal.role_for(permission) or role)
+        except SecurityDenied as exc:
+            raise guard.deny(request.scope, exc.status, exc.code, exc.key, principal=principal,
+                             permission=permission) from None
         if write:
             guard.throttle(request.scope, principal)
-        return Access(principal=principal, role=role, permission=permission,
-                      request_id=getattr(request.state, "request_id", None) or uuid.uuid4().hex,
-                      client_ip=getattr(request.state, "client_ip", None) or guard.client_ip(request.scope))
+        return access
 
     dependency.__factory_permission__ = permission  # type: ignore[attr-defined]
     dependency.__factory_write__ = write  # type: ignore[attr-defined]
