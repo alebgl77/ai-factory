@@ -15,9 +15,10 @@ from typing import Any
 import httpx
 
 from ._hashing import canonical, digest
-from .adapters import normalize_opportunity_event
-from .algorithms import ModelRoute, RoutePolicy, match_customer, review_priority, select_route
+from .adapters import OpportunityEvent, normalize_opportunity_event
+from .algorithms import MatchResult, ModelRoute, RoutePolicy, match_customer, review_priority, select_route
 from .connector import DraftConnector, validate_connector, write_and_verify
+from .crm import CRM_CONFLICT, CRMBlockedOpportunity, CRMError, validate_source
 from .identity import ASSESSMENT, READ, Actor, WorkActor
 from .store import Store, WorkbenchError
 
@@ -147,6 +148,7 @@ class Workbench:
                  advisor: Callable[[str, str, dict[str, Any]], str] | None = None, *,
                  workspace: str = WORKSPACE, connector: DraftConnector | None = None,
                  customers: Sequence[Mapping[str, str]] | None = None, crm_source: str = "crm-sim",
+                 crm_sources: Sequence[str] = (),
                  defer_execution: bool = False) -> None:
         if not isinstance(workspace, str) or not _WORKSPACE_ID.fullmatch(workspace):
             raise ValueError("invalid workspace")
@@ -154,12 +156,21 @@ class Workbench:
             raise ValueError("invalid workbench mode")
         if not isinstance(crm_source, str) or not _SUBJECT.fullmatch(crm_source):
             raise ValueError("invalid CRM source")
+        try:
+            if isinstance(crm_sources, (str, bytes)):
+                raise ValueError
+            trusted_sources = frozenset(validate_source(source) for source in crm_sources)
+            if crm_source in trusted_sources:
+                raise ValueError
+        except (CRMError, TypeError, ValueError):
+            raise ValueError("invalid trusted CRM sources") from None
         self._workspace = workspace
         self._connector = connector
         self._target = validate_connector(connector) if connector is not None else "sandbox-erp"
         catalogue = CUSTOMERS if customers is None and workspace == WORKSPACE and connector is None else customers
         self._customers = tuple(dict(row) for row in catalogue or ())
         self._crm_source = crm_source
+        self._crm_sources = trusted_sources
         self._defer_execution = defer_execution
         self.store = Store(path, workspace, self._target)
         self.mode = mode
@@ -176,7 +187,8 @@ class Workbench:
         return self.clock().astimezone(dt.timezone.utc).isoformat()
 
     def _requires_authentication(self) -> bool:
-        return self.mode == "protected_demo" or self.workspace != WORKSPACE or self._connector is not None
+        return (self.mode == "protected_demo" or self.workspace != WORKSPACE or self._connector is not None
+                or bool(self._crm_sources))
 
     def check_access(self, actor: WorkActor) -> None:
         if not actor.authenticated and self._requires_authentication():
@@ -205,8 +217,11 @@ class Workbench:
         result = {key: record[key] for key in PUBLIC_CASE_FIELDS}
         if "profile" in record:
             result["profile"] = record["profile"]
+        if record.get("crm_reconciliation_required"):
+            result["reconciliation_required"] = True
         result["priority"] = self._priority(record, now)
         result["can_decide"] = (record["status"] in QUEUE_STATES and bool(actor.role_for(ASSESSMENT))
+                                and not record.get("crm_reconciliation_required")
                                 and not self._owns(record, actor)
                                 and (record["status"] != "applying" or record.get("decision_actor") == actor.actor))
         if record["status"] == "applying" and result["can_decide"]:
@@ -332,6 +347,38 @@ class Workbench:
                profile: dict[str, str] | None = None) -> dict[str, Any]:
         return self._submit(payload, actor, seed=False, profile=profile)
 
+    def _opportunity_case(self, event: OpportunityEvent, actor: WorkActor, previous: dict | None, *,
+                          profile: dict[str, str] | None, exact_reference: bool = False) -> dict:
+        if exact_reference and event.customer_ref is None:
+            match = MatchResult("missing")
+        else:
+            match = match_customer(
+                {"customer_name": event.customer_name, "customer_ref": event.customer_ref}, self._customers,
+                tenant=self.workspace, allowed_ids={row["id"] for row in self._customers},
+            )
+        fields = {"customer_id": match.candidate_id, "crm_opportunity": event.subject,
+                  "amount_minor": event.amount_minor, "currency": event.currency}
+        action = {"type": "erp.create_draft_order", "fields": fields} if match.status == "matched" else None
+        reason = ("Customer matched. Draft ERP order requires approval." if action
+                  else "No unambiguous customer match. Human review is required.")
+        evidence = [f"CRM: {event.source} / {event.subject} / v{event.record_version}",
+                    f"Customer match: {match.status} ({match.score:.2f})",
+                    f"Amount: {event.amount_minor} minor units {event.currency}"]
+        return self._new_case(
+            case_id=previous["id"] if previous else uuid.uuid4().hex, source=event.source,
+            subject=event.subject, title=event.title, kind="action" if action else "undocumented",
+            reason=reason, evidence=evidence, actor=actor, action=action,
+            revision=previous["revision"] + 1 if previous else 1, record_version=event.record_version,
+            source_payload_hash=event.record_fingerprint,
+            profile=previous.get("profile") if profile is None and previous else profile,
+            private=previous is not None and "private" in previous,
+        )
+
+    @staticmethod
+    def _execution_claimed(record: dict[str, Any]) -> bool:
+        return (record["status"] == "executed"
+                or (record["status"] == "applying" and record.get("execution_started") is not False))
+
     def _submit(self, payload: dict[str, Any], actor: WorkActor, *, seed: bool,
                 profile: dict[str, str] | None = None) -> dict[str, Any]:
         self.check_access(actor)
@@ -349,19 +396,6 @@ class Workbench:
         if profile is not None and (not actor.authenticated or not actor.ids):
             raise WorkbenchError("authentication_required", 401)
         source_payload_hash = event.record_fingerprint
-        match = match_customer(
-            {"customer_name": event.customer_name, "customer_ref": event.customer_ref}, self._customers,
-            tenant=self.workspace, allowed_ids={row["id"] for row in self._customers},
-        )
-        fields = {"customer_id": match.candidate_id, "crm_opportunity": event.subject,
-                  "amount_minor": event.amount_minor, "currency": event.currency}
-        action = {"type": "erp.create_draft_order", "fields": fields} if match.status == "matched" else None
-        kind = "action" if action else "undocumented"
-        reason = ("Customer matched. Draft ERP order requires approval." if action
-                  else "No unambiguous customer match. Human review is required.")
-        evidence = [f"CRM: {event.source} / {event.subject} / v{event.record_version}",
-                    f"Customer match: {match.status} ({match.score:.2f})",
-                    f"Amount: {event.amount_minor} minor units {event.currency}"]
         with self.store.transaction() as connection:
             previous_event = connection.execute(
                 "SELECT fingerprint, case_id FROM events WHERE source = ? AND id = ?", (event.source, event.id)
@@ -379,23 +413,103 @@ class Workbench:
                     raise WorkbenchError("event_revision_conflict", 409)
                 record = previous
             else:
-                if previous and (
-                    previous["status"] == "executed"
-                    or (previous["status"] == "applying" and previous.get("execution_started") is not False)
-                ):
+                if previous and self._execution_claimed(previous):
                     raise WorkbenchError("reconciliation_required", 409)
-                record = self._new_case(
-                    case_id=previous["id"] if previous else uuid.uuid4().hex, source=event.source,
-                    subject=event.subject, title=event.title, kind=kind, reason=reason, evidence=evidence,
-                    actor=actor, action=action, revision=previous["revision"] + 1 if previous else 1,
-                    record_version=event.record_version, source_payload_hash=source_payload_hash,
-                    profile=previous.get("profile") if profile is None and previous else profile,
-                    private=previous is not None and "private" in previous,
-                )
+                record = self._opportunity_case(event, actor, previous, profile=profile)
                 self.store.put_case(connection, record)
             connection.execute("INSERT INTO events(source,id,fingerprint,case_id) VALUES (?,?,?,?)",
                                (event.source, event.id, event.fingerprint, record["id"]))
         return self._public(record, actor)
+
+    def _check_crm_ingestion(self, source: str, actor: WorkActor, *,
+                             profile: dict[str, str] | None) -> dict[str, str] | None:
+        self.check_access(actor)
+        if not actor.authenticated or not actor.ids:
+            raise WorkbenchError("authentication_required", 401)
+        if source not in self._crm_sources or not actor.roles & SUBMIT_ROLES:
+            raise WorkbenchError("crm_source_not_authorized", 403)
+        return _profile_snapshot(profile)
+
+    def _apply_crm_observation(self, source: str, subject: str, version: int,
+                               event: OpportunityEvent | CRMBlockedOpportunity | None,
+                               actor: WorkActor, *, profile: dict[str, str] | None) -> tuple[str, ...]:
+        """Trusted provider observations, including those that withdraw an opportunity."""
+        profile = self._check_crm_ingestion(source, actor, profile=profile)
+        if isinstance(event, OpportunityEvent):
+            data = event.to_dict()["data"]
+            data.pop("record_version")
+        else:
+            data = {"blocked": event.code} if event is not None else None
+        fingerprint = digest(data)
+        conflict_fingerprint = digest({"blocked": CRM_CONFLICT.code})
+        with self.store.transaction() as connection:
+            head = connection.execute(
+                "SELECT record_version,fingerprint FROM crm_revisions WHERE source = ? AND subject = ?",
+                (source, subject),
+            ).fetchone()
+            previous = self._load_visible_subject(connection, source, subject, actor)
+            if head is not None:
+                if version < head["record_version"]:
+                    return ("stale",)
+                if version == head["record_version"]:
+                    held = bool(previous and previous.get("crm_reconciliation_required"))
+                    if head["fingerprint"] == conflict_fingerprint:
+                        return ("conflicts", "reconciliation_required") if held else ("conflicts",)
+                    if fingerprint != head["fingerprint"]:
+                        event, fingerprint = CRM_CONFLICT, conflict_fingerprint
+                    else:
+                        return ("reconciliation_required",) if held else ("replayed",)
+            elif previous is not None and version <= previous["record_version"]:
+                if version < previous["record_version"]:
+                    return ("stale",)
+                if isinstance(event, OpportunityEvent) and event.record_fingerprint == previous["source_payload_hash"]:
+                    return ("replayed",)
+                event, fingerprint = CRM_CONFLICT, conflict_fingerprint
+
+            outcomes = []
+            if isinstance(event, CRMBlockedOpportunity):
+                outcomes.append("conflicts" if event == CRM_CONFLICT else "blocked")
+            if previous is not None and self._execution_claimed(previous):
+                if head is None or fingerprint != head["fingerprint"] or previous.get("crm_reconciliation_required"):
+                    previous["crm_reconciliation_required"] = True
+                    self.store.put_case(connection, previous)
+                    outcomes.append("reconciliation_required")
+            elif isinstance(event, CRMBlockedOpportunity):
+                reason = ("The CRM reported conflicting data at the same revision. Sync a newer consistent revision."
+                          if event == CRM_CONFLICT else
+                          "The CRM opportunity is won but its business data cannot prepare a draft. Correct the source and sync again.")
+                record = self._new_case(
+                    case_id=previous["id"] if previous else uuid.uuid4().hex,
+                    source=source, subject=subject, title="CRM opportunity requires review", kind="undocumented",
+                    reason=reason, evidence=[f"CRM: {source} / {subject} / v{version}"], actor=actor,
+                    revision=previous["revision"] + 1 if previous else 1, record_version=version,
+                    source_payload_hash=fingerprint, profile=previous.get("profile") if previous else profile, private=True,
+                )
+                self.store.put_case(connection, record)
+            elif isinstance(event, OpportunityEvent):
+                record = self._opportunity_case(event, actor, previous, profile=profile, exact_reference=True)
+                self.store.put_case(connection, record)
+                connection.execute("INSERT INTO events(source,id,fingerprint,case_id) VALUES (?,?,?,?)",
+                                   (source, event.id, event.fingerprint, record["id"]))
+                outcomes.append("applied")
+            elif previous is not None and previous["status"] != "withdrawn":
+                record = self._new_case(
+                    case_id=previous["id"], source=source, subject=subject, title=previous["title"],
+                    kind=previous["kind"], reason="The CRM opportunity is no longer won. The proposal was withdrawn.",
+                    evidence=[f"CRM: {source} / {subject} / v{version}"], actor=actor,
+                    revision=previous["revision"] + 1, record_version=version,
+                    source_payload_hash=fingerprint, profile=previous.get("profile"), private=True,
+                )
+                record["status"] = "withdrawn"
+                self.store.put_case(connection, record)
+                outcomes.append("withdrawn")
+            connection.execute(
+                """INSERT INTO crm_revisions(source,subject,record_version,fingerprint) VALUES (?,?,?,?)
+                   ON CONFLICT(source,subject) DO UPDATE SET record_version=excluded.record_version,
+                   fingerprint=excluded.fingerprint""",
+                (source, subject, version, fingerprint),
+            )
+        return tuple(outcomes) if outcomes else ("ignored",)
 
     def decide(self, case_id: str, actor: WorkActor, *, decision: str, revision: int,
                proposal_hash: str, rationale: str, provenance: dict[str, str] | None = None) -> dict[str, Any]:
@@ -413,6 +527,8 @@ class Workbench:
             record = self._load_visible_case(connection, case_id, actor)
             if revision != record["revision"] or proposal_hash != record["proposal_hash"]:
                 raise WorkbenchError("stale_proposal", 409)
+            if record.get("crm_reconciliation_required"):
+                raise WorkbenchError("reconciliation_required", 409)
             if decision == "approve" and self._owns(record, actor):
                 raise WorkbenchError("self_approval_forbidden", 403)
             if proof is not None:
@@ -470,13 +586,16 @@ class Workbench:
             raise ValueError("limit must be between 1 and 1000")
         with self.store.transaction(write=False) as connection:
             return [row["id"] for row in connection.execute(
-                "SELECT id FROM cases WHERE status = 'applying' ORDER BY id LIMIT ?", (limit,),
+                """SELECT id FROM cases WHERE status = 'applying'
+                   AND json_type(record,'$.crm_reconciliation_required') IS NULL ORDER BY id LIMIT ?""", (limit,),
             )]
 
     def reconcile_pending(self, case_id: str) -> dict[str, Any]:
         """Trusted host recovery. Resume only a stored, exact, previously approved draft."""
         with self.store.transaction(write=False) as connection:
             record = self.store.load_case(connection, case_id)
+            if record.get("crm_reconciliation_required"):
+                raise WorkbenchError("reconciliation_required", 409)
             prior = connection.execute(
                 "SELECT decision,proposal_hash FROM decisions WHERE case_id = ? AND revision = ?",
                 (case_id, record["revision"]),
@@ -497,6 +616,8 @@ class Workbench:
             current = self.store.load_case(connection, record["id"])
             if (current["revision"], current["proposal_hash"]) != (record["revision"], record["proposal_hash"]):
                 raise WorkbenchError("stale_proposal", 409)
+            if current.get("crm_reconciliation_required"):
+                raise WorkbenchError("reconciliation_required", 409)
             if current["status"] == "executed":
                 return current
             if current["status"] != "applying":
@@ -565,9 +686,12 @@ class Workbench:
             else:
                 item.pop("actor")
                 item.pop("rationale")
-        return {"case_id": case_id, "status": record["status"], "receipt": record["receipt"],
-                "decisions": decisions, "feedback_counts": counts,
-                "my_feedback": dict(own_feedback) if own_feedback else None}
+        result = {"case_id": case_id, "status": record["status"], "receipt": record["receipt"],
+                  "decisions": decisions, "feedback_counts": counts,
+                  "my_feedback": dict(own_feedback) if own_feedback else None}
+        if record.get("crm_reconciliation_required"):
+            result["reconciliation_required"] = True
+        return result
 
     def _review(self, actor: WorkActor, subject: str, title: str, kind: str, reason: str,
                 evidence: list[str], *, private: bool = False) -> dict[str, Any]:
@@ -584,7 +708,8 @@ class Workbench:
         return record
 
     def seed(self) -> None:
-        if self._seeded or self.workspace != WORKSPACE or self._connector is not None or self._crm_source != "crm-sim":
+        if (self._seeded or self.workspace != WORKSPACE or self._connector is not None
+                or self._crm_source != "crm-sim" or self._crm_sources):
             return
         with self._seed_lock:
             if not self._seeded:

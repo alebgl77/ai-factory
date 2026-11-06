@@ -15,6 +15,30 @@ python examples/adaptive_workbench.py
 
 The example uses disposable local SQLite stores and synthetic data. Its JSON report shows a direct human decision, Slack and Teams human relays, an internal service relaying a human decision, and a machine-only governance approval that was blocked. It compares two profile policies on sample cases. A second scenario commits a draft in a separate simulated ERP, drops the response, and verifies one draft after the engine reopens. The example needs no provider account, network access during execution, or external credentials.
 
+## Connect Salesforce, HubSpot or Twenty
+
+Copy [the sample configuration](../examples/crm-sources.example.json). Set an instance alias per CRM account and give the polling identity read access to opportunities and their account or company references. Keep each alias bound to the same account across token rotations. Inject credentials through the environment variables named by `token_env` in the operator configuration.
+
+| Provider | Account configuration |
+| --- | --- |
+| Salesforce | Set the HTTPS instance origin and use an OAuth access token from an identity with read access to Opportunity and Account. `IsWon` determines whether the opportunity qualifies. Set `default_currency` for a single-currency org. For a multi-currency org, omit it to read `CurrencyIsoCode`. [Salesforce REST query](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-query) |
+| HubSpot | Supply an access token with deal and company read access. Set `won_stages` to your portal's internal won-stage IDs. The connector uses the primary company or the sole associated company. [CRM search](https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm) · [Associations](https://developers.hubspot.com/docs/api-reference/latest/crm/associations/associate-records/guide) |
+| Twenty | Use `https://api.twenty.com` or the HTTPS origin of your self-hosted instance. Scope the API key to the standard Opportunity schema and its company reference. Set `won_stages` to values in your workspace, for example `WON` where that value is configured. [Twenty API](https://github.com/twentyhq/twenty/blob/main/packages/twenty-docs/developers/extend/api.mdx) |
+
+For every known account, enter its ERP customer `id` and a CRM `reference` in the form `provider/instance/account-id`. Multiple references can point to the same ERP customer. An opportunity with an unknown or ambiguous account goes to review without an ERP draft action. The importer converts amounts to exact minor units in their original currency. The `blocked` counter reports opportunities with missing or unusable amounts or currencies. Correct the source record to produce a newer revision. Other records in the window can still be processed.
+
+Run the first import from the trusted host. Adjust the dates to your intended backfill window.
+
+```sh
+python -m ai_factory_workbench.crm_sync --database ./crm-workbench.sqlite3 \
+  --workspace sales-ops --config ./crm-sources.json \
+  --since 2026-11-01T00:00:00Z --until 2026-11-02T00:00:00Z
+```
+
+Each source stores its own resume point after its window succeeds. Continue by increasing `--until` and omitting `--since` for initialized sources. Keep a fetched window within seven days including the five-minute replay overlap. Once caught up, schedule the command from the host with `--until` omitted to end five minutes before the run. Use `--provider hubspot` to select a provider or `--provider hubspot/eu-portal` for one account. The command reports counts and safe error codes by source. `conflicts` counts contradictory observations for the same CRM record and revision. Resolve them in the CRM and sync a newer revision before preparing a fresh proposal. Use the same config and database to retry a failed window.
+
+New won opportunities enter the configured work profile, which defaults to `governance`. A later stage change observed by polling withdraws an unclaimed action. If execution may have started, check the existing ERP operation before acting. Plan a separate deletion feed for removals that the provider's opportunity listing no longer returns. The command uses the local ERP simulation. To share the queue, configure a protected Companion host with the same workspace and database. For a real ERP, construct `Workbench` with your `DraftConnector`, the same exact customer mapping and `crm_sources=(source.source, ...)`, then call `sync_opportunities` from the trusted SDK host. Use the approval channels described below to authorize the resulting work.
+
 ## Adapt the working method
 
 | Profile | Evidence it asks for |

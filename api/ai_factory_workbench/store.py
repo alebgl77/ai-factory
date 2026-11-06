@@ -73,10 +73,26 @@ CREATE TABLE IF NOT EXISTS erp_drafts (
     action_hash TEXT NOT NULL,
     fields TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS crm_checkpoints (
+    source TEXT PRIMARY KEY,
+    start_at INTEGER NOT NULL,
+    until_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS crm_revisions (
+    source TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    record_version INTEGER NOT NULL,
+    fingerprint TEXT NOT NULL,
+    PRIMARY KEY (source, subject)
+);
 """
 
 
 _LEGACY_TABLES = frozenset({"cases", "events", "decisions", "feedback", "erp_drafts"})
+_CRM_TABLE_PROBES = {
+    "crm_checkpoints": "SELECT 1 FROM crm_checkpoints LIMIT 1",
+    "crm_revisions": "SELECT 1 FROM crm_revisions LIMIT 1",
+}
 
 
 class Store:
@@ -113,7 +129,10 @@ class Store:
                 if "workspace_settings" in tables:
                     self._check_binding(connection)
                 else:
-                    if tables and (not tables <= _LEGACY_TABLES or self._binding != ("demo", "sandbox-erp")):
+                    has_crm_state = any(table in tables and connection.execute(probe).fetchone() is not None
+                                        for table, probe in _CRM_TABLE_PROBES.items())
+                    if tables and (not tables.difference(_CRM_TABLE_PROBES) <= _LEGACY_TABLES
+                                   or self._binding != ("demo", "sandbox-erp") or has_crm_state):
                         raise WorkbenchError("workspace_binding_required", 409)
                     connection.execute(
                         "CREATE TABLE workspace_settings (id INTEGER PRIMARY KEY CHECK (id = 1), "

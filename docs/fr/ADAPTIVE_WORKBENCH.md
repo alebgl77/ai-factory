@@ -15,6 +15,30 @@ python examples/adaptive_workbench.py
 
 L’exemple utilise des bases SQLite temporaires et des données fictives. Le rapport JSON montre une décision humaine directe, deux décisions humaines relayées via Slack et Teams, une décision humaine relayée par un service interne et le blocage d’une approbation automatique de gouvernance. Il compare deux politiques sur des dossiers fictifs. Un second scénario crée un brouillon dans un ERP simulé séparé, perd la réponse et retrouve un seul brouillon après réouverture du moteur. L’exécution se fait hors ligne, sans compte fournisseur ni identifiant externe.
 
+## Connecter Salesforce, HubSpot ou Twenty
+
+Copiez [la configuration d’exemple](../../examples/crm-sources.example.json). Donnez un alias d’instance à chaque compte CRM et accordez à l’identité de synchronisation les droits de lecture sur les opportunités et leurs références de comptes ou sociétés. Conservez le même alias pour le même compte lors d’une rotation de jeton. Injectez les identifiants via les variables d’environnement nommées par `token_env` dans la configuration de l’hôte.
+
+| Fournisseur | Configuration du compte |
+| --- | --- |
+| Salesforce | Indiquez l’origine HTTPS de l’instance et un jeton OAuth d’une identité qui peut lire les opportunités et les comptes. `IsWon` détermine les opportunités gagnées. Renseignez `default_currency` pour une organisation monodevise. Dans une organisation multidevise, omettez ce paramètre pour lire `CurrencyIsoCode`. [Requêtes REST Salesforce](https://developer.salesforce.com/docs/platform/api-rest/guide/resources-query) |
+| HubSpot | Fournissez un jeton qui donne accès en lecture aux transactions et aux entreprises. Renseignez `won_stages` avec les identifiants internes des étapes gagnées du portail. Le connecteur retient l’entreprise principale ou l’unique entreprise associée. [Recherche CRM](https://developers.hubspot.com/docs/api-reference/latest/crm/search-the-crm) · [Associations](https://developers.hubspot.com/docs/api-reference/latest/crm/associations/associate-records/guide) |
+| Twenty | Utilisez `https://api.twenty.com` ou l’origine HTTPS de votre instance auto-hébergée. Restreignez la clé API au schéma standard des opportunités et à la référence de société. Renseignez `won_stages` avec les valeurs de votre espace, par exemple `WON` si cette valeur y est configurée. [API Twenty](https://github.com/twentyhq/twenty/blob/main/packages/twenty-docs/developers/extend/api.mdx) |
+
+Pour chaque compte connu, indiquez le champ `id` du client ERP et une `reference` CRM de la forme `provider/instance/account-id`. Plusieurs références peuvent désigner le même client ERP. Une opportunité associée à un compte inconnu ou ambigu part en revue sans action de création de brouillon ERP. L’import convertit les montants en unités mineures exactes de leur devise d’origine. Le compteur `blocked` signale les opportunités dont le montant ou la devise manque ou ne peut pas être utilisé. Corrigez la fiche CRM pour produire une révision plus récente. Les autres dossiers de la fenêtre peuvent être traités.
+
+Lancez le premier import depuis l’hôte de confiance. Adaptez les dates à la période souhaitée.
+
+```sh
+python -m ai_factory_workbench.crm_sync --database ./crm-workbench.sqlite3 \
+  --workspace sales-ops --config ./crm-sources.json \
+  --since 2026-11-01T00:00:00Z --until 2026-11-02T00:00:00Z
+```
+
+Chaque source enregistre son point de reprise lorsque sa fenêtre a été traitée. Augmentez ensuite `--until` et omettez `--since` pour les sources déjà initialisées. Limitez la fenêtre de lecture à sept jours, dont cinq minutes de recouvrement pour le rejeu. Une fois à jour, planifiez la commande sur l’hôte en omettant `--until` pour arrêter la lecture cinq minutes avant l’exécution. Utilisez `--provider hubspot` pour sélectionner un fournisseur ou `--provider hubspot/eu-portal` pour un compte précis. La commande affiche des compteurs et des codes d’erreur par source. `conflicts` compte les observations contradictoires pour un même dossier CRM et une même révision. Corrigez le dossier dans le CRM et synchronisez une révision plus récente avant de préparer une nouvelle proposition. Reprenez une fenêtre en échec avec la même configuration et la même base.
+
+Les nouvelles opportunités gagnées suivent le profil configuré, `governance` par défaut. Un changement d’étape détecté par la synchronisation retire une action qui n’a pas encore été réservée pour exécution. Si l’exécution a pu commencer, vérifiez d’abord l’opération existante dans l’ERP. Prévoyez un flux de suppression distinct pour les dossiers que le fournisseur retire de sa liste d’opportunités. La commande utilise l’ERP simulé local. Pour partager la file, configurez un Compagnon protégé avec le même espace et la même base. Pour un ERP réel, construisez `Workbench` avec votre `DraftConnector`, le même catalogue exact et `crm_sources=(source.source, ...)`, puis appelez `sync_opportunities` depuis l’hôte SDK de confiance. Utilisez les canaux de validation décrits plus bas pour autoriser les actions proposées.
+
 ## Adapter la méthode de travail
 
 | Profil | Preuves demandées |
