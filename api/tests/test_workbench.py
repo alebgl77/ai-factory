@@ -145,8 +145,8 @@ def test_lost_receipt_recovers_after_process_restart(make_client, monkeypatch):
     case = first.post(ROOT + "/events", json=opportunity()).json()
     original = store.create_draft
 
-    def lose_receipt(*args):
-        original(*args)
+    def lose_receipt(*args, **kwargs):
+        original(*args, **kwargs)
         raise TimeoutError
 
     monkeypatch.setattr(store, "create_draft", lose_receipt)

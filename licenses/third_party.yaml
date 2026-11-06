@@ -241,6 +241,30 @@ vendored:
     where: "OpenAPI page /api/v1/docs: loaded by the browser from jsDelivr, version pinned with Subresource Integrity and a per-answer CSP nonce (api/app/main.py); never distributed by this repository"
     source: https://github.com/swagger-api/swagger-ui
     check: {file: api/app/main.py, pattern: "SWAGGER_UI_VERSION = \"([0-9.]+)\""}
+  - name: claude-inc-skill-vetting
+    version: 3199e383aefa5f8364f3f7389d45e8c5b90b93ab
+    spdx: MIT
+    license: MIT
+    usage: runtime
+    where: "SDK analyst skill ai-factory-skill-vetting (read-only adaptation with upstream license)"
+    source: https://github.com/alebgl77/claude-inc/blob/3199e383aefa5f8364f3f7389d45e8c5b90b93ab/skills/skill-vetting/SKILL.md
+    check: {file: api/ai_factory_workbench/agent_skills/ai-factory-skill-vetting/SKILL.md, pattern: 'upstream-revision:\s*["\x27]?([0-9a-f]{40})'}
+  - name: ecc-agent-security-hardening
+    version: b38be6a7f6350964d59328b52f0624e1d1d552d1
+    spdx: MIT
+    license: MIT
+    usage: runtime
+    where: "SDK analyst skill ai-factory-agent-security-review (read-only adaptation with upstream license)"
+    source: https://github.com/affaan-m/ECC/blob/b38be6a7f6350964d59328b52f0624e1d1d552d1/skills/agent-security-hardening/SKILL.md
+    check: {file: api/ai_factory_workbench/agent_skills/ai-factory-agent-security-review/SKILL.md, pattern: 'upstream-revision:\s*["\x27]?([0-9a-f]{40})'}
+  - name: grafana-llmops-forge-skill
+    version: 491fcac4f43318e6eda16d8496912ea441bf888b
+    spdx: MIT
+    license: MIT
+    usage: runtime
+    where: "SDK analyst skill ai-factory-observability-review (read-only adaptation with upstream license)"
+    source: https://github.com/alebgl77/grafana-llmops-forge/blob/491fcac4f43318e6eda16d8496912ea441bf888b/SKILL.md
+    check: {file: api/ai_factory_workbench/agent_skills/ai-factory-observability-review/SKILL.md, pattern: 'upstream-revision:\s*["\x27]?([0-9a-f]{40})'}
 
 # Verification tools (CI, scripts): never shipped in the stack images.
 tools:

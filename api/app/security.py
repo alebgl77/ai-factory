@@ -382,11 +382,13 @@ class Guard:
         if status == 401:  # RFC 9110: a 401 carries a challenge; identity comes from the SSO proxy
             headers.setdefault("WWW-Authenticate", 'SSO realm="virtual-ai-factory"')
         state = scope.get("state") or {}
+        method = scope.get("method")
         seclog.emit(seclog.SECURITY_LOGGER, "request.denied", logging.WARNING, reason=code, status=status,
-                    method=scope.get("method"), path=str(scope.get("path", ""))[:256],
-                    request_id=state.get("request_id"), client_ip=state.get("client_ip") or self.client_ip(scope),
+                    method=method if method in seclog.HTTP_METHODS else "UNKNOWN", route=seclog.route_label(scope),
+                    request_ref=seclog.reference("request", state.get("request_id")),
+                    client_ip=state.get("client_ip") or self.client_ip(scope),
                     peer=_safe_peer(_peer(scope)), auth_mode=self.config.auth_mode,
-                    actor=principal.actor if principal else None,
+                    actor_ref=seclog.reference("actor", principal.actor) if principal else None,
                     roles=sorted(principal.roles) if principal else None, permission=permission, **fields)
         return SecurityDenied(status, code, key, params, headers)
 
@@ -433,7 +435,7 @@ class SecurityMiddleware:
             return
         state = scope.setdefault("state", {})
         incoming = next((v.decode("latin-1") for k, v in _headers(scope) if k == b"x-request-id"), "")
-        request_id = incoming if _REQUEST_ID.match(incoming) else uuid.uuid4().hex
+        request_id = incoming if _REQUEST_ID.fullmatch(incoming) else uuid.uuid4().hex
         state["request_id"] = request_id
         state["client_ip"] = self.guard.client_ip(scope)
         path = str(scope.get("path") or "")

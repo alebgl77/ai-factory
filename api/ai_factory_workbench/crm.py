@@ -15,6 +15,7 @@ import httpx
 
 from ._hashing import digest
 from .adapters import OpportunityEvent, normalize_opportunity_event
+from .cyberlog import append_event
 
 if TYPE_CHECKING:
     from .identity import WorkActor
@@ -330,4 +331,5 @@ def sync_opportunities(engine: Workbench, provider: CRMSource, actor: WorkActor,
             )
         if changed.rowcount != 1:
             raise CRMError("crm_checkpoint_changed")
+        append_event(connection, "crm.checkpoint", "success", actor=actor.actor, source=source)
     return CRMSyncResult(source, end, seen, **outcomes)

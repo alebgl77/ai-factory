@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ._hashing import canonical, digest
+from .cyberlog import JournalError, initialize_journal, journal_enabled
 
 
 class WorkbenchError(Exception):
@@ -89,16 +90,21 @@ CREATE TABLE IF NOT EXISTS crm_revisions (
 
 
 _LEGACY_TABLES = frozenset({"cases", "events", "decisions", "feedback", "erp_drafts"})
-_CRM_TABLE_PROBES = {
+_BOUND_STATE_PROBES = {
     "crm_checkpoints": "SELECT 1 FROM crm_checkpoints LIMIT 1",
     "crm_revisions": "SELECT 1 FROM crm_revisions LIMIT 1",
+    "cyber_events": "SELECT 1 FROM cyber_events LIMIT 1",
 }
 
 
 class Store:
-    def __init__(self, path: Path, workspace: str = "demo", target: str = "sandbox-erp") -> None:
+    def __init__(self, path: Path, workspace: str = "demo", target: str = "sandbox-erp", *,
+                 cyber_audit: bool = False) -> None:
+        if type(cyber_audit) is not bool:
+            raise ValueError("invalid cyber audit policy")
         self.path = Path(path)
         self._binding = (workspace, target)
+        self._enable_journal = cyber_audit
         self._initialized = False
         self._initialization_lock = threading.Lock()
 
@@ -129,10 +135,10 @@ class Store:
                 if "workspace_settings" in tables:
                     self._check_binding(connection)
                 else:
-                    has_crm_state = any(table in tables and connection.execute(probe).fetchone() is not None
-                                        for table, probe in _CRM_TABLE_PROBES.items())
-                    if tables and (not tables.difference(_CRM_TABLE_PROBES) <= _LEGACY_TABLES
-                                   or self._binding != ("demo", "sandbox-erp") or has_crm_state):
+                    has_bound_state = any(table in tables and connection.execute(probe).fetchone() is not None
+                                          for table, probe in _BOUND_STATE_PROBES.items())
+                    if tables and (not tables.difference(_BOUND_STATE_PROBES) <= _LEGACY_TABLES
+                                   or self._binding != ("demo", "sandbox-erp") or has_bound_state):
                         raise WorkbenchError("workspace_binding_required", 409)
                     connection.execute(
                         "CREATE TABLE workspace_settings (id INTEGER PRIMARY KEY CHECK (id = 1), "
@@ -144,6 +150,7 @@ class Store:
                 # executescript would commit before schema creation, leaving a partially bound store.
                 for statement in SCHEMA.strip().removesuffix(";").split(";"):
                     connection.execute(statement)
+                initialize_journal(connection, enable_if_unconfigured=self._enable_journal)
                 connection.commit()
                 try:
                     connection.execute("PRAGMA journal_mode = WAL")
@@ -163,16 +170,19 @@ class Store:
 
     @contextmanager
     def transaction(self, *, write: bool = True) -> Iterator[sqlite3.Connection]:
-        self._initialize()
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-            try:
-                self._check_binding(connection)
-                yield connection
-                connection.commit()
-            except BaseException:
-                connection.rollback()
-                raise
+        try:
+            self._initialize()
+            with closing(self._connect()) as connection:
+                connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+                try:
+                    self._check_binding(connection)
+                    yield connection
+                    connection.commit()
+                except BaseException:
+                    connection.rollback()
+                    raise
+        except JournalError:
+            raise WorkbenchError("cyber_journal_unavailable", 503) from None
 
     @staticmethod
     def load_case(connection: sqlite3.Connection, case_id: str) -> dict[str, Any]:
@@ -198,6 +208,8 @@ class Store:
             row = connection.execute(
                 "SELECT id, action_hash FROM erp_drafts WHERE external_ref = ?", (external_ref,)
             ).fetchone()
+            if row is None and before_write is None and journal_enabled(connection):
+                raise JournalError("journaled ERP dispatch requires case verification")
             if row is None and (before_write is None or before_write(connection)):
                 connection.execute(
                     "INSERT OR IGNORE INTO erp_drafts(external_ref,id,action_hash,fields) VALUES (?,?,?,?)",

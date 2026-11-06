@@ -1,6 +1,6 @@
 """FastAPI application of the Virtual AI Factory aggregation API (MIT).
 
-Run: ``uvicorn app.main:app --host 0.0.0.0 --port 8000``
+Run: ``uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log``
 """
 
 from __future__ import annotations
@@ -21,14 +21,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import metrics as metrics_mod
+from . import seclog
 from .i18n import DEFAULT_LANG, msg, normalize_lang
 from .routers import audit, core, grafana, placement, registry, spaces, workbench
 from .security import READ, Access, SecurityDenied, SecurityMiddleware, require
 from .service import FactoryService
 from .settings import API_VERSION, Settings
 from .workbench.service import Workbench, local_advisor
-
-log = logging.getLogger("factory.api")
 
 
 class BodySizeLimit:
@@ -128,6 +127,7 @@ window.ui = SwaggerUIBundle({{url: {json.dumps(openapi_url)}, dom_id: "#swagger-
 def create_app(settings: Settings | None = None, transport: httpx.BaseTransport | None = None,
                clock: Callable[[], dt.datetime] | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    seclog.protect_uvicorn_errors()
     app = FastAPI(
         title="Virtual AI Factory — aggregation API",
         description=("Aggregation API (MIT): risk registry, FinOps, LLMOps/RAG, data loop, hybrid placement, "
@@ -157,8 +157,10 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
         return exc.response(normalize_lang(request.query_params.get("lang"), settings.default_lang))
 
     @app.exception_handler(Exception)
-    async def unhandled(request: Request, exc: Exception) -> JSONResponse:
-        log.exception("unhandled error: %s", exc.__class__.__name__)
+    async def unhandled(request: Request, _exc: Exception) -> JSONResponse:
+        seclog.emit(seclog.API_LOGGER, "request.failed", logging.ERROR, status=500,
+                    route=seclog.route_label(request.scope),
+                    request_ref=seclog.reference("request", getattr(request.state, "request_id", None)))
         lang = normalize_lang(request.query_params.get("lang"), settings.default_lang)
         return JSONResponse(status_code=500, content={"detail": msg(lang, "error.internal")})
 
@@ -172,6 +174,7 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
         app.state.workbench = Workbench(
             Path(settings.state_dir) / f"workbench-{settings.workbench_mode}.sqlite3",
             settings.workbench_mode, clock=clock, advisor=advisor,
+            cyber_audit=settings.workbench_cyber_audit == "on",
         )
         app.include_router(workbench.router)
 

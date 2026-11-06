@@ -176,7 +176,7 @@ vous-même.
 | Domaine | Ce qui est en place | Comment vérifier |
 |---|---|---|
 | Identité et accès | SSO d'entreprise (OpenID Connect via oauth2-proxy : Entra ID, Okta, Google, Keycloak), identité acceptée uniquement depuis le proxy de bord, RBAC à 5 rôles, refus par défaut, configuration qui échoue fermée | `api/tests/test_security.py`, `compose/sso/test_sso_e2e.sh` |
-| Intégrité de la gouvernance | Règle des quatre yeux : personne n'approuve une version de modèle qu'il a enregistrée ; journal d'audit chaîné par SHA-256 de chaque écriture, vérificateur hors ligne | `GET /api/v1/audit/verify`, `python -m app.audit verify` |
+| Intégrité de la gouvernance | Règle des quatre yeux : personne n'approuve une version de modèle qu'il a enregistrée ; journal d'audit chaîné par SHA-256 pour les écritures de gouvernance prises en charge, vérificateur hors ligne | `GET /api/v1/audit/verify`, `python -m app.audit verify` |
 | Données sensibles | Données C3/C4 traitées uniquement sur le GPU local, échec fermé (aucun repli vers le cloud) ; données personnelles masquées avant tout modèle cloud ; aucun prompt dans les journaux | `scripts/smoke_stack.sh` |
 | Garde-fous LLM | Détection d'injection de prompt et de jailbreak (EN/FR), signalement ou blocage | `compose/litellm/tests` |
 | Aucun jeton dans le navigateur | Le dashboard ne parle qu'à l'API ; jeton Grafana, clés de la passerelle et des fournisseurs restent côté serveur | `scripts/smoke_stack.sh` |
@@ -191,6 +191,7 @@ secrets, rotation, sauvegardes, rétention) sont dans le guide de durcissement d
 [docs/fr/SECURITY.md](docs/fr/SECURITY.md).
 
 - [docs/fr/SECURITY.md](docs/fr/SECURITY.md) : architecture de sécurité, guide de durcissement, réponse à incident
+- [Guide Cyber](docs/fr/CYBER_SECURITY.md) pour le journal Workbench facultatif, les scellés authentifiés, les exports SIEM et le triage des CVE
 - [docs/fr/THREAT_MODEL.md](docs/fr/THREAT_MODEL.md) : flux de données, STRIDE par composant, menaces LLM, risques résiduels
 - [docs/fr/SECURITY_CONTROLS.md](docs/fr/SECURITY_CONTROLS.md) : contrôles rapprochés de l'OWASP Top 10 LLM 2025, de l'OWASP ASVS 5.0, du NIST SSDF, du CIS Docker, de l'ISO/IEC 27001:2022, avec des repères NIS2 et DORA
 - [SECURITY.md](SECURITY.md) : signaler une vulnérabilité (signalement privé, accusé de réception sous 72 h) et vérifier une release

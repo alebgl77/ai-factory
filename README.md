@@ -172,7 +172,7 @@ Every line below is backed by a test, a CI job or a command you can run yourself
 | Area | What is in place | How to verify |
 |---|---|---|
 | Identity and access | Enterprise SSO (OpenID Connect via oauth2-proxy: Entra ID, Okta, Google, Keycloak), identity accepted from the edge only, 5-role RBAC, deny by default, fail-closed configuration | `api/tests/test_security.py`, `compose/sso/test_sso_e2e.sh` |
-| Governance integrity | Four-eyes rule: nobody approves a model version they recorded; SHA-256 hash-chained audit trail of every write, offline verifier | `GET /api/v1/audit/verify`, `python -m app.audit verify` |
+| Governance integrity | Four-eyes rule: nobody approves a model version they recorded; SHA-256 hash-chained audit trail for supported governance writes, offline verifier | `GET /api/v1/audit/verify`, `python -m app.audit verify` |
 | Sensitive data | C3/C4 data processed on the local GPU only, fail closed (no cloud fallback); PII redacted before any cloud model; no prompt in logs | `scripts/smoke_stack.sh` |
 | LLM guardrails | Prompt-injection and jailbreak detection (EN/FR), flag or block | `compose/litellm/tests` |
 | No token in the browser | The dashboard only talks to the API; Grafana token, gateway and provider keys stay server side | `scripts/smoke_stack.sh` |
@@ -187,6 +187,7 @@ rotation, backups, retention) are in the
 [hardening guide](docs/SECURITY.md#14-production-hardening-guide).
 
 - [docs/SECURITY.md](docs/SECURITY.md): security architecture, hardening guide, incident response
+- [Cyber operations guide](docs/CYBER_SECURITY.md) for optional Workbench journaling, authenticated checkpoints, SIEM exports and CVE triage
 - [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md): data flows, STRIDE per component, LLM threats, residual risks
 - [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md): controls mapped to OWASP LLM Top 10 2025, OWASP ASVS 5.0, NIST SSDF, CIS Docker, ISO/IEC 27001:2022, with NIS2 and DORA pointers
 - [SECURITY.md](SECURITY.md): report a vulnerability (private reporting, acknowledgement within 72 h) and verify a release

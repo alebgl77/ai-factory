@@ -24,4 +24,4 @@ Repository = "https://github.com/alebgl77/ai-factory"
 include = ["ai_factory_workbench*"]
 
 [tool.setuptools.package-data]
-ai_factory_workbench = ["agent_skills/*/SKILL.md"]
+ai_factory_workbench = ["agent_skills/*/SKILL.md", "agent_skills/*/LICENSE.upstream"]
