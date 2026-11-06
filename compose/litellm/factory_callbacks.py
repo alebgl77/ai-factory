@@ -50,7 +50,6 @@ Metric label values are validated and capped to keep Prometheus cardinality boun
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import math
 import os
@@ -127,7 +126,6 @@ _STRICT_CLASSES = frozenset({"C1", "C2"}) | _STRICT_SENSITIVE
 _STRICT_CHAT_ALIASES = frozenset({"chat-default", "chat-small", "chat-sensitive"})
 _OPENAI_LOCAL_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
 _KEY_DIGEST = re.compile(r"[0-9a-f]{64}")
-_RAW_VIRTUAL_KEY = re.compile(r"sk-[A-Za-z0-9_-]{16,253}")
 _AUTH_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _OVERRIDES = frozenset({
     "api_base", "api_key", "api_type", "api_version", "aws_access_key_id", "aws_secret_access_key",
@@ -288,14 +286,10 @@ def _bound_gateway_request(policy: dict, auth, data: dict, call_type) -> None:
             or getattr(auth, "user_role", None) in {"proxy_admin", "proxy_admin_viewer"}
             or getattr(auth, "aliases", None) or getattr(auth, "router_settings", None)):
         raise _gateway_denied()
-    key = getattr(auth, "api_key", None)
-    if not isinstance(key, str):
-        raise _gateway_denied()
-    if _RAW_VIRTUAL_KEY.fullmatch(key):
-        digest = hashlib.sha256(key.encode("ascii")).hexdigest()
-    elif _KEY_DIGEST.fullmatch(key):
-        digest = key
-    else:
+    # UserAPIKeyAuth normalizes virtual credentials during LiteLLM authentication.
+    # This callback consumes only its authenticated fingerprint and refuses raw keys.
+    digest = getattr(auth, "api_key", None)
+    if not isinstance(digest, str) or not _KEY_DIGEST.fullmatch(digest):
         raise _gateway_denied()
     binding = policy.get(digest)
     if binding is None:

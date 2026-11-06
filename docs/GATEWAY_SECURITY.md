@@ -1,6 +1,6 @@
 # Routage authentifié des modèles par BU
 
-Le mode strict lie chaque clé d’inférence à un seul dossier du registre GitOps. Le proxy LiteLLM authentifie la clé virtuelle, puis la Factory vérifie son empreinte SHA-256, son équipe, ses modèles et ses routes autorisés. Le dossier fixe la BU, la sensibilité minimale et l’alias. Une sensibilité client plus basse est ignorée. Une sensibilité plus haute qui nécessiterait un autre modèle est refusée. Une requête C3 ou C4 admise utilise un alias local, avec masquage et aucun repli. Le mode strict désactive la journalisation du texte pour l’ensemble du proxy.
+Le mode strict lie chaque clé d’inférence à un seul dossier du registre GitOps. LiteLLM authentifie la clé virtuelle et normalise son empreinte avant le contrôle Factory. Celui-ci vérifie exclusivement cette empreinte authentifiée, l’équipe, les modèles et les routes autorisés. Une valeur brute ou fournie par le corps de requête est refusée comme preuve d’identité. Le dossier fixe la BU, la sensibilité minimale et l’alias. Une sensibilité client plus basse est ignorée. Une sensibilité plus haute qui nécessiterait un autre modèle est refusée. Une requête C3 ou C4 admise utilise un alias local, avec masquage et aucun repli. Le mode strict désactive la journalisation du texte pour l’ensemble du proxy. [Normalisation LiteLLM épinglée](https://github.com/BerriAI/litellm/blob/v1.106.7/litellm/proxy/_types.py#L3393-L3437)
 
 ## Préparer la configuration
 

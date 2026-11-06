@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
-import hashlib
 import json
 from pathlib import Path
 import ssl
@@ -15,7 +14,7 @@ import yaml
 
 REGISTRY = Path(__file__).resolve().parents[3] / "config" / "usecases"
 RAW_KEY = "sk-" + "a" * 36
-DIGEST = hashlib.sha256(RAW_KEY.encode("ascii")).hexdigest()
+DIGEST = "a" * 64
 
 
 def binding(**changes):
@@ -76,10 +75,9 @@ def deny(fc, callback, identity, data, call="acompletion"):
     assert RAW_KEY not in str(failure.value.detail) and DIGEST not in str(failure.value.detail)
 
 
-@pytest.mark.parametrize("supplied_key", [RAW_KEY, DIGEST])
 @pytest.mark.parametrize("supplied_sensitivity", [None, "C1", "C4"])
-def test_authenticated_case_overrides_downgrades_in_both_metadata_buckets(strict, supplied_key, supplied_sensitivity):
-    result = invoke(strict, auth(api_key=supplied_key), body(metadata={"sensitivity": supplied_sensitivity},
+def test_authenticated_case_overrides_downgrades_in_both_metadata_buckets(strict, supplied_sensitivity):
+    result = invoke(strict, auth(), body(metadata={"sensitivity": supplied_sensitivity},
         litellm_metadata={"sensitivity": "C2", "user_api_key_team_id": "other", "langfuse_host": "unsafe"},
         unrelated_provider_option="discarded", disable_fallbacks=False))
     assert result["model"] == "chat-sensitive" and result["disable_fallbacks"] is True
@@ -90,7 +88,7 @@ def test_authenticated_case_overrides_downgrades_in_both_metadata_buckets(strict
             "uc-04", "cc-rh", "people-workloads")
         assert metadata["sensitivity"] == ("C4" if supplied_sensitivity == "C4" else "C3")
         assert metadata["mask_input"] and metadata["mask_output"] and metadata["turn_off_message_logging"]
-        assert "langfuse_host" not in metadata and supplied_key not in str(metadata)
+        assert "langfuse_host" not in metadata and DIGEST not in str(metadata)
     assert sys.modules["litellm"].turn_off_message_logging is True
 
 
@@ -98,11 +96,18 @@ def test_authenticated_case_overrides_downgrades_in_both_metadata_buckets(strict
     {"via_virtual_key": False}, {"user_role": "proxy_admin"}, {"team_id": "finance-workloads"},
     {"allowed_routes": ["llm_api_routes"]}, {"allowed_routes": ["/v1/chat/completions", "/key/update"]},
     {"allowed_routes": []}, {"request_route": "/v1/responses"}, {"api_key": ""}, {"api_key": "b" * 64},
+    {"api_key": RAW_KEY}, {"api_key": RAW_KEY, "token": DIGEST},
     {"models": ["chat-default", "chat-sensitive", "embed-default"]}, {"aliases": {"chat-sensitive": "chat-default"}},
     {"router_settings": {"fallbacks": ["chat-default"]}},
 ])
 def test_requires_authenticated_narrow_virtual_key(fc, strict, identity):
     deny(fc, strict, auth(**identity), body())
+
+
+def test_request_fingerprint_cannot_replace_authenticated_value(fc, strict):
+    spoofed = body(metadata={"user_api_key": DIGEST, "user_api_key_hash": DIGEST},
+                   litellm_metadata={"user_api_key_hash": DIGEST})
+    deny(fc, strict, auth(api_key="b" * 64), spoofed)
 
 
 @pytest.mark.parametrize("override", [
