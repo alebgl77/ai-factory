@@ -11,9 +11,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const sources = new Map([
   'companion/index.html', 'companion/companion.css', 'companion/companion.js', 'companion/demo.js',
   'companion/handoff.css', 'companion/handoff.js', 'companion/vendor/qrcode.js',
+  'companion/fonts/fonts.css', 'companion/fonts/Geist-Variable.woff2', 'companion/fonts/GeistMono-Variable.woff2',
   'exercise/index.html', 'exercise/uc04.css', 'exercise/uc04.js'
 ].map(name => [`/project/${name}`, name]));
-const contentTypes = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript' };
+const contentTypes = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'application/javascript', '.woff2': 'font/woff2' };
 const browser = await chromium.launch();
 const caseFixture = {
   id: 'WK-42', title: 'Protected <img src=x> action', kind: 'action', status: 'waiting_review',
@@ -34,6 +35,17 @@ async function serve(page, api, staticMode = false) {
   });
 }
 
+async function checkFonts(page) {
+  await page.evaluate(() => document.fonts.ready);
+  const loaded = await page.evaluate(() => [...document.fonts].filter(face => face.status === 'loaded').map(face => face.family));
+  assert.ok(loaded.includes('Geist'));
+  assert.ok(loaded.includes('Geist Mono'));
+}
+
+async function checkNarrow(page) {
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+}
+
 try {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const demo = await context.newPage();
@@ -44,10 +56,29 @@ try {
   const file = pathToFileURL(path.join(root, 'dashboard', 'companion', 'index.html'));
   await demo.goto(`${file.href}?lang=fr`);
   await demo.getByText(/Simulation locale/).waitFor();
-  assert.equal(await demo.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await checkFonts(demo);
+  await checkNarrow(demo);
+  const firstCase = demo.locator('#cases button').first();
+  await firstCase.waitFor();
+  assert.equal(await demo.locator('#case-detail').isVisible(), false);
+  assert.ok((await firstCase.boundingBox()).height >= 44);
+  await firstCase.press('Enter');
+  assert.equal(await demo.locator('#case-title').evaluate(node => node === document.activeElement), true);
+  assert.equal(await demo.locator('.inbox').isVisible(), false);
+  await demo.getByRole('button', { name: 'Retour aux dossiers' }).press('Enter');
+  assert.equal(await firstCase.evaluate(node => node === document.activeElement), true);
+  await firstCase.press('Enter');
+  await demo.setViewportSize({ width: 320, height: 700 });
+  await checkNarrow(demo);
+  const mobileBack = demo.getByRole('button', { name: 'Retour aux dossiers' });
+  assert.ok((await mobileBack.boundingBox()).height >= 44);
+  await demo.getByLabel('Motif de la décision').fill('   ');
+  await demo.getByRole('button', { name: 'Approuver', exact: true }).click();
+  await demo.locator('#decision-notice').getByText('Saisissez le motif de votre décision.').waitFor();
   await demo.getByLabel('Motif de la décision').fill('Éléments CRM et ERP concordants.');
   await demo.getByRole('button', { name: 'Approuver', exact: true }).click();
   await demo.getByText('ERP-DRAFT-104').waitFor();
+  assert.equal(await demo.locator('#decision-notice').evaluate(node => node === document.activeElement), true);
   await demo.getByLabel('Commentaire (facultatif)').fill('Rapprochement utile.');
   await demo.getByRole('button', { name: 'Utile', exact: true }).click();
   await demo.getByText('Avis enregistré.').waitFor();
@@ -64,18 +95,28 @@ try {
   await demo.getByRole('button', { name: 'Envoyer' }).click();
   await demo.getByRole('button', { name: 'Ouvrir la revue humaine' }).click();
   await demo.getByRole('heading', { name: 'Revue demandée dans la conversation' }).waitFor();
+  assert.equal(await demo.locator('#case-title').evaluate(node => node === document.activeElement), true);
   assert.match(await demo.locator('#evidence-items').innerText(), /<b>Texte brut<\/b>/);
   assert.equal(await demo.locator('#evidence-items b').count(), 0);
   assert.deepEqual(demoRequests, []);
   assert.deepEqual(errors, []);
 
   const workshop = await context.newPage();
+  await workshop.setViewportSize({ width: 320, height: 700 });
   const external = [];
   workshop.on('request', req => { if (!req.url().startsWith('https://factory.test/')) external.push(req.url()); });
   await serve(workshop, route => { throw new Error(`Unexpected API request in static mode: ${route.request().url()}`); }, true);
   await workshop.goto('https://factory.test/project/exercise/index.html?lang=fr&token=fixture-only#private');
-  await workshop.getByRole('button', { name: 'Code QR' }).click();
+  const qrButton = workshop.getByRole('button', { name: 'Code QR' });
+  await qrButton.click();
   const qrDialog = workshop.getByRole('dialog', { name: 'Ouvrir sur votre téléphone' });
+  await qrDialog.locator('canvas').waitFor({ state: 'visible' });
+  await checkFonts(workshop);
+  assert.equal(await qrDialog.evaluate(node => node.scrollWidth <= node.clientWidth), true);
+  await workshop.keyboard.press('Escape');
+  await qrDialog.waitFor({ state: 'detached' });
+  assert.equal(await qrButton.evaluate(node => node === document.activeElement), true);
+  await qrButton.press('Enter');
   await qrDialog.locator('canvas').waitFor({ state: 'visible' });
   const qrLink = qrDialog.getByRole('link');
   assert.equal(await qrLink.getAttribute('href'), 'https://factory.test/project/companion/index.html?lang=fr');
@@ -95,12 +136,16 @@ try {
   assert.equal(matrixMatches, true);
   await qrLink.click();
   await workshop.getByText(/Simulation locale/).waitFor();
+  await checkFonts(workshop);
   assert.deepEqual(external, []);
 
   const protectedPage = await context.newPage();
+  await protectedPage.setViewportSize({ width: 1440, height: 900 });
   const payloads = [];
   let allowRead = false;
   let cases = [caseFixture];
+  let pendingFeedback;
+  let releaseFeedback;
   await serve(protectedPage, async (route, url) => {
     const req = route.request();
     if (url.pathname.endsWith('/cases')) {
@@ -116,7 +161,11 @@ try {
       cases = [{ ...caseFixture, status: 'executed', receipt: { id: 'ERP-DRAFT-42' } }];
       return route.fulfill({ json: cases[0] });
     }
-    if (url.pathname.endsWith('/feedback')) return route.fulfill({ json: { recorded: true } });
+    if (url.pathname.endsWith('/feedback')) {
+      if (!pendingFeedback) return route.fulfill({ json: { recorded: true } });
+      await pendingFeedback;
+      return route.fulfill({ status: 500, json: { detail: 'fixture failure' } });
+    }
     if (url.pathname.endsWith('/chat')) return route.fulfill({ json: { answer: '<b>Advice</b>', source: 'local', escalated: false } });
     return route.fulfill({ status: 404 });
   });
@@ -129,15 +178,21 @@ try {
   await protectedPage.getByRole('button', { name: 'Refresh' }).click();
   await protectedPage.getByText(/Authenticated workspace/).waitFor();
   await protectedPage.getByRole('heading', { name: caseFixture.title }).waitFor();
+  assert.equal(await protectedPage.locator('.inbox').isVisible(), true);
+  assert.equal(await protectedPage.locator('#back-to-cases').isVisible(), false);
+  await checkFonts(protectedPage);
   assert.equal(await protectedPage.locator('#case-title img').count(), 0);
   await protectedPage.getByLabel('Reason for the decision').fill('Draft reason for an earlier revision.');
   cases = [{ ...caseFixture, revision: 5, proposal_hash: 'a'.repeat(64), approval_expired: true }];
-  await protectedPage.getByRole('button', { name: 'Refresh' }).click();
-  await protectedPage.getByText(/proposal has expired/).waitFor();
-  assert.equal(await protectedPage.getByLabel('Reason for the decision').inputValue(), '');
-  assert.equal(await protectedPage.getByRole('button', { name: 'Approve', exact: true }).isEnabled(), false);
+  await protectedPage.setViewportSize({ width: 390, height: 844 });
+  await protectedPage.locator('#back-to-cases').waitFor();
+  await protectedPage.getByLabel('Language').selectOption('fr');
+  await protectedPage.getByText(/Cette proposition a expiré/).waitFor();
+  await protectedPage.locator('#case-notice').getByText(/Examinez la nouvelle révision avant de décider/).waitFor();
+  assert.equal(await protectedPage.getByLabel('Motif de la décision').inputValue(), '');
+  assert.equal(await protectedPage.getByRole('button', { name: 'Approuver', exact: true }).isEnabled(), false);
   cases = [{ ...caseFixture, revision: 5, proposal_hash: 'a'.repeat(64) }];
-  await protectedPage.getByRole('button', { name: 'Refresh' }).click();
+  await protectedPage.getByLabel('Langue').selectOption('en');
   await protectedPage.getByText(/Revision 5/).waitFor();
   await protectedPage.waitForFunction(() => !document.querySelector('#decision-form [value="approve"]').disabled);
   await protectedPage.getByLabel('Reason for the decision').fill('Confirmed the exact proposal.');
@@ -156,7 +211,16 @@ try {
   await protectedPage.getByText('Operations · Local model').waitFor();
   assert.equal(await protectedPage.locator('#messages b').count(), 0);
   assert.deepEqual(payloads[2], { agent: 'operations', message: 'What changed?', case_id: 'WK-42' });
-  console.log('Mobile Companion passed local simulation, exact-revision decisions, feedback, escalation, QR and protected mode.');
+  await protectedPage.getByRole('button', { name: 'Decision inbox' }).click();
+  pendingFeedback = new Promise(resolve => { releaseFeedback = resolve; });
+  const feedbackSent = protectedPage.waitForRequest(req => req.url().endsWith('/feedback'));
+  await protectedPage.getByRole('button', { name: 'Helpful', exact: true }).click();
+  await feedbackSent;
+  await protectedPage.getByRole('button', { name: 'Back to cases' }).click();
+  releaseFeedback();
+  await protectedPage.locator('#workspace-notice').getByText(/WK-42 · The workspace could not complete this request/).waitFor();
+  await checkNarrow(protectedPage);
+  console.log('Companion passed desktop and mobile navigation, local fonts, QR, escalation, exact-revision decisions, feedback and protected mode.');
 } finally {
   await browser.close();
 }
