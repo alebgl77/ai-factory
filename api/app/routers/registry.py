@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..i18n import msg
 from ..security import ASSESSMENT, MODEL_VERSION, Access, require
 from ..service import FactoryService
-from ..state import AuditError, SeparationOfDuties, StateError
+from ..state import AuditError, ModelVersionUnchanged, SeparationOfDuties, StaleReviewRevision, StateError
 from .deps import ID_PATTERN, READ_ONLY, not_found, response_lang, service, state_unavailable
 
 router = APIRouter(prefix="/api/v1/registry", tags=["registry"])
@@ -26,6 +26,7 @@ class AssessmentIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: Literal["approved", "approved_with_conditions", "rejected", "pending"]
     reviewer: str = Field(min_length=1, max_length=64, pattern=ID_PATTERN)
+    expected_review_revision: str = Field(min_length=64, max_length=64, pattern=r"^[0-9a-f]{64}$")
 
 
 # Writes are language-independent (CONTRACT section 9): the state keeps ids, versions, dates and
@@ -54,18 +55,19 @@ def get_registry(uc_id: str = Path(pattern=ID_PATTERN), svc: FactoryService = De
 def post_model_version(body: ModelVersionIn, uc_id: str = Path(pattern=ID_PATTERN),
                        access: Access = Depends(require(MODEL_VERSION, write=True)),
                        svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
-    uc = svc.find_usecase(uc_id)
+    uc = svc.find_configured_usecase(uc_id)
     if uc is None:
         raise not_found(lang)
-    if str((uc.get("model") or {}).get("version")) == body.version:
-        raise HTTPException(status_code=409, detail=msg(lang, "error.version_is_current"))
     try:
-        svc.state.set_model_version(uc, body.version, body.name, svc.today(), audit=access.audit_context())
+        current = svc.state.set_model_version(uc, body.version, body.name, svc.today(), audit=access.audit_context())
+    except ModelVersionUnchanged:
+        raise HTTPException(status_code=409, detail=msg(lang, "error.version_is_current")) from None
     except StateError as exc:
         raise state_unavailable(lang, isinstance(exc, AuditError)) from None
     svc.invalidate()
-    item = svc.evaluate_usecase(svc.find_usecase(uc_id) or uc, lang)
+    item = svc.evaluate_usecase(current, lang)
     return {"usecase": uc_id, "model": item["model"], "assessment": item["assessment"],
+            "review_revision": item["review_revision"],
             "reevaluation_required": item["risk"]["reevaluation_required"], "reason": item["risk"]["reason"],
             "deploy_gate": "blocked" if item["risk"]["deploy_block"] else "open",
             "message": msg(lang, "registry.model_version_recorded"),
@@ -81,15 +83,19 @@ def post_assessment(request: Request, body: AssessmentIn, uc_id: str = Path(patt
     approving decision by the identity that recorded the current model version is refused with 403
     ``separation_of_duties`` (and audited as ``denied``). The authenticated reviewer is recorded in
     the assessment (``reviewed_by``, ``reviewed_by_role``, ``separation_of_duties``)."""
-    uc = svc.find_usecase(uc_id)
+    uc = svc.find_configured_usecase(uc_id)
     if uc is None:
         raise not_found(lang)
     people = {str(p.get("id")) for p in (svc.config.get().get("profiles") or {}).get("people") or []}
     if people and body.reviewer not in people:
         raise HTTPException(status_code=422, detail=msg(lang, "error.unknown_reviewer"))
     try:
-        svc.state.record_assessment(uc, body.decision, body.reviewer, svc.today(), audit=access.audit_context(),
-                                    enforce_four_eyes=svc.guard.config.enforced)
+        current = svc.state.record_assessment(uc, body.decision, body.reviewer, svc.today(),
+                                              expected_review_revision=body.expected_review_revision,
+                                              audit=access.audit_context(), enforce_four_eyes=svc.guard.config.enforced)
+    except StaleReviewRevision:
+        raise svc.guard.deny(request.scope, 409, "stale_review_revision", "error.stale_review_revision",
+                             principal=access.principal, permission=ASSESSMENT) from None
     except SeparationOfDuties as exc:
         raise svc.guard.deny(request.scope, 403, "separation_of_duties", "auth.four_eyes",
                              principal=access.principal, permission=ASSESSMENT,
@@ -97,7 +103,7 @@ def post_assessment(request: Request, body: AssessmentIn, uc_id: str = Path(patt
     except StateError as exc:
         raise state_unavailable(lang, isinstance(exc, AuditError)) from None
     svc.invalidate()
-    item = svc.evaluate_usecase(svc.find_usecase(uc_id) or uc, lang)
+    item = svc.evaluate_usecase(current, lang)
     return {"usecase": uc_id, "assessment": item["assessment"],
             "reevaluation_required": item["risk"]["reevaluation_required"], "reason": item["risk"]["reason"],
             "deploy_gate": "blocked" if item["risk"]["deploy_block"] else "open", "risk": item["risk"]}

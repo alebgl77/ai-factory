@@ -3,12 +3,14 @@ import json
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
 from app.config_loader import ConfigStore, load_config
-from app.state import StateStore, VersionConflict, apply_registry_overrides
+from app.engines.risk import reevaluation
+from app.state import StateError, StateStore, VersionConflict, apply_registry_overrides
 from tests.conftest import FIXTURE_DIR, TODAY
 
 REPO = Path(__file__).resolve().parents[2]
@@ -30,10 +32,15 @@ def test_state_atomic_writes_and_overlay(tmp_path, cfg):
     assert m["assessment"]["previous_decision"] == "approved_with_conditions"
     # the Git baseline is untouched
     assert next(u for u in cfg["usecases"] if u["id"] == "uc-02")["model"]["version"] == "2026-07"
-    store.record_assessment(m, "approved", "p07", TODAY)
+    store.record_assessment(uc, "approved", "p07", TODAY, expected_review_revision=m["review_revision"])
     m2 = next(u for u in apply_registry_overrides(cfg["usecases"], store.registry_overrides()) if u["id"] == "uc-02")
-    assert m2["assessment"] == {"reviewed_model_version": "2026-11", "last_reviewed": TODAY.isoformat(),
-                                "reviewer": "p07", "decision": "approved"}
+    assert m2["assessment"] == {"reviewed_model_version": "2026-11", "reviewed_revision": m["review_revision"],
+                                "last_reviewed": TODAY.isoformat(), "reviewer": "p07", "decision": "approved"}
+    assert m2["review_revision"] == m["review_revision"]
+    changed = {**uc, "sensitivity": "C4"}
+    revised = apply_registry_overrides([changed], store.registry_overrides())[0]
+    assert revised["model"] == m2["model"]
+    assert reevaluation(revised) == (True, "proposal changed since the last review")
 
 
 def test_corrupted_state_falls_back_to_baseline(tmp_path):
@@ -43,6 +50,31 @@ def test_corrupted_state_falls_back_to_baseline(tmp_path):
     (d / "spaces_state.json").write_text("[]")
     store = StateStore(str(d))
     assert store.registry_overrides() == {}
+
+
+def test_review_write_refuses_corrupted_registry_instead_of_reusing_baseline_revision(tmp_path, cfg):
+    store = StateStore(str(tmp_path))
+    uc = cfg["usecases"][0]
+    current = apply_registry_overrides([uc], {})[0]
+    overlay = tmp_path / "registry_overrides.json"
+    overlay.write_bytes(b"{not json")
+    with pytest.raises(StateError):
+        store.record_assessment(uc, "approved", "p07", TODAY,
+                                expected_review_revision=current["review_revision"])
+    assert overlay.read_bytes() == b"{not json"
+
+
+def test_concurrent_model_changes_extend_the_same_history(tmp_path, cfg):
+    store = StateStore(str(tmp_path))
+    uc = next(u for u in cfg["usecases"] if u["id"] == "uc-02")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        changes = [pool.submit(store.set_model_version, uc, version, None, TODAY)
+                   for version in ("2026-11-a", "2026-11-b")]
+    proposals = [change.result() for change in changes]
+    current = apply_registry_overrides([uc], store.registry_overrides())[0]
+    assert {event["version"] for event in current["model"]["history"][-2:]} == {"2026-11-a", "2026-11-b"}
+    assert len({proposal["review_revision"] for proposal in proposals}) == 2
+    assert current["review_revision"] in {proposal["review_revision"] for proposal in proposals}
     assert store.spaces_state()["version"] == 0
 
 

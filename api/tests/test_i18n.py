@@ -12,6 +12,7 @@ import pytest
 from app import i18n
 from app.i18n import MESSAGES, is_lang_mapping, localize_tree, msg, normalize_lang
 from app.settings import Settings
+from tests.conftest import review_body
 
 # Every read endpoint of CONTRACT section 3 (GET), with the ones that carry generated or config text.
 READ_ENDPOINTS = ["/api/v1/health", "/api/v1/snapshot", "/api/v1/registry", "/api/v1/registry/uc-01",
@@ -263,10 +264,12 @@ def test_writes_are_language_independent(make_client):
     en = c.get("/api/v1/registry/uc-01").json()
     assert en["model"]["name"] == "cloud/large (fictional)" and en["model"]["version"] == "2026-11"
     assert en["risk"]["reason"] == "model 2026-11 not reviewed (last 2026-06); assessment pending"
-    r = c.post("/api/v1/registry/uc-01/assessment", json={"decision": "approved", "reviewer": "p07"})
+    assert en["review_revision"] == body["review_revision"]
+    r = c.post("/api/v1/registry/uc-01/assessment", json=review_body(c, "uc-01"))
     assert r.status_code == 200 and r.json()["reason"] is None
     en = c.get("/api/v1/registry/uc-01").json()
     fr = c.get("/api/v1/registry/uc-01", params={"lang": "fr"}).json()
+    assert fr["review_revision"] == en["review_revision"] == body["review_revision"]
     assert fr["assessment"] == en["assessment"]
     assert en["assessment"]["decision"] == "approved" and en["assessment"]["reviewed_model_version"] == "2026-11"
 
@@ -293,7 +296,7 @@ def test_other_errors_are_localised(client):
     assert client.get("/api/v1/grafana/metric/nope").json()["detail"].startswith("unknown query")
     r = client.post("/api/v1/placement/decide", params={"lang": "fr"}, json={})
     assert r.status_code == 422 and r.json()["detail"] == "sensibilité (C1..C4) ou cas d'usage requis"
-    r = client.post("/api/v1/registry/uc-01/assessment", json={"decision": "approved", "reviewer": "p99"})
+    r = client.post("/api/v1/registry/uc-01/assessment", json=review_body(client, "uc-01", reviewer="p99"))
     assert r.json()["detail"] == "reviewer not found in profiles.yaml"
     big = json.dumps({"version": 0, "state": {"x": "y" * 70000}})
     r = client.put("/api/v1/spaces/state", params={"lang": "fr"}, content=big,

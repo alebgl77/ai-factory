@@ -163,6 +163,14 @@ audited, and `pending` / `rejected` remain possible. Each assessment records `re
 `reviewed_by_role` and `separation_of_duties` (`verified`, `unknown_recorder`, `not_required`,
 `not_enforced`).
 
+Read `review_revision` from the registry or snapshot before opening a review and pass the opaque
+SHA-256 value as `expected_review_revision` when submitting it. The API compares it under the
+same lock as the four-eyes check. A stale value returns 409 `stale_review_revision`; reload the
+proposal and review it again. A missing or malformed value returns 422.
+The revision covers the individual proposal. Review shared policies separately. Existing
+approvals remain bound to the model version until reviewed again. Re-review active proposals
+when migrating to this control before going live.
+
 Limit: a model version defined in Git (`config/usecases/*.yaml`) has no API recorder
 (`unknown_recorder`): its four-eyes control is the review of the Git change (protect the default
 branch and require an approving review, see section 14, step 11).
@@ -381,8 +389,9 @@ without a read-only root filesystem and were not runtime-tested here (no GPU).
 - **SBOM.** CycloneDX and SPDX for the source tree and every image: `scripts/sbom.sh` locally,
   CI artifacts (`security.yml`), release assets.
 - **Signed releases.** Images `ghcr.io/alebgl77/<name>` are signed keyless with Sigstore cosign
-  and carry SLSA build provenance and SBOM attestations; release checksums are signed too. How to
-  verify: [../SECURITY.md](../SECURITY.md#verify-a-release).
+  and carry SLSA build provenance and SBOM attestations; release checksums are signed too. Before
+  building, the release requires successful latest CI, security and CodeQL `push` runs on the
+  default branch for the exact tagged commit. [Release verification](../SECURITY.md#verify-a-release)
 - **Licence policy.** Only permissive licences in the code we ship; AGPL services (Grafana, Loki)
   run as separate, unmodified containers. `scripts/check_licenses.py` (CI job `licenses`) checks
   every dependency, image and submodule against `licenses/third_party.yaml`.
@@ -419,6 +428,28 @@ checked statically (actionlint, zizmor in three modes) and their scripts are uni
   configuration and the message catalogue; unknown values fall back to the default language.
 
 ## 14. Production hardening guide
+
+The demo binds the edge to loopback (`EDGE_BIND=127.0.0.1`). For remote access, explicitly set
+`EDGE_BIND` to the intended interface, configure HTTPS and SSO, and run the production preflight
+before starting the stack. Render the same Compose files and profiles you intend to deploy.
+
+```sh
+docker compose --env-file /path/to/.env --profile sso config --format json | python scripts/check_production.py
+```
+
+Set `GRAFANA_PUBLIC_URL` and `LANGFUSE_PUBLIC_URL` to their production HTTPS URLs. For the
+bundled vLLM services, include `--profile local-gpu` when rendering and deploying. For a GPU
+reached through private DNS, pass `--private-gpu-host HOST` to the preflight once per exact
+hostname. Verify the DNS resolution and outbound network policy on the target.
+
+Keep the rendered JSON out of logs and files because it may contain secrets. The preflight
+requires demo mode, the Workbench and the `sim` profile to be disabled. It rejects unsafe network
+modes and demo or public-IP GPU endpoints. Verify actual egress along with tenant-specific TLS,
+identity and recovery. [Enterprise security review](ENTERPRISE_SECURITY_REVIEW.md)
+
+Use a supported Docker Engine version from 28.0.0 onward. Older versions can expose ports
+published to loopback to other hosts on the same layer-2 segment. Probe those ports from a
+second host on that segment before exposure. [Docker port publishing](https://docs.docker.com/engine/network/port-publishing/)
 
 Apply in this order. Each step says how to check it.
 

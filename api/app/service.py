@@ -124,9 +124,9 @@ class FactoryService:
         cfg = cfg or self.config.get()
         return apply_registry_overrides(cfg.get("usecases") or [], self.state.registry_overrides())
 
-    def find_usecase(self, uc_id: str) -> dict[str, Any] | None:
-        """Effective use case as written in Git + overlay (not localised: used for writes)."""
-        for uc in self.effective_usecases():
+    def find_configured_usecase(self, uc_id: str) -> dict[str, Any] | None:
+        """Git baseline for a write; the state store applies the current overlay under lock."""
+        for uc in self.config.get().get("usecases") or []:
             if str(uc.get("id")) == uc_id:
                 return uc
         return None

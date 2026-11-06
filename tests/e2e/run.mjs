@@ -160,6 +160,9 @@ if (!process.env.E2E_BASE_URL) {
   let apiReady = false;
   let holdFrench = null;
   const snapshotCalls = [];
+  const assessmentCalls = [];
+  const reviewTarget = fixtures.en.registry.find(u => u.risk.reevaluation_required);
+  const nextReviewRevision = 'f'.repeat(64);
   const tierMarkup = 'high" data-xss-probe="tier"><em data-xss-probe="tier">probe</em>';
   const codeMarkup = '<em data-xss-probe="code">UC-04</em>';
   const metricMarkup = '<em data-xss-probe="metric">metric</em>';
@@ -174,6 +177,9 @@ if (!process.env.E2E_BASE_URL) {
       if (!apiReady || !fixtures[lang]) return route.fulfill({ status: 503, json: {} });
       const data = structuredClone(fixtures[lang]);
       data.meta.telemetry_collected_at = new Date().toISOString();
+      if (assessmentCalls.length) {
+        data.registry.find(u => u.id === reviewTarget.id).review_revision = nextReviewRevision;
+      }
       const useCase = data.registry.find(u => u.id === 'uc-04');
       useCase.name += ' (API)';
       useCase.code = codeMarkup;
@@ -181,6 +187,10 @@ if (!process.env.E2E_BASE_URL) {
       data.catalog.models[0].eval = { [metricMarkup]: 0.5 };
       if (lang === 'fr' && holdFrench) return holdFrench.then(() => route.fulfill({ json: data }));
       return route.fulfill({ json: data });
+    }
+    if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
+      assessmentCalls.push(route.request().postDataJSON());
+      return route.fulfill({ status: 409, json: { code: 'stale_review_revision' } });
     }
     const local = path.join(root, 'dashboard', url.pathname.slice(1));
     return fs.existsSync(local) ? route.fulfill({ path: local }) : route.fulfill({ status: 404 });
@@ -204,6 +214,14 @@ if (!process.env.E2E_BASE_URL) {
   const englishName = fixtures.en.registry.find(u => u.id === 'uc-04').name;
   check('live EN switch requests and renders the selected API locale', snapshotCalls.at(-1) === 'en' &&
     (await mock.locator('#cBody').textContent()).includes(`${englishName} (API)`));
+  const approve = mock.locator(`#cBody [data-cact="approve"][data-uc="${reviewTarget.id}"]`);
+  await approve.click();
+  await mock.waitForFunction(({ id, revision }) =>
+    window.__twin.SNAP.registry.find(u => u.id === id).review_revision === revision,
+  { id: reviewTarget.id, revision: nextReviewRevision });
+  check('a stale approval submits the displayed revision once and refreshes the review',
+    assessmentCalls.length === 1 && assessmentCalls[0].expected_review_revision === reviewTarget.review_revision &&
+    await approve.getAttribute('data-review-revision') === nextReviewRevision);
   let releaseFrench;
   holdFrench = new Promise(resolve => { releaseFrench = resolve; });
   const frenchRequest = mock.waitForRequest(/\/api\/v1\/snapshot\?lang=fr$/);

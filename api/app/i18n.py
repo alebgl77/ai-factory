@@ -110,6 +110,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "modèle {version} non revu (dernière revue : {last})",
     },
     "risk.reason.no_review": {"en": "none", "fr": "aucune"},
+    "risk.reason.proposal_changed": {
+        "en": "proposal changed since the last review",
+        "fr": "la proposition a changé depuis la dernière revue",
+    },
     "risk.reason.assessment_pending": {"en": "assessment pending", "fr": "évaluation en attente"},
     "risk.reason.separator": {"en": "; ", "fr": " ; "},
     "risk.tier.prohibited": {"en": "prohibited", "fr": "interdit"},
@@ -393,6 +397,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "error.version_is_current": {
         "en": "this version is already the current version",
         "fr": "cette version est déjà la version courante",
+    },
+    "error.stale_review_revision": {
+        "en": "the proposal changed; review the current proposal before submitting a decision",
+        "fr": "la proposition a changé. Examinez la proposition actuelle avant d’enregistrer votre décision",
     },
     "error.unknown_reviewer": {
         "en": "reviewer not found in profiles.yaml",

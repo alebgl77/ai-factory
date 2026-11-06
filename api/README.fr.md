@@ -138,6 +138,11 @@ possibles (ils gardent la porte de déploiement fermée). Chaque évaluation enr
 `reviewed_by`, `reviewed_by_role` et `separation_of_duties` : `verified`, `unknown_recorder`
 (version définie dans Git et revue là-bas), `not_required` ou `not_enforced` (mode démo).
 
+Le registre et le snapshot exposent `review_revision`, une valeur SHA-256 opaque. Envoyez-la dans
+`expected_review_revision` avec `decision` et `reviewer` lors de la soumission. Une valeur absente
+ou mal formée renvoie 422. Une version périmée renvoie 409 avec `code: stale_review_revision`.
+Relisez le dossier en cours et reprenez la revue avant une nouvelle soumission.
+
 ### Journal d'audit infalsifiable
 
 Chaque écriture (version de modèle, évaluation, réservations, décision de placement) ajoute une
