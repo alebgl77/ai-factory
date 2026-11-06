@@ -397,9 +397,17 @@ if (!process.env.E2E_BASE_URL) {
   await mobile.waitForFunction(() => window.__appReady === true, null, { timeout: 30000 });
   await mobile.locator('#tabFactory').click();
   await mobile.locator('#factoryPanel [data-csec="shadow"]').click();
+  const demoVisible = await mobile.locator('[data-shadow-state="demo"]').isVisible();
+  const mobileLayout = await mobile.locator('#cBody').evaluate(el => ({
+    consoleHeight: el.clientHeight,
+    consoleScrollHeight: el.scrollHeight,
+    documentWidth: document.documentElement.clientWidth,
+    documentScrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: window.innerWidth,
+  }));
   check('mobile Factory route shows the demo with a scrollable console and no page overflow',
-    await mobile.locator('[data-shadow-state="demo"]').isVisible() && await mobile.locator('#cBody').evaluate(el =>
-      el.scrollHeight > el.clientHeight && document.documentElement.scrollWidth === window.innerWidth));
+    demoVisible && mobileLayout.consoleScrollHeight > mobileLayout.consoleHeight && mobileLayout.documentScrollWidth <= mobileLayout.documentWidth,
+    JSON.stringify({ demoVisible, ...mobileLayout }));
   const mobileUsage = mobile.getByRole('table', { name: 'Signaux par équipe et outil' });
   check('mobile usage rows keep their labels and fit without horizontal scrolling', await mobileUsage.evaluate(el => {
     const row = el.querySelector('tbody tr'), label = row.querySelector('.shadow-cell-label');
