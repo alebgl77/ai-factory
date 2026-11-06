@@ -23,6 +23,7 @@ from .identity import ASSESSMENT, READ, Actor, WorkActor
 from .store import Store, WorkbenchError
 
 WORKSPACE = "demo"
+_SIMULATED_CRM_SOURCE = "crm-sim"
 _WORKSPACE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _SUBJECT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -147,7 +148,7 @@ class Workbench:
     def __init__(self, path: Path, mode: str = "demo", clock: Callable[[], dt.datetime] | None = None,
                  advisor: Callable[[str, str, dict[str, Any]], str] | None = None, *,
                  workspace: str = WORKSPACE, connector: DraftConnector | None = None,
-                 customers: Sequence[Mapping[str, str]] | None = None, crm_source: str = "crm-sim",
+                 customers: Sequence[Mapping[str, str]] | None = None, crm_source: str = _SIMULATED_CRM_SOURCE,
                  crm_sources: Sequence[str] = (),
                  defer_execution: bool = False) -> None:
         if not isinstance(workspace, str) or not _WORKSPACE_ID.fullmatch(workspace):
@@ -169,6 +170,18 @@ class Workbench:
         self._target = validate_connector(connector) if connector is not None else "sandbox-erp"
         catalogue = CUSTOMERS if customers is None and workspace == WORKSPACE and connector is None else customers
         self._customers = tuple(dict(row) for row in catalogue or ())
+        self._customer_ids = frozenset(row["id"] for row in self._customers if isinstance(row.get("id"), str))
+        references: dict[str, list[dict[str, str]]] = {}
+        for row in self._customers:
+            reference = row.get("reference")
+            if (isinstance(reference, str) and reference and row.get("tenant") == workspace
+                    and isinstance(row.get("id"), str)):
+                references.setdefault(reference, []).append(row)
+        self._customer_matches = {
+            reference: match_customer({"customer_ref": reference}, rows, tenant=workspace,
+                                      allowed_ids={row["id"] for row in rows})
+            for reference, rows in references.items()
+        }
         self._crm_source = crm_source
         self._crm_sources = trusted_sources
         self._defer_execution = defer_execution
@@ -212,6 +225,9 @@ class Workbench:
         amount = record["action"]["fields"]["amount_minor"] if record["action"] else 0
         return review_priority(record["kind"], max(0.0, age), amount)
 
+    def _allows_draft_source(self, source: str) -> bool:
+        return self._connector is None or source != _SIMULATED_CRM_SOURCE
+
     def _public(self, record: dict[str, Any], actor: WorkActor, now: dt.datetime | None = None) -> dict[str, Any]:
         now = now or self.clock()
         result = {key: record[key] for key in PUBLIC_CASE_FIELDS}
@@ -222,6 +238,8 @@ class Workbench:
         result["priority"] = self._priority(record, now)
         result["can_decide"] = (record["status"] in QUEUE_STATES and bool(actor.role_for(ASSESSMENT))
                                 and not record.get("crm_reconciliation_required")
+                                and not record.get("crm_unconfirmed")
+                                and (record["action"] is None or self._allows_draft_source(record["source"]))
                                 and not self._owns(record, actor)
                                 and (record["status"] != "applying" or record.get("decision_actor") == actor.actor))
         if record["status"] == "applying" and result["can_decide"]:
@@ -234,8 +252,10 @@ class Workbench:
         return (record["status"] == "waiting_review" and bool(record["expires_at"])
                 and now >= dt.datetime.fromisoformat(record["expires_at"]))
 
-    def cases(self, actor: WorkActor) -> list[dict[str, Any]]:
+    def cases(self, actor: WorkActor, *, limit: int = 200) -> list[dict[str, Any]]:
         self.check_access(actor)
+        if type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
         now = self.clock()
         with self.store.transaction(write=False) as connection:
             connection.create_function("review_priority", 1, lambda raw: self._priority(json.loads(raw), now),
@@ -244,8 +264,8 @@ class Workbench:
                 f"""SELECT record FROM cases WHERE {_CASE_VISIBLE}
                     ORDER BY CASE WHEN status IN ('waiting_review','applying') THEN 0 ELSE 1 END,
                              review_priority(record) DESC, json_extract(record,'$.created_at'), id
-                    LIMIT 200""",
-                (actor.authenticated,),
+                    LIMIT ?""",
+                (actor.authenticated, limit),
             ).fetchall()
         return [self._public(json.loads(row["record"]), actor, now) for row in rows]
 
@@ -349,12 +369,12 @@ class Workbench:
 
     def _opportunity_case(self, event: OpportunityEvent, actor: WorkActor, previous: dict | None, *,
                           profile: dict[str, str] | None, exact_reference: bool = False) -> dict:
-        if exact_reference and event.customer_ref is None:
-            match = MatchResult("missing")
+        if event.customer_ref is not None or exact_reference:
+            match = self._customer_matches.get(event.customer_ref, MatchResult("missing"))
         else:
             match = match_customer(
-                {"customer_name": event.customer_name, "customer_ref": event.customer_ref}, self._customers,
-                tenant=self.workspace, allowed_ids={row["id"] for row in self._customers},
+                {"customer_name": event.customer_name}, self._customers,
+                tenant=self.workspace, allowed_ids=self._customer_ids,
             )
         fields = {"customer_id": match.candidate_id, "crm_opportunity": event.subject,
                   "amount_minor": event.amount_minor, "currency": event.currency}
@@ -390,6 +410,8 @@ class Workbench:
             raise WorkbenchError("invalid_event", 422) from None
         if event.source != self._crm_source:
             raise WorkbenchError("invalid_event", 422)
+        if not self._allows_draft_source(event.source):
+            raise WorkbenchError("simulated_crm_requires_sandbox", 409)
         if self.workspace == WORKSPACE and not seed and (event.id == DEMO_EVENT_ID or event.subject == DEMO_SUBJECT):
             raise WorkbenchError("reserved_demo_identity", 422)
         profile = _profile_snapshot(profile)
@@ -432,7 +454,8 @@ class Workbench:
 
     def _apply_crm_observation(self, source: str, subject: str, version: int,
                                event: OpportunityEvent | CRMBlockedOpportunity | None,
-                               actor: WorkActor, *, profile: dict[str, str] | None) -> tuple[str, ...]:
+                               actor: WorkActor, *, profile: dict[str, str] | None,
+                               incomplete: bool = False) -> tuple[str, ...]:
         """Trusted provider observations, including those that withdraw an opportunity."""
         profile = self._check_crm_ingestion(source, actor, profile=profile)
         if isinstance(event, OpportunityEvent):
@@ -448,6 +471,8 @@ class Workbench:
                 (source, subject),
             ).fetchone()
             previous = self._load_visible_subject(connection, source, subject, actor)
+            if incomplete and isinstance(event, OpportunityEvent) and previous is None:
+                return ("ignored",)
             if head is not None:
                 if version < head["record_version"]:
                     return ("stale",)
@@ -457,7 +482,8 @@ class Workbench:
                         return ("conflicts", "reconciliation_required") if held else ("conflicts",)
                     if fingerprint != head["fingerprint"]:
                         event, fingerprint = CRM_CONFLICT, conflict_fingerprint
-                    else:
+                    elif not (not incomplete and isinstance(event, OpportunityEvent)
+                              and previous and previous.get("crm_unconfirmed")):
                         return ("reconciliation_required",) if held else ("replayed",)
             elif previous is not None and version <= previous["record_version"]:
                 if version < previous["record_version"]:
@@ -466,18 +492,27 @@ class Workbench:
                     return ("replayed",)
                 event, fingerprint = CRM_CONFLICT, conflict_fingerprint
 
+            unconfirmed = incomplete and isinstance(event, OpportunityEvent)
+            if (unconfirmed and previous and not previous.get("crm_unconfirmed")
+                    and (previous["action"] is None or (head and fingerprint == head["fingerprint"]))):
+                return ("ignored",)
             outcomes = []
             if isinstance(event, CRMBlockedOpportunity):
                 outcomes.append("conflicts" if event == CRM_CONFLICT else "blocked")
+            elif unconfirmed:
+                outcomes.append("blocked")
             if previous is not None and self._execution_claimed(previous):
                 if head is None or fingerprint != head["fingerprint"] or previous.get("crm_reconciliation_required"):
                     previous["crm_reconciliation_required"] = True
                     self.store.put_case(connection, previous)
                     outcomes.append("reconciliation_required")
-            elif isinstance(event, CRMBlockedOpportunity):
-                reason = ("The CRM reported conflicting data at the same revision. Sync a newer consistent revision."
-                          if event == CRM_CONFLICT else
-                          "The CRM opportunity is won but its business data cannot prepare a draft. Correct the source and sync again.")
+            elif isinstance(event, CRMBlockedOpportunity) or unconfirmed:
+                if unconfirmed:
+                    reason = "The CRM sync was incomplete. Finish the sync before approving this opportunity."
+                elif event == CRM_CONFLICT:
+                    reason = "The CRM reported conflicting data at the same revision. Sync a newer consistent revision."
+                else:
+                    reason = "The CRM opportunity is won but its business data cannot prepare a draft. Correct the source and sync again."
                 record = self._new_case(
                     case_id=previous["id"] if previous else uuid.uuid4().hex,
                     source=source, subject=subject, title="CRM opportunity requires review", kind="undocumented",
@@ -485,6 +520,8 @@ class Workbench:
                     revision=previous["revision"] + 1 if previous else 1, record_version=version,
                     source_payload_hash=fingerprint, profile=previous.get("profile") if previous else profile, private=True,
                 )
+                if unconfirmed:
+                    record["crm_unconfirmed"] = True
                 self.store.put_case(connection, record)
             elif isinstance(event, OpportunityEvent):
                 record = self._opportunity_case(event, actor, previous, profile=profile, exact_reference=True)
@@ -529,6 +566,11 @@ class Workbench:
                 raise WorkbenchError("stale_proposal", 409)
             if record.get("crm_reconciliation_required"):
                 raise WorkbenchError("reconciliation_required", 409)
+            if record.get("crm_unconfirmed"):
+                raise WorkbenchError("crm_sync_incomplete", 409)
+            if (decision == "approve" and record["status"] in QUEUE_STATES and record["action"] is not None
+                    and not self._allows_draft_source(record["source"])):
+                raise WorkbenchError("simulated_crm_requires_sandbox", 409)
             if decision == "approve" and self._owns(record, actor):
                 raise WorkbenchError("self_approval_forbidden", 403)
             if proof is not None:
@@ -587,7 +629,8 @@ class Workbench:
         with self.store.transaction(write=False) as connection:
             return [row["id"] for row in connection.execute(
                 """SELECT id FROM cases WHERE status = 'applying'
-                   AND json_type(record,'$.crm_reconciliation_required') IS NULL ORDER BY id LIMIT ?""", (limit,),
+                   AND json_type(record,'$.crm_reconciliation_required') IS NULL AND (? OR source <> ?)
+                   ORDER BY id LIMIT ?""", (self._connector is None, _SIMULATED_CRM_SOURCE, limit),
             )]
 
     def reconcile_pending(self, case_id: str) -> dict[str, Any]:
@@ -609,36 +652,70 @@ class Workbench:
             record = self._apply(record)
         return {"case_id": case_id, "status": record["status"], "receipt": record["receipt"]}
 
+    def _read_exact_execution(self, connection: sqlite3.Connection, record: dict[str, Any]) -> dict[str, Any]:
+        current = self.store.load_case(connection, record["id"])
+        if (current["revision"], current["proposal_hash"]) != (record["revision"], record["proposal_hash"]):
+            raise WorkbenchError("stale_proposal", 409)
+        return current
+
+    def _write_candidate(self, connection: sqlite3.Connection, record: dict[str, Any]) -> dict[str, Any]:
+        current = self._read_exact_execution(connection, record)
+        if current.get("crm_reconciliation_required"):
+            raise WorkbenchError("reconciliation_required", 409)
+        if current["status"] == "executed":
+            return current
+        if current["status"] != "applying":
+            raise WorkbenchError("no_pending_execution", 409)
+        if not self._allows_draft_source(current["source"]):
+            raise WorkbenchError("simulated_crm_requires_sandbox", 409)
+        return current
+
     def _apply(self, record: dict[str, Any]) -> dict[str, Any]:
         # Recheck and claim under the same lock that accepts newer CRM revisions.
         # After this point even a lost response requires reconciliation.
         with self.store.transaction() as connection:
-            current = self.store.load_case(connection, record["id"])
-            if (current["revision"], current["proposal_hash"]) != (record["revision"], record["proposal_hash"]):
-                raise WorkbenchError("stale_proposal", 409)
-            if current.get("crm_reconciliation_required"):
-                raise WorkbenchError("reconciliation_required", 409)
+            current = self._write_candidate(connection, record)
             if current["status"] == "executed":
                 return current
-            if current["status"] != "applying":
-                raise WorkbenchError("no_pending_execution", 409)
             if current.get("execution_started") is not True:
                 current["execution_started"] = True
                 self.store.put_case(connection, current)
+            authoritative = self._connector is None and connection.execute(
+                "SELECT 1 FROM crm_revisions WHERE source = ? AND subject = ?",
+                (current["source"], current["subject"]),
+            ).fetchone() is not None
         record = current
+
+        def sandbox_write_allowed(connection: sqlite3.Connection) -> bool:
+            return self._write_candidate(connection, record)["status"] == "applying"
+
+        def connector_write_allowed() -> bool:
+            with self.store.transaction(write=False) as connection:
+                return sandbox_write_allowed(connection)
 
         # Connector writes are idempotent because a retry and a worker can overlap.
         external_ref = "wb-" + digest([self.workspace, record["source"], record["subject"], record["action"]["type"]])
         try:
             fields = record["action"]["fields"]
-            if self._connector is None:
-                receipt = self.store.create_draft(external_ref, fields)
+            if self._connector is not None:
+                receipt = write_and_verify(self._connector, self._target, external_ref, fields,
+                                           before_write=connector_write_allowed)
+            elif authoritative:
+                receipt = self.store.create_draft(external_ref, fields, before_write=sandbox_write_allowed)
             else:
-                receipt = write_and_verify(self._connector, self._target, external_ref, fields)
+                receipt = self.store.create_draft(external_ref, fields)
         except TimeoutError:
             raise WorkbenchError("outcome_unknown_retry_same_approval", 503) from None
+        except WorkbenchError as error:
+            if str(error) in {"draft_readback_conflict", "draft_conflict"}:
+                with self.store.transaction() as connection:
+                    current = self._read_exact_execution(connection, record)
+                    # The existing reconciliation flag also holds definitive ERP conflicts.
+                    current["crm_reconciliation_required"] = True
+                    self.store.put_case(connection, current)
+            raise
         with self.store.transaction() as connection:
-            current = self.store.load_case(connection, record["id"])
+            current = self._read_exact_execution(connection, record)
             if current["status"] == "applying":
                 current.update(status="executed", receipt=receipt)
                 self.store.put_case(connection, current)
@@ -709,7 +786,7 @@ class Workbench:
 
     def seed(self) -> None:
         if (self._seeded or self.workspace != WORKSPACE or self._connector is not None
-                or self._crm_source != "crm-sim" or self._crm_sources):
+                or self._crm_source != _SIMULATED_CRM_SOURCE or self._crm_sources):
             return
         with self._seed_lock:
             if not self._seeded:
@@ -718,7 +795,7 @@ class Workbench:
 
     def _seed_cases(self) -> None:
         system = Actor("sandbox", frozenset({"admin"}))
-        self._submit({"specversion": "1.0", "source": "crm-sim", "id": DEMO_EVENT_ID,
+        self._submit({"specversion": "1.0", "source": _SIMULATED_CRM_SOURCE, "id": DEMO_EVENT_ID,
                      "type": "crm.opportunity.won", "subject": DEMO_SUBJECT,
                      "data": {"title": "Atelier Acme · ERP draft order", "customer_name": "Atelier Acme",
                               "customer_ref": "CRM-ACME", "amount_minor": 124000,

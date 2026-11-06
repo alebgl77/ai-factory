@@ -7,8 +7,8 @@ from decimal import Decimal
 import httpx
 import pytest
 
-from ai_factory_workbench import hubspot
-from ai_factory_workbench.crm import CRMError
+from ai_factory_workbench import Actor, Workbench, WorkbenchError, hubspot
+from ai_factory_workbench.crm import CRMError, sync_opportunities
 from ai_factory_workbench.hubspot import HubSpotCRM
 from ai_factory_workbench.salesforce import SalesforceCRM
 
@@ -165,6 +165,7 @@ def test_hubspot_paging_exact_won_stages_and_company_batch():
         assert request.headers["Authorization"] == f"Bearer {_TOKEN}"
         body = json.loads(request.content)
         if request.url.path == _HS_SEARCH:
+            assert body["limit"] == 200
             assert body["filterGroups"] == [{"filters": [
                 {"propertyName": "hs_lastmodifieddate", "operator": "GTE", "value": stamp_ms},
                 {"propertyName": "hs_lastmodifieddate", "operator": "LT",
@@ -204,6 +205,76 @@ def test_hubspot_paging_exact_won_stages_and_company_batch():
     assert all(record.updated_at == _START + timedelta(milliseconds=1) for record in records)
     assert records[0].amount == "122.59"
     assert len(requests) == 3
+
+
+def test_hubspot_fetches_200_search_results_but_resolves_companies_in_smaller_batches():
+    stamp = (_START + timedelta(seconds=1)).isoformat()
+    association_sizes = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        if request.url.path == _HS_SEARCH:
+            assert body["limit"] == 200
+            if "after" not in body:
+                return httpx.Response(200, json={"total": 201, "results": [_hs_row(i, stamp) for i in range(1, 201)],
+                                                 "paging": {"next": {"after": "200"}}})
+            assert body["after"] == "200"
+            return httpx.Response(200, json={"total": 201, "results": [_hs_row(201, stamp)]})
+        assert request.url.path == _HS_COMPANIES
+        association_sizes.append(len(body["inputs"]))
+        return httpx.Response(200, json={"status": "COMPLETE", "results": []})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        connector = HubSpotCRM(_TOKEN, instance="portal", won_stages=["custom-won"], client=client)
+        assert len(list(connector.opportunities(_START, _END))) == 201
+    assert association_sizes == [100, 100, 1]
+
+
+@pytest.mark.parametrize("failure", ["search", "associations"])
+def test_hubspot_partial_window_reopen_prevents_approved_draft(tmp_path, failure):
+    failing = False
+    early = (_START + timedelta(seconds=1)).isoformat()
+    later = (_END + timedelta(seconds=1)).isoformat()
+
+    def handler(request):
+        body = json.loads(request.content)
+        if request.url.path == _HS_SEARCH:
+            if not failing:
+                return httpx.Response(200, json={"total": 1, "results": [_hs_row(1, early)]})
+            if "after" in body:
+                return httpx.Response(429)
+            page = {"total": 2, "results": [_hs_row(1, later, stage="reopened"), _hs_row(2, later)]}
+            if failure == "search":
+                page.update(total=3, paging={"next": {"after": "2"}})
+            return httpx.Response(200, json=page)
+        assert request.url.path == _HS_COMPANIES
+        if failing:
+            return httpx.Response(429)
+        return httpx.Response(200, json={"status": "COMPLETE", "results": [
+            {"from": {"id": "1"}, "to": [_association(91)]},
+        ]})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        connector = HubSpotCRM(_TOKEN, instance="portal", won_stages=["custom-won"], client=client)
+        wb = Workbench(tmp_path / "workbench.sqlite3", mode="protected_demo", workspace="orders",
+                       crm_sources=(connector.source,), defer_execution=True, customers=[
+                           {"id": "erp-91", "tenant": "orders", "name": "Customer",
+                            "reference": f"{connector.source}/91"},
+                       ])
+        editor = Actor("sync", frozenset({"editor"}))
+        reviewer = Actor("reviewer", frozenset({"approver"}))
+        sync_opportunities(wb, connector, editor, since=_START, until=_END)
+        original = wb.cases(reviewer)[0]
+        wb.decide(original["id"], reviewer, decision="approve", revision=original["revision"],
+                  proposal_hash=original["proposal_hash"], rationale="Reviewed mapping")
+        failing = True
+        with pytest.raises(CRMError, match="^crm_rate_limited$"):
+            sync_opportunities(wb, connector, editor, until=_END + timedelta(seconds=2))
+        records = wb.cases(reviewer)
+        assert [(record["id"], record["status"]) for record in records] == [(original["id"], "withdrawn")]
+        with pytest.raises(WorkbenchError, match="^no_pending_execution$"):
+            wb.reconcile_pending(original["id"])
+        assert wb.store.draft_count() == 0
 
 
 def test_hubspot_search_splits_saturated_windows_and_fails_closed_at_one_millisecond(monkeypatch):

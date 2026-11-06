@@ -7,7 +7,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, localcontext
+from decimal import Context, Decimal, InvalidOperation, localcontext
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
 
@@ -198,8 +198,7 @@ def _amount_minor(amount: object, currency: object) -> int:
         value = Decimal(amount)
         if not value.is_finite() or len(value.as_tuple().digits) > 40 or not -18 <= value.as_tuple().exponent <= 16:
             raise ValueError
-        with localcontext() as context:
-            context.prec = 50
+        with localcontext(Context(prec=50)):
             minor = value.scaleb(_MINOR_DIGITS[currency])
             if minor != minor.to_integral_value() or not 1 <= minor <= 100_000_000_000:
                 raise ValueError
@@ -250,7 +249,9 @@ def sync_opportunities(engine: Workbench, provider: CRMSource, actor: WorkActor,
     """Apply the latest observation per opportunity and checkpoint only on success.
 
     The CRM and SQLite are not one transaction. Completed sink operations are
-    durable and idempotent; a partial failure is resumed from the previous cursor.
+    durable and idempotent; a partial failure records confirmed safety holds
+    and withdrawals without creating new actionable proposals or advancing the
+    cursor.
     """
     source = validate_source(provider.source)
     profile = engine._check_crm_ingestion(source, actor, profile=profile)
@@ -281,22 +282,38 @@ def sync_opportunities(engine: Workbench, provider: CRMSource, actor: WorkActor,
     start, end = validate_window(start, end)
 
     seen = 0
-    observations: dict[str, tuple[int, OpportunityEvent | CRMBlockedOpportunity | None]] = {}
-    for row in provider.opportunities(start, end):
-        seen += 1
-        if seen > _MAX_ROWS:
-            raise CRMError("crm_window_too_many_records")
-        version, event = _normalize(source, engine.workspace, row, start, end)
-        previous = observations.get(row.record_id)
-        if previous is None or version > previous[0]:
-            observations[row.record_id] = (version, event)
-        elif version == previous[0] and event != previous[1]:
-            observations[row.record_id] = (version, CRM_CONFLICT)
+    revisions: dict[tuple[str, int], OpportunityEvent | CRMBlockedOpportunity | None] = {}
+    latest: dict[str, int] = {}
+    latest_blocking: dict[str, int] = {}
+    try:
+        for row in provider.opportunities(start, end):
+            seen += 1
+            if seen > _MAX_ROWS:
+                raise CRMError("crm_window_too_many_records")
+            version, event = _normalize(source, engine.workspace, row, start, end)
+            subject = row.record_id
+            key = (subject, version)
+            if key in revisions and event != revisions[key]:
+                event = CRM_CONFLICT
+            revisions[key] = event
+            latest[subject] = max(version, latest.get(subject, version))
+            if not isinstance(event, OpportunityEvent):
+                latest_blocking[subject] = max(version, latest_blocking.get(subject, version))
+    except CRMError:
+        # A later win cannot hide an observed withdrawal in an incomplete poll.
+        for subject, version in sorted(latest_blocking.items()):
+            engine._apply_crm_observation(source, subject, version, revisions[subject, version], actor, profile=profile)
+        for subject, version in sorted(latest.items()):
+            event = revisions[subject, version]
+            if isinstance(event, OpportunityEvent):
+                engine._apply_crm_observation(source, subject, version, event, actor, profile=profile, incomplete=True)
+        raise
 
     outcomes = dict.fromkeys(("applied", "replayed", "ignored", "stale", "withdrawn", "reconciliation_required",
                              "blocked", "conflicts"), 0)
-    for subject, (version, event) in sorted(observations.items()):
-        outcome = engine._apply_crm_observation(source, subject, version, event, actor, profile=profile)
+    for subject, version in sorted(latest.items()):
+        outcome = engine._apply_crm_observation(source, subject, version, revisions[subject, version], actor,
+                                                profile=profile)
         for state in outcome:
             outcomes[state] += 1
 

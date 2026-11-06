@@ -89,7 +89,7 @@ def run(directory: Path) -> dict:
 
     def open_workbench(erp: ExampleERP) -> Workbench:
         return Workbench(database, mode="protected_demo", clock=lambda: NOW, workspace=WORKSPACE,
-                         connector=erp, customers=CUSTOMERS, defer_execution=True)
+                         connector=erp, customers=CUSTOMERS, crm_source="crm-example", defer_execution=True)
 
     engine = open_workbench(provider)
     profile = get_profile("governance")
@@ -145,7 +145,7 @@ def run(directory: Path) -> dict:
     assert policy_report["changed_count"] > 0 and engine.cases(REVIEWER) == queue_before_replay
 
     event = {
-        "specversion": "1.0", "source": "crm-sim", "id": "example-delivery", "type": "crm.opportunity.won",
+        "specversion": "1.0", "source": "crm-example", "id": "example-delivery", "type": "crm.opportunity.won",
         "subject": "example-opportunity", "data": {
             "title": "Example Atelier order", "customer_name": "Example Atelier", "customer_ref": "CRM-EXAMPLE",
             "amount_minor": 128_900, "currency": "EUR", "record_version": 1,

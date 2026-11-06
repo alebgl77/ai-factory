@@ -9,7 +9,7 @@ import re
 import sqlite3
 import sys
 from collections.abc import Sequence
-from contextlib import ExitStack
+from contextlib import closing
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -146,30 +146,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                     if args.provider is None or args.provider in (identifier, config["provider"])}
         if not selected:
             raise ValueError("unknown provider")
-        with ExitStack() as cleanup:
-            providers = []
-            for identifier, config in selected.items():
-                provider = _open_source(config)
-                cleanup.callback(provider.close)
-                if provider.source != identifier:
-                    raise ValueError("invalid provider source")
-                providers.append(provider)
-            engine = Workbench(args.database, mode="protected_demo", workspace=args.workspace,
-                               customers=customers, crm_sources=tuple(configs))
-            actor = Actor("crm-sync", frozenset({"editor"}))
-            results = []
-            failed = False
-            for provider in providers:
-                try:
+        engine = Workbench(args.database, mode="protected_demo", workspace=args.workspace,
+                           customers=customers, crm_sources=tuple(configs))
+        actor = Actor("crm-sync", frozenset({"editor"}))
+        results = []
+        failed = False
+        for identifier, config in selected.items():
+            try:
+                with closing(_open_source(config)) as provider:
+                    if provider.source != identifier:
+                        raise ValueError("invalid provider source")
                     result = sync_opportunities(engine, provider, actor, since=since, until=until, profile=profile)
-                except (CRMError, WorkbenchError, OSError, ValueError, sqlite3.Error) as error:
-                    results.append({"source": provider.source, "error": _error_code(error)})
-                    failed = True
-                else:
-                    report = asdict(result)
-                    if isinstance(report["until"], datetime):
-                        report["until"] = report["until"].isoformat()
-                    results.append(report)
+            except (CRMError, WorkbenchError, OSError, ValueError, sqlite3.Error) as error:
+                results.append({"source": identifier, "error": _error_code(error)})
+                failed = True
+            else:
+                report = asdict(result)
+                if isinstance(report["until"], datetime):
+                    report["until"] = report["until"].isoformat()
+                results.append(report)
     except (CRMError, WorkbenchError, OSError, ValueError, sqlite3.Error) as error:
         print(json.dumps({"error": _error_code(error)}), file=sys.stderr)
         return 1

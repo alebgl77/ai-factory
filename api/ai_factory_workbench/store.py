@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
@@ -189,18 +189,23 @@ class Store:
             (record["id"], record["source"], record["subject"], record["status"], canonical(record).decode()),
         )
 
-    def create_draft(self, external_ref: str, fields: dict[str, Any]) -> dict[str, str]:
+    def create_draft(self, external_ref: str, fields: dict[str, Any], *,
+                     before_write: Callable[[sqlite3.Connection], bool] | None = None) -> dict[str, str]:
         """Sandbox adapter. Its transaction commits independently of the workbench receipt."""
         action_hash = digest(fields)
         draft_id = "draft-" + digest(external_ref)[:20]
         with self.transaction() as connection:
-            connection.execute(
-                "INSERT OR IGNORE INTO erp_drafts(external_ref,id,action_hash,fields) VALUES (?,?,?,?)",
-                (external_ref, draft_id, action_hash, canonical(fields).decode()),
-            )
             row = connection.execute(
                 "SELECT id, action_hash FROM erp_drafts WHERE external_ref = ?", (external_ref,)
             ).fetchone()
+            if row is None and (before_write is None or before_write(connection)):
+                connection.execute(
+                    "INSERT OR IGNORE INTO erp_drafts(external_ref,id,action_hash,fields) VALUES (?,?,?,?)",
+                    (external_ref, draft_id, action_hash, canonical(fields).decode()),
+                )
+                row = connection.execute(
+                    "SELECT id, action_hash FROM erp_drafts WHERE external_ref = ?", (external_ref,)
+                ).fetchone()
             if row is None or row["action_hash"] != action_hash:
                 raise WorkbenchError("draft_conflict", 409)
             return {"id": row["id"], "external_ref": external_ref, "system": "sandbox-erp", "state": "draft"}
