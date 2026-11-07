@@ -25,6 +25,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import metrics as metrics_mod
 from . import seclog
+from .ideas import IdeasStore, router as ideas_router
 from .activity import ActivityJournal, router as activity_router
 from .i18n import DEFAULT_LANG, msg, normalize_lang
 from .portfolio import router as portfolio_router
@@ -219,6 +220,8 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
             # accept an earlier pending grant, even after a policy rollback.
             app.state.portfolio_grant_generation = f"{service.bu_policy.fingerprint}:{secrets.token_hex(32)}"
             app.include_router(portfolio_router)
+            app.state.ideas = IdeasStore(settings.state_dir, clock=clock)
+            app.include_router(ideas_router)
     if settings.portfolio_runner_file:
         if not hasattr(app.state, "portfolio"):
             raise ValueError("Portfolio runner requires the authenticated portfolio")

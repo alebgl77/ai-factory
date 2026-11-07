@@ -68,7 +68,20 @@ for (const id of ['S1', 'X1', 'X2', 'X3', 'O1', 'O2']) check(`3D space ${id} pre
 
 await page.click('#tabFactory');
 await page.waitForTimeout(200);
-check('Usine tab lists 10 console sections', (await page.$$('#factoryPanel [data-csec]')).length === 10);
+check('Usine tab lists 11 console sections', (await page.$$('#factoryPanel [data-csec]')).length === 11);
+const coffeeMap = page.locator('#coffeeMapOpen');
+await coffeeMap.focus();
+await page.keyboard.press('Enter');
+check('Coffee corner map label opens the idea wall with the keyboard',
+  await page.locator('#cTitle').textContent() === 'Coin café · Boîte à idées');
+await page.keyboard.press('Escape');
+check('closing the idea wall restores focus to the Coffee corner map label',
+  await coffeeMap.evaluate(el => document.activeElement === el));
+await page.locator('#viewTop').click();
+await coffeeMap.click();
+check('Coffee corner also opens from the floor plan', await page.locator('.ideas').isVisible());
+await page.keyboard.press('Escape');
+await page.locator('#view3d').click();
 const shadowMap = page.locator('#shadowMapOpen');
 if (!process.env.E2E_BASE_URL && visualDir) await page.screenshot({ path: path.join(visualDir, 'ai-factory-observatoire-carte.png'), animations: 'disabled' });
 await shadowMap.focus();
@@ -238,6 +251,11 @@ if (!process.env.E2E_BASE_URL) {
   const activityRequests = [];
   const portfolioRequests = [];
   let portfolioStatus = 200, portfolioConflict = false, portfolioRole = 'manager';
+  const ideaRequests = [];
+  const ideaMarkup = '<em data-idea-injected>Retour terrain</em>';
+  let ideasStatus = 200, ideasViewer = '2'.repeat(64), canPostIdeas = true;
+  let ideaItems = [{ id: '1'.repeat(32), bu: 'cc.relation:client', bu_label: 'Relation client', title: ideaMarkup, text: 'Exemple partagé.',
+    category: 'experience', tags: ['feedback'], visibility: 'factory', created_at: '2026-11-07T12:30:00+00:00' }];
   let workbenchOutcome = null;
   const portfolioId = n => n.toString(16).padStart(32, '0');
   const activityDay = Math.floor(Date.now() / 86400000) * 86400000;
@@ -312,6 +330,20 @@ if (!process.env.E2E_BASE_URL) {
       const reply = { json: { events: activityEmpty ? [] : view === 'all' ? [...activityOwn, activityExtra] : activityOwn,
         truncated: view === 'all', since: activityTime(days - 1), until: activityTime(0, 12), view: activityViewer, can_view_all: activityAllAllowed } };
       return days === 30 && holdActivity ? holdActivity.then(() => route.fulfill(reply)) : route.fulfill(reply);
+    }
+    if (url.pathname === '/api/v1/ideas') {
+      const method = route.request().method();
+      const body = method === 'POST' ? route.request().postDataJSON() : null;
+      ideaRequests.push({ method, body, language: url.searchParams.get('lang') });
+      if (ideasStatus !== 200) return route.fulfill({ status: ideasStatus, json: {} });
+      if (method === 'POST') {
+        const created = { id: '3'.repeat(32), ...body, bu_label: 'Delivery', category: 'automation',
+          tags: ['workflow'], visibility: 'factory', created_at: '2026-11-07T12:31:00+00:00' };
+        ideaItems = [created, ...ideaItems];
+        return route.fulfill({ status: 201, json: created });
+      }
+      return route.fulfill({ json: { items: ideaItems, view: ideasViewer, truncated: false, total: ideaItems.length,
+        units: canPostIdeas ? [{ id: 'cc.platform:ops', label: 'Delivery' }] : [], permissions: { create: canPostIdeas } } });
     }
     if (url.pathname.startsWith('/api/v1/portfolio')) {
       const method = route.request().method();
@@ -642,6 +674,39 @@ if (!process.env.E2E_BASE_URL) {
   check('portfolio downgrade clears all previously rendered tasks and controls',
     await scoped.locator('.portfolio-task').count() === 0 && await scoped.locator('[data-portfolio-form]').count() === 0);
   await scoped.keyboard.press('Escape');
+  await scoped.locator('#pilotPanel [data-ideas-open]').click();
+  const protectedIdeas = scoped.locator('.ideas[data-ideas-state="ready"]');
+  await protectedIdeas.getByRole('heading', { name: ideaMarkup }).waitFor();
+  check('protected idea wall renders a shared note from another BU as text only',
+    await protectedIdeas.getByText('Relation client', { exact: true }).isVisible() &&
+    await protectedIdeas.locator('[data-idea-injected]').count() === 0);
+  await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
+  check('idea composer states the Factory-wide visibility before posting',
+    await protectedIdeas.getByText('Visible par toute la Factory dès l’envoi.').isVisible());
+  await protectedIdeas.locator('#idea-title').fill('Automatisation des passations');
+  await protectedIdeas.locator('#idea-text').fill('Proposer un rappel partagé pour chaque handover.');
+  await protectedIdeas.getByRole('button', { name: 'Déposer mon idée' }).click();
+  await protectedIdeas.getByText('Idée déposée · Automatisation').waitFor();
+  const ideaWrite = ideaRequests.find(request => request.method === 'POST');
+  check('the posted idea is classified by the API and remains off browser storage',
+    ideaWrite?.body?.bu === 'cc.platform:ops' && ideaWrite?.language === 'fr' && !Object.hasOwn(ideaWrite.body, 'category') &&
+    await protectedIdeas.getByRole('heading', { name: 'Automatisation des passations' }).isVisible() &&
+    await scoped.evaluate(() => localStorage.getItem(window.FactoryIdeas.storeKey) === null));
+  await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
+  await protectedIdeas.locator('#idea-title').fill('Do not retain this draft');
+  ideasViewer = '4'.repeat(64); canPostIdeas = false; ideaItems = [];
+  await scoped.clock.fastForward(20000);
+  await protectedIdeas.getByText('Le mur est encore vide').waitFor();
+  check('idea wall replaces the previous viewer projection and draft on revalidation',
+    await protectedIdeas.locator('.idea-note').count() === 0 && !await protectedIdeas.locator('#ideas-compose').isVisible() &&
+    await protectedIdeas.locator('#idea-title').inputValue() === '' &&
+    await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).count() === 0);
+  ideasStatus = 403;
+  await scoped.clock.fastForward(20000);
+  await scoped.locator('.ideas[data-ideas-state="denied"]').waitFor();
+  check('idea wall fails closed on permission loss without the demo fixture',
+    await scoped.locator('.idea-note').count() === 0 && await scoped.locator('.ideas-mode').textContent() === 'Mur de la Factory');
+  await scoped.keyboard.press('Escape');
   await scoped.locator('#tabSpaces').click();
   await scoped.locator('#spacePanel button[data-res="D1"]').click();
   check('protected scheduling presents only its authorized case and verified booking identity',
@@ -661,6 +726,7 @@ if (!process.env.E2E_BASE_URL) {
   // Test a fresh static boot after releasing the live renderer and its clock.
   const callsBeforeStatic = snapshotCalls.length;
   const shadowCallsBeforeStatic = shadowReads;
+  const ideaCallsBeforeStatic = ideaRequests.length;
   const workbenchCallsBeforeStatic = workbenchRequests.length;
   const activityCallsBeforeStatic = activityRequests.length;
   const portfolioCallsBeforeStatic = portfolioRequests.length;
@@ -837,10 +903,27 @@ if (!process.env.E2E_BASE_URL) {
   check('central planning creates a linked project and edits mutable fields only',
     /(?:Active|Actif)/.test(await demoProject.textContent()) && (await demoProject.textContent()).includes('Demo central objective'));
   await staticPage.keyboard.press('Escape');
+  await staticPage.locator('#pilotPanel [data-ideas-open]').click();
+  const demoIdeas = staticPage.locator('.ideas[data-ideas-state="ready"]');
+  await demoIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
+  await demoIdeas.locator('#idea-title').fill('Automatisation du relais 42');
+  await demoIdeas.locator('#idea-text').fill('Rappel unique E2E. Un workflow pour transmettre les dossiers.');
+  await demoIdeas.getByRole('button', { name: 'Déposer mon idée' }).click();
+  await demoIdeas.getByText('Idée déposée · Automatisation').waitFor();
+  await demoIdeas.locator('#ideas-search').fill('Rappel unique E2E');
+  check('the local idea wall classifies a new note and filters it by search and category',
+    await demoIdeas.locator('.idea-note-automation').count() === 1 &&
+    await demoIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible());
+  await demoIdeas.locator('[data-idea-filter="security"]').click();
+  check('unmatched idea filters offer a clear empty state', await demoIdeas.getByText('Aucun post-it correspondant').isVisible());
+  await staticPage.keyboard.press('Escape');
+  await staticPage.locator('#pilotPanel [data-ideas-open]').click();
+  check('the posted demo idea survives reopening the wall', await demoIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible());
+  await staticPage.keyboard.press('Escape');
   await staticPage.clock.fastForward(30000);
-  check('published static mode never requests snapshot, Observatory, Workbench, activity or portfolio APIs',
+  check('published static mode never requests snapshot, Observatory, Workbench, activity, portfolio or idea APIs',
     snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic && workbenchRequests.length === workbenchCallsBeforeStatic &&
-    activityRequests.length === activityCallsBeforeStatic && portfolioRequests.length === portfolioCallsBeforeStatic);
+    activityRequests.length === activityCallsBeforeStatic && portfolioRequests.length === portfolioCallsBeforeStatic && ideaRequests.length === ideaCallsBeforeStatic);
   await staticPage.evaluate(() => { document.documentElement.removeAttribute('data-static-demo'); });
   const nextLanguage = await staticPage.locator('#languageSelect').inputValue() === 'fr' ? 'en' : 'fr';
   await staticPage.locator('#languageSelect').selectOption(nextLanguage);
@@ -904,6 +987,13 @@ if (!process.env.E2E_BASE_URL) {
   check('mobile portfolio keeps its task board and delegation controls within the viewport', await mobilePortfolio.isVisible() &&
     await mobilePortfolio.locator('.portfolio-board').isVisible() &&
     await mobilePortfolio.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
+  await mobile.keyboard.press('Escape');
+  await mobile.locator('#pilotPanel [data-ideas-open]').click();
+  const mobileIdeas = mobile.locator('.ideas[data-ideas-state="ready"]');
+  check('mobile idea wall retains browser-local notes and has no horizontal overflow', await mobileIdeas.isVisible() &&
+    await mobileIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible() &&
+    await mobileIdeas.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
+  if (visualDir) await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-coffee-mobile.png'), animations: 'disabled' });
   await mobile.close();
 }
 
