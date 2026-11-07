@@ -672,7 +672,7 @@ services:
     logging: *logging
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.227.0
+    image: langfuse/langfuse-worker:4.72.0
     <<: *hardening
     restart: unless-stopped
     read_only: true
