@@ -14,6 +14,7 @@
 <script defer src="assets/factory-workbench-follow.js"></script>
 <script defer src="assets/factory-activity.js"></script>
 <script defer src="assets/factory-portfolio.js"></script>
+<script defer src="assets/factory-assist.js"></script>
 <script defer src="assets/factory-ideas.js"></script>
 <script>
   try { var p = JSON.parse(localStorage.getItem('aiFactoryRef.prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.setAttribute('data-theme', p.theme); } catch (e) {}
@@ -389,6 +390,21 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .c-body{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px}
 .console.is-activity .c-tabs{flex:none}
 .console.is-portfolio .c-tabs{flex:none}
+.assist-host{position:absolute;z-index:2;inset:10px 10px 10px auto;width:min(415px,calc(100% - 20px));overflow:auto;padding:13px;border:1px solid var(--border-strong);border-radius:11px;background:var(--panel);box-shadow:var(--shadow-lg)}
+.assist-surface,.assist-form,.assist-result,.assist-field{display:grid;gap:8px;min-width:0}
+.assist-surface [hidden]{display:none}
+.assist-head,.assist-sources{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px}
+.assist-head{justify-content:space-between}.assist-head h3,.assist-result h4,.assist-mode,.assist-note,.assist-output,.assist-status{margin:0}
+.assist-head h3{font-size:17px}.assist-mode{font:700 11px/1.35 ui-monospace,monospace;color:var(--accent)}
+.assist-note,.assist-status{font-size:12px;line-height:1.45;color:var(--muted)}
+.assist-status:empty{display:none}.assist-steps{margin:0;padding-inline-start:24px;color:var(--text);font-size:13px}
+.assist-sources{margin:0;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px}
+.assist-sources label{display:inline-flex;align-items:center;gap:4px;min-height:28px}
+.assist-field{gap:3px;font-size:12px;font-weight:650}.assist-field :is(input,select,textarea){width:100%;min-width:0;padding:6px;border:1px solid var(--border-strong);border-radius:5px;background:var(--panel);color:var(--text);font:inherit;font-weight:400}
+.assist-result{border:1px solid var(--border);border-radius:7px;padding:9px;background:var(--panel-2)}
+.assist-output{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+.assist-form>.mini,.assist-result>.mini{justify-self:start;min-height:32px}
+@media(max-width:470px){.assist-host{inset:6px;width:auto;padding:10px}}
 .console.is-ideas .c-tabs{flex:none}
 .ideas{--ideas-accent:#7c3c22;--ideas-warm:#fbf2e2;--ideas-line:#e1cbb0;display:grid;gap:14px;min-width:0}
 [data-theme="dark"] .ideas{--ideas-accent:#f0bc8e;--ideas-warm:#32251f;--ideas-line:#684c3c}
@@ -914,6 +930,7 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
       </header>
       <nav class="c-tabs" id="cTabs" role="tablist" aria-label="Sections de la console"></nav>
       <div class="c-body" id="cBody"></div>
+      <div class="assist-host" id="assistHost" hidden></div>
     </section>
     <aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle" tabindex="-1">
       <header class="d-head">
@@ -3935,8 +3952,10 @@ let shadowView = null;
 let activityView = null;
 let portfolioView = null, portfolioDemo = null;
 let ideasView = null;
+let assistView = null;
 function selectConsole(key) {
   if (key === consoleKey) return;
+  closeAssist(false);
   consoleKey = key;
   activityView = null;
   portfolioView = null;
@@ -3997,6 +4016,10 @@ function renderConsole() {
   }
   if (consoleKey === 'portfolio') {
     setHTMLKeepFocus($('cBody'), window.FactoryPortfolio?.render(preparePortfolio(), language, esc) || '');
+    if (assistView) {
+      if (!currentAssist(assistView)) closeAssist(false);
+      else checkAssistDraft();
+    }
     return;
   }
   if (consoleKey === 'ideas') { renderIdeas(); return; }
@@ -4176,6 +4199,183 @@ async function submitIdea(view, fields) {
 
 const portfolioConflict = ['This revision changed. The current task or record has been reloaded.', 'Cette révision a changé. La version actuelle a été rechargée.'];
 const portfolioInvalid = ['The change does not satisfy the portfolio rules.', 'La modification ne respecte pas les règles du portefeuille.'];
+
+function currentAssist(view) {
+  return assistView === view && consoleKey === 'portfolio' && view.portfolio === portfolioView
+    && !!portfolioView?.data && view.source === portfolioSource() && view.scope === portfolioScope()
+    && view.viewer === portfolioView.viewer && view.language === language && !document.hidden
+    && (view.source !== 'api' || navigator.onLine)
+    && (view.kind !== 'decision_outline' || portfolioView.data.capabilities.global_admin)
+    && (view.kind !== 'draft_task' || view.editor === portfolioView.editor);
+}
+function closeAssist(restore = true) {
+  if (!assistView) return;
+  const view = assistView; assistView = null; view.result = null; view.pending = null;
+  $('assistHost').replaceChildren(); $('assistHost').hidden = true;
+  if (restore) (view.trigger.isConnected ? view.trigger : $('cBody').querySelector(`[data-assist-open="${view.kind}"]`) || $('console')).focus({ preventScroll: true });
+}
+function draftForAssist(view) {
+  const form = $('cBody').querySelector('[data-portfolio-form]');
+  const editor = view.editor;
+  if (!form || !editor || editor !== portfolioView?.editor) return null;
+  const title = form.querySelector('[data-portfolio-field="title"]')?.value;
+  const target = form.querySelector('textarea[data-portfolio-field="description"]');
+  const row = view.portfolio.data.tasks.find(task => task.id === editor.key);
+  const bu = form.querySelector('[data-portfolio-field="unit"]')?.value || row?.unit;
+  if (title === undefined || !target || !bu) return null;
+  return { title, target, bu, description: target.value, signature: JSON.stringify([title, target.value, bu]) };
+}
+function checkAssistDraft() {
+  const view = assistView;
+  if (view?.kind !== 'draft_task') return;
+  const requested = view.result?.draft || view.pending?.draft;
+  if (requested && requested !== draftForAssist(view)?.signature) {
+    view.result = null; view.pending = null;
+    view.message = ui('The task changed. Generate a new suggestion.', 'La tâche a changé. Générez une nouvelle suggestion.');
+    view.panel.update(view);
+  }
+}
+function assistFailure(status) {
+  if (status === 404) return ui('Local assistance is disabled.', 'L’assistance locale est désactivée.');
+  if (status === 401 || status === 403) return ui('Local assistance is not authorized in this context.', 'L’assistance locale n’est pas autorisée dans ce contexte.');
+  if (status === 429) return ui('The local model is busy. Try again shortly.', 'Le modèle local est occupé. Réessayez dans un instant.');
+  return ui('The local suggestion could not be verified.', 'La suggestion locale n’a pas pu être vérifiée.');
+}
+function openAssist(kind, trigger) {
+  const helper = window.FactoryAssist, portfolio = portfolioView;
+  if (!helper?.validType(kind) || consoleKey !== 'portfolio' || !portfolio?.data || portfolio.pending
+    || !['api', 'demo'].includes(portfolio.source) || document.hidden || (portfolio.source === 'api' && !navigator.onLine)
+    || (kind === 'decision_outline' && !portfolio.data.capabilities.global_admin)
+    || (kind === 'draft_task' && (portfolio.editor?.collection !== 'tasks' || portfolio.editor.action))) return;
+  closeAssist(false);
+  const view = { kind, trigger, portfolio, editor: portfolio.editor, source: portfolio.source, scope: portfolio.scope,
+    viewer: portfolio.viewer, language, units: [], status: 'loading', result: null, pending: null,
+    message: ui('Checking access to assistance…', 'Vérification de l’accès à l’assistance…') };
+  assistView = view;
+  view.panel = helper.create(kind, language, {
+    close: () => closeAssist(), generate: fields => startAssist(view, fields),
+    discard: () => {
+      if (!currentAssist(view) || (!view.pending && !view.result && !view.message)) return;
+      view.pending = null; view.result = null; view.message = ''; view.panel.update(view);
+    },
+    apply: () => applyAssist(view),
+  });
+  $('assistHost').replaceChildren(view.panel.section); $('assistHost').hidden = false;
+  view.panel.update(view); view.panel.heading.focus();
+  if (view.source === 'demo') readyAssist(view, portfolio.data.units);
+  else void loadAssist(view);
+}
+function readyAssist(view, units) {
+  const allowed = units?.length && (view.kind !== 'draft_task' || units.some(unit => unit.id === draftForAssist(view)?.bu));
+  view.units = units || []; view.status = allowed ? 'ready' : 'unavailable';
+  view.message = allowed ? '' : ui('Assistance is unavailable for this BU.', 'L’assistance est indisponible pour cette BU.');
+  view.panel.update(view);
+}
+async function loadAssist(view) {
+  const { units, status } = await readAssistConfig(view);
+  if (!currentAssist(view)) return;
+  if (units) { readyAssist(view, units); return; }
+  revokeAssist(view, status);
+}
+async function readAssistConfig(view) {
+  const response = await apiFetch(`/assist?lang=${view.language}`, { mode: 'same-origin', redirect: 'error' }, 5000);
+  const units = response.ok && window.FactoryAssist.parseConfig(response.body, view.viewer);
+  return { units, status: response.ok && !units ? 403 : response.status };
+}
+function revokeAssist(view, status) {
+  view.pending = null; view.recheck = null; view.result = null; view.units = [];
+  view.status = 'unavailable'; view.message = assistFailure(status); view.panel.update(view);
+}
+function authorizeAssist(view, config, bu) {
+  if (!config.units?.length || (bu && !config.units.some(unit => unit.id === bu))) {
+    revokeAssist(view, config.status === 200 ? 403 : config.status);
+    return false;
+  }
+  view.units = config.units;
+  return true;
+}
+async function revalidateAssist(view) {
+  const check = {}; view.recheck = check;
+  const config = await readAssistConfig(view);
+  if (!currentAssist(view) || view.recheck !== check) return;
+  view.recheck = null;
+  const bu = view.result?.bu || view.pending?.bu || (view.kind === 'draft_task' ? draftForAssist(view)?.bu : null);
+  if (authorizeAssist(view, config, bu)) view.panel.update(view);
+}
+function startAssist(view, fields) {
+  if (!currentAssist(view) || view.pending || view.status !== 'ready') return false;
+  const helper = window.FactoryAssist, draft = view.kind === 'draft_task' ? draftForAssist(view) : null;
+  if (view.kind === 'draft_task' && !draft) return false;
+  const explain = view.kind === 'explain_process';
+  const request = { kind: view.kind, bu: draft?.bu || fields.bu,
+    title: draft ? draft.title.trim() : explain ? ui('Portfolio workflow', 'Parcours du portefeuille') : fields.title,
+    text: draft ? (draft.description.trim() || ui('Draft a short description from the task title.', 'Rédiger une description courte à partir de l’intitulé.'))
+      : fields.text || (explain ? ui('Explain the workflow roles and checkpoints.', 'Expliquer les rôles et points de contrôle du parcours.') : ''),
+    source: fields.source };
+  view.result = null;
+  if (!helper.limit(request.title, 120) || !helper.limit(request.text, 2000) || !helper.validSource(request.source)
+    || !view.units.some(unit => unit.id === request.bu)) {
+    view.message = ui('Complete the fields and choose an authorized BU.', 'Complétez les champs et sélectionnez une BU autorisée.');
+    view.panel.update(view); return false;
+  }
+  const pending = { draft: draft?.signature, bu: request.bu };
+  view.pending = pending; view.message = ''; view.panel.update(view);
+  if (view.source === 'demo') acceptAssist(view, request, pending, { text: helper.template(request, view.language) });
+  else void askAssist(view, request, pending);
+  return true;
+}
+function acceptAssist(view, request, pending, proposal) {
+  if (!currentAssist(view) || view.pending !== pending) return;
+  checkAssistDraft();
+  if (view.pending !== pending) return;
+  view.pending = null;
+  view.result = { ...proposal, bu: request.bu, source: request.source, draft: pending.draft };
+  view.panel.update(view);
+}
+async function askAssist(view, request, pending) {
+  const response = await apiFetch(`/assist?lang=${view.language}`, {
+    method: 'POST', body: JSON.stringify(request), mode: 'same-origin', redirect: 'error',
+  }, 30000);
+  if (!currentAssist(view) || view.pending !== pending) return;
+  const result = response.ok && window.FactoryAssist.parseResult(response.body, view.viewer);
+  if (result) {
+    const config = await readAssistConfig(view);
+    if (currentAssist(view) && view.pending === pending && authorizeAssist(view, config, request.bu)) {
+      acceptAssist(view, request, pending, result);
+    }
+    return;
+  }
+  view.pending = null; view.result = null;
+  if ([401, 403, 404].includes(response.status) || response.ok) view.status = 'unavailable';
+  view.message = assistFailure(response.status); view.panel.update(view);
+}
+async function applyAssist(view) {
+  if (!currentAssist(view) || view.kind !== 'draft_task' || view.pending || !view.result) return;
+  const result = view.result;
+  let draft = draftForAssist(view);
+  if (!draft || result.draft !== draft.signature) { checkAssistDraft(); return; }
+  if (view.source === 'api') {
+    const pending = { draft: draft.signature, bu: draft.bu };
+    view.pending = pending; view.panel.update(view);
+    const config = await readAssistConfig(view);
+    if (!currentAssist(view) || view.pending !== pending || !authorizeAssist(view, config, draft.bu)) return;
+    checkAssistDraft();
+    if (view.pending !== pending) return;
+    view.pending = null;
+    draft = draftForAssist(view);
+  }
+  const next = (draft.description ? draft.description + '\n\n' : '') + result.text.trim();
+  if (next.length > draft.target.maxLength) {
+    view.message = ui('The combined description is too long. Shorten it before generating another suggestion.',
+      'La description avec cet ajout serait trop longue. Raccourcissez-la avant de générer une autre suggestion.');
+    view.panel.update(view); return;
+  }
+  closeAssist(false);
+  draft.target.value = next;
+  draft.target.dispatchEvent(new Event('input', { bubbles: true }));
+  draft.target.focus();
+}
+
 function preparePortfolio() {
   const source = portfolioSource(), scope = portfolioScope();
   if (!portfolioView || portfolioView.source !== source || portfolioView.scope !== scope) {
@@ -4591,7 +4791,9 @@ function secSkills() {
     ${(k.people || []).some(p => (p.overdue || []).length) ? `<p class="cnote">En retard : ${(k.people || []).filter(p => (p.overdue || []).length).map(p => `${esc(personName(p.person))} (${p.overdue.length})`).join(', ')}</p>` : ''}</section>
     <section class="csec"><h3>Sessions Skills Lab à venir <em>${ses.length}</em></h3><ul class="clist">${ses.slice(0, 8).map(s => { const m = (k.modules || []).find(x => x.id === s.module);
       return `<li><b>${esc(m?.title || s.title || s.module)}</b><span>${esc(shortDate(s.date))} · ${esc(s.start)}–${esc(s.end)} · formateur ${esc(personName(s.trainer))} · ${(s.attendees || []).length} inscrit(s)${m?.format ? ' · ' + esc(m.format) : ''}</span><button type="button" class="mini" data-cact="s1" data-date="${esc(s.date)}">Voir la salle</button></li>`; }).join('') || '<li>Aucune session.</li>'}</ul></section>
-    <section class="csec"><h3>R&D Lab · ${num(r.gpu_hours_month)} h GPU / mois</h3><div class="kanban">${stages.map(([id, l]) => `<div><h4>${l}</h4>${(r.experiments || []).filter(e => e.stage === id).map(e => `<div class="kcard"><b>${esc(e.title)}</b><small>${esc(e.id)} · ${esc(personName(e.owner))}${e.linked_usecase ? ' · ' + ucCode(e.linked_usecase) : ''} · ${num(e.gpu_hours)} h GPU</small>${e.transfer_criteria ? `<small>Transfert si : ${esc(e.transfer_criteria)}</small>` : ''}</div>`).join('')}</div>`).join('')}</div></section>`;
+    <section class="csec"><h3>R&D Lab · ${num(r.gpu_hours_month)} h GPU / mois</h3>
+      <a class="mini" href="./docs/flow-lab.html?lang=${language}">${ui('Open the Flow Lab', 'Ouvrir le laboratoire de flux')}</a>
+      <div class="kanban">${stages.map(([id, l]) => `<div><h4>${l}</h4>${(r.experiments || []).filter(e => e.stage === id).map(e => `<div class="kcard"><b>${esc(e.title)}</b><small>${esc(e.id)} · ${esc(personName(e.owner))}${e.linked_usecase ? ' · ' + ucCode(e.linked_usecase) : ''} · ${num(e.gpu_hours)} h GPU</small>${e.transfer_criteria ? `<small>Transfert si : ${esc(e.transfer_criteria)}</small>` : ''}</div>`).join('')}</div>`).join('')}</div></section>`;
 }
 function secGrafana() {
   const g = SNAP?.grafana || {};
@@ -4804,7 +5006,7 @@ function setHTMLKeepFocus(root, html) {
   if (root.__html === html) return;
   root.__html = html;
   const a = document.activeElement;
-  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioFilter', 'portfolioAction', 'portfolioField', 'ideasOpen'].find(x => a.dataset[x] !== undefined) : null;
+  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioFilter', 'portfolioAction', 'portfolioField', 'ideasOpen', 'assistOpen'].find(x => a.dataset[x] !== undefined) : null;
   const v = k && a.dataset[k];
   root.innerHTML = html;
   if (k) {
@@ -5399,6 +5601,7 @@ function bindUI() {
   });
   window.addEventListener('offline', () => encounter.follower?.stop('offline'));
   window.addEventListener('pagehide', () => {
+    closeAssist(false);
     encounter.follower?.stop();
     if ((consoleKey === 'activity' && activityView?.source === 'api') || (consoleKey === 'portfolio' && portfolioView?.source === 'api')
       || (consoleKey === 'ideas' && ideasView?.source === 'api')) closeConsole();
@@ -5461,6 +5664,8 @@ function bindUI() {
   $('cBody').addEventListener('click', e => {
     if (e.target.closest('[data-activity-open]')) openConsole('activity');
     else if (e.target.closest('[data-activity-retry]') && activityView?.source === 'api') reloadActivity(activityView);
+    const assist = e.target.closest('[data-assist-open]');
+    if (assist) { openAssist(assist.dataset.assistOpen, assist); return; }
     const choice = e.target.closest('[data-portfolio-choice]');
     const action = e.target.closest('[data-portfolio-action]');
     if (choice) portfolioChoice(choice.dataset.portfolioChoice);
@@ -5494,7 +5699,10 @@ function bindUI() {
   $('cBody').addEventListener('input', e => {
     if (shadowView && e.target.matches('[data-shadow-field]')) shadowView.draft[e.target.dataset.shadowField] = e.target.value;
     const field = e.target.dataset.portfolioField;
-    if (field && portfolioView?.editor && !portfolioView.pending && !e.target.multiple) portfolioView.editor.values[field] = e.target.value;
+    if (field && portfolioView?.editor && !portfolioView.pending && !e.target.multiple) {
+      portfolioView.editor.values[field] = e.target.value;
+      checkAssistDraft();
+    }
   });
   $('cBody').addEventListener('toggle', e => {
     const key = e.target.dataset?.portfolioParent;
@@ -5617,10 +5825,10 @@ function bindUI() {
 
   document.addEventListener('keydown', e => {
     if (e.target.closest?.('#uc04-dialog')) return;
-    if (e.key === 'Escape') { if (!$('help').hidden) closeHelp(); else if (consoleKey) closeConsole(); else if (S.selected) closeDrawer(); else if (!$('encounterPanel').hidden) closeEncounter(true); else if (POV.active) exitPov(); return; }
+    if (e.key === 'Escape') { if (!$('help').hidden) closeHelp(); else if (assistView) closeAssist(); else if (consoleKey) closeConsole(); else if (S.selected) closeDrawer(); else if (!$('encounterPanel').hidden) closeEncounter(true); else if (POV.active) exitPov(); return; }
     if (e.key === 'Tab' && !$('help').hidden) { e.preventDefault(); $('helpClose').focus(); return; }
     const t = e.target;
-    if (e.ctrlKey || e.metaKey || e.altKey || t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || !$('help').hidden) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || !$('help').hidden || t.closest?.('#assistHost')) return;
     if (POV.active && povKeyDown(e)) return;
     if (e.repeat && e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -5640,12 +5848,14 @@ function bindUI() {
     if (fn) { e.preventDefault(); fn(); }
   });
   document.addEventListener('visibilitychange', () => {
+    closeAssist(false);
     if (consoleKey === 'activity' && activitySource() === 'api') { activityView = null; renderConsole(); }
     if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
     if (consoleKey === 'ideas' && ideasView?.source === 'api') { ideasView = null; renderConsole(); }
     if (!document.hidden && S.live) goLive();
   });
   window.addEventListener('offline', () => {
+    closeAssist(false);
     if (consoleKey === 'activity' && activityView?.source === 'api') { activityView = null; renderConsole(); }
     if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
     if (consoleKey === 'ideas' && ideasView?.source === 'api') { ideasView = null; renderConsole(); }
@@ -5658,6 +5868,8 @@ function bindUI() {
         && !portfolioView.pending && !portfolioView.editor) void readPortfolio(portfolioView);
     if (!document.hidden && consoleKey === 'ideas' && ideasView?.source === 'api' && ideasView.status === 'ready'
         && !ideasView.pending) void readIdeas(ideasView);
+    if (assistView?.source === 'api' && assistView.status === 'ready' && currentAssist(assistView)
+        && !assistView.pending && !assistView.recheck) void revalidateAssist(assistView);
   }, 20000);
   // Another tab changed the saved data: reload it instead of overwriting it later
   window.addEventListener('storage', e => {

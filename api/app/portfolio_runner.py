@@ -153,6 +153,13 @@ class PortfolioEngine:
     def managed_agents(self) -> frozenset[str]:
         return frozenset(self.bindings)
 
+    def local_bindings_by_unit(self, eligible: frozenset[str]) -> dict[str, _Binding]:
+        by_unit: dict[str, _Binding] = {}
+        for agent_id in sorted(self.bindings.keys() & eligible):
+            binding = self.bindings[agent_id]
+            by_unit.setdefault(binding.unit, binding)
+        return by_unit
+
     def _autonomy(self, unit: str, mode: str) -> str:
         policy = self.service.bu_policy
         assert policy is not None
@@ -307,16 +314,23 @@ class PortfolioEngine:
 
     async def _completion(self, claim: _Claim) -> tuple[str | None, dict[str, int], str | None]:
         content = json.dumps({key: claim.task[key] for key in ("title", "description")}, ensure_ascii=False)
-        async with httpx.AsyncClient(transport=self.transport, timeout=CALL_SECONDS, follow_redirects=False,
+        return await self.complete_local(claim.binding, _INSTRUCTION, content, timeout=CALL_SECONDS)
+
+    async def complete_local(
+        self, binding: _Binding, instruction: str, content: str, *, timeout: float,
+    ) -> tuple[str | None, dict[str, int], str | None]:
+        async with httpx.AsyncClient(transport=self.transport, timeout=timeout, follow_redirects=False,
                                      trust_env=False) as client:
             async with client.stream("POST", self.endpoint, headers={
-                "Authorization": f"Bearer {claim.binding.virtual_key}", "Accept-Encoding": "identity",
+                "Authorization": f"Bearer {binding.virtual_key}", "Accept-Encoding": "identity",
             }, json={
                 "model": "chat-sensitive", "stream": False, "max_tokens": MAX_TOKENS,
-                "metadata": {"usecase": claim.binding.usecase_id},
-                "messages": [{"role": "system", "content": _INSTRUCTION}, {"role": "user", "content": content}],
+                "metadata": {"usecase": binding.usecase_id},
+                "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": content}],
             }) as response:
                 response.raise_for_status()
+                if response.headers.get("content-encoding", "identity").strip().lower() != "identity":
+                    raise ValueError
                 body = bytearray()
                 async for part in response.aiter_bytes():
                     if len(body) + len(part) > _MAX_RESPONSE:
@@ -327,7 +341,7 @@ class PortfolioEngine:
         message = choice["message"]
         result = message["content"]
         usage = {"input": data["usage"]["prompt_tokens"], "output": data["usage"]["completion_tokens"]}
-        if (choice["finish_reason"] not in {"stop", "length"} or message.get("tool_calls")
+        if (choice["finish_reason"] not in {"stop", "length"} or message.get("tool_calls") or message.get("function_call")
                 or (result is not None and not isinstance(result, str))
                 or any(type(value) is not int or not 0 <= value <= 10**9 for value in usage.values())):
             raise ValueError

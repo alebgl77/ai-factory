@@ -362,6 +362,7 @@
     }
     return `<form class="portfolio-form" data-portfolio-form autocomplete="off"><h4>${name}</h4>
       <div class="portfolio-form-grid">${fields}</div><div class="portfolio-actions">
+      ${!pending && collection === 'tasks' && !action ? button('data-assist-open', 'draft_task', t('Help me write', 'M’aider à rédiger')) : ''}
       <button type="submit" class="mini"${pending ? ' disabled' : ''}>${t('Confirm', 'Confirmer')}</button>${pending ? '' : button('data-portfolio-action', 'cancel', t('Cancel', 'Annuler'))}</div></form>`;
   }
 
@@ -504,7 +505,10 @@
     const central = (collection, label, selected) => data.capabilities.global_admin
       ? `<div class="portfolio-actions">${button('data-portfolio-action', `edit:${collection}`, label)}
         ${selected ? button('data-portfolio-action', `edit:${collection}:${selected.id}`, t('Edit selection', 'Modifier la sélection')) : ''}</div>` : '';
-    return `${top}${summary}${data.truncated ? `<p class="portfolio-alert" role="status">${t('Partial portfolio. Some authorized records were omitted.', 'Portefeuille partiel. Certains éléments autorisés ne sont pas affichés.')}</p>` : ''}
+    return `${top}${summary}<div class="portfolio-actions">
+      ${button('data-assist-open', 'explain_process', t('Understand this workflow', 'Comprendre ce parcours'))}
+      ${data.capabilities.global_admin ? button('data-assist-open', 'decision_outline', t('Prepare a decision', 'Préparer une décision')) : ''}</div>
+      ${data.truncated ? `<p class="portfolio-alert" role="status">${t('Partial portfolio. Some authorized records were omitted.', 'Portefeuille partiel. Certains éléments autorisés ne sont pas affichés.')}</p>` : ''}
       ${view.message ? `<p class="portfolio-alert" role="status">${t(...view.message)}</p>` : ''}
       ${renderEditor(view, h, esc)}
       ${section('01', t('Objectives and indicators', 'Objectifs et indicateurs'), goals + (selectedGoal?.description ? empty(esc(selectedGoal.description)) : ''), central('goals', t('New objective', 'Nouvel objectif'), selectedGoal))}

@@ -189,13 +189,21 @@ def production_errors(config, *, private_gpu_hosts=()):
             or re.search(r"\.example\.ya?ml$", bu_policy) or not _readonly_bind(services["api"], "/config")):
         errors.append("Set FACTORY_BU_POLICY to an operator-owned policy in the read-only /config bind mount.")
     runner_path = _value(api, "FACTORY_PORTFOLIO_RUNNER_FILE")
-    if runner_path:
+    assist_enabled = _value(api, "FACTORY_ASSIST_ENABLED").strip().lower() == "on"
+    if runner_path or assist_enabled:
         expected = "/run/secrets/factory_portfolio_runner"
         if runner_path != expected or not _readonly_bind(services["api"], expected):
             errors.append("Mount the private portfolio runner binding file read-only using its Compose overlay.")
         if (_value(api, "LITELLM_URL") != "http://litellm:4000"
                 or _object(services["api"].get("deploy")).get("replicas", 1) != 1):
             errors.append("Keep the portfolio runner on one API replica and use the internal LiteLLM origin.")
+    if assist_enabled:
+        try:
+            rate = int(_value(api, "FACTORY_RATE_LIMIT_PER_MIN") or "60")
+        except ValueError:
+            rate = 0
+        if rate <= 0:
+            errors.append("Keep write rate limiting enabled for FACTORY_ASSIST_ENABLED.")
     if _value(edge, "FACTORY_PRIVATE_TELEMETRY") != "disabled":
         errors.append("Disable direct Grafana and Langfuse edge routes for production BU scopes.")
 

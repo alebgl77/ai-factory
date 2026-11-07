@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="Éditeur de topologies IA et simulation locale des flux synthétiques, des tokens et du routage.">
+  <title>Laboratoire de flux IA · AI Factory</title>
+  <link rel="stylesheet" href="./flow-lab.css">
+  <script defer src="./flow-sim.js"></script>
+  <script defer src="./flow-lab.js"></script>
+</head>
+<body>
+  <a class="skip" href="#atelier">Aller à l’atelier</a>
+  <header class="top">
+    <div class="shell top-row">
+      <a class="brand" href="../index.html?lang=fr">AI FACTORY <span>R&amp;D</span></a>
+      <nav aria-label="Navigation du laboratoire"><a href="#atelier">Topologie</a><a href="#injection">Injection</a><a href="#historique">Historique</a></nav>
+      <span class="sealed"><span aria-hidden="true"></span> Hors réseau</span>
+    </div>
+  </header>
+  <main class="shell">
+    <section class="hero" aria-labelledby="titre-lab">
+      <p class="eyebrow">Banc d’essai / Scénarios synthétiques</p>
+      <h1 id="titre-lab">Laboratoire de flux <em>IA</em></h1>
+      <p>Assemblez une topologie, injectez un lot fictif et suivez son trajet. Comparez le routage, les blocages, les tokens et le coût estimé.</p>
+      <ul class="meta">
+        <li>01 · Construire</li><li>02 · Injecter</li><li>03 · Comparer</li>
+      </ul>
+    </section>
+    <noscript><p class="notice">Le moteur de simulation a besoin de JavaScript. Il s’exécute dans cette page, sans connexion à des modèles ou à des services.</p></noscript>
+
+    <section id="atelier" aria-labelledby="titre-atelier">
+      <div class="section-head">
+        <div><p class="eyebrow">01 / Atelier</p><h2 id="titre-atelier">Topologie</h2></div>
+        <button id="reset-topology" type="button" class="secondary">Charger l’exemple</button>
+      </div>
+      <div class="workbench">
+        <aside class="panel palette" aria-labelledby="palette-title">
+          <h3 id="palette-title">Composants</h3>
+          <p>Ajoutez un nœud au canevas.</p>
+          <div id="palette" class="palette-list"></div>
+        </aside>
+        <div class="panel canvas-panel">
+          <div class="canvas-head">
+            <h3>Canevas</h3><span id="topology-count" class="mono"></span>
+          </div>
+          <div class="canvas-scroll" tabindex="0" role="region" aria-label="Canevas de topologie défilable">
+            <div class="canvas">
+              <svg id="paths" viewBox="0 0 1000 440" preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div id="nodes" class="nodes" aria-label="Nœuds de la topologie"></div>
+            </div>
+          </div>
+          <div class="legend" aria-label="Types de liens">
+            <span><i aria-hidden="true"></i> Défaut</span>
+            <span><i class="restricted" aria-hidden="true"></i> C3/C4</span>
+            <span><i class="fallback" aria-hidden="true"></i> Repli</span>
+            <span><i class="taken" aria-hidden="true"></i> Trajet simulé</span>
+          </div>
+        </div>
+        <aside class="panel inspector" aria-labelledby="inspector-title">
+          <h3 id="inspector-title" tabindex="-1">Inspecteur</h3>
+          <div id="inspector"></div>
+        </aside>
+      </div>
+      <div class="panel connections">
+        <div>
+          <h3>Relier les nœuds</h3>
+          <p>Les contrôles sont utilisables au clavier.</p>
+          <form id="edge-form">
+            <label for="edge-from">Départ <select id="edge-from" required></select></label>
+            <label for="edge-to">Arrivée <select id="edge-to" required></select></label>
+            <label for="edge-route">Route <select id="edge-route" required></select></label>
+            <button type="submit" class="secondary">Relier</button>
+          </form>
+        </div>
+        <details>
+          <summary id="edge-summary">Liaisons configurées</summary>
+          <ul id="edge-list" class="edge-list"></ul>
+        </details>
+      </div>
+      <p id="editor-status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="injection" aria-labelledby="titre-injection">
+      <div class="section-head"><div><p class="eyebrow">02 / Exécution</p><h2 id="titre-injection">Injecter un scénario</h2></div></div>
+      <div class="panel scenario">
+        <div class="preset-row" aria-label="Scénarios prédéfinis">
+          <button type="button" class="preset" data-preset="nominal">Nominal C2</button>
+          <button type="button" class="preset" data-preset="restricted">Données sensibles C4</button>
+          <button type="button" class="preset" data-preset="fault">Panne du modèle distant</button>
+        </div>
+        <form id="scenario-form">
+          <label for="classification">Classification <select id="classification" name="classification">
+            <option value="1">C1 · Public</option><option value="2" selected>C2 · Interne</option>
+            <option value="3">C3 · Sensible</option><option value="4">C4 · Restreint</option>
+          </select></label>
+          <label for="requests">Nombre de demandes <input id="requests" type="number" min="1" max="5000" value="100" required></label>
+          <label for="input-tokens">Tokens d’entrée / demande <input id="input-tokens" type="number" min="1" max="8192" value="600" required></label>
+          <label for="output-tokens">Tokens de sortie / modèle <input id="output-tokens" type="number" min="1" max="4096" value="220" required></label>
+          <label for="fault">Panne simulée <select id="fault">
+            <option value="none">Aucune</option><option value="cpu">Modèle CPU local</option>
+            <option value="gpu">Modèle GPU local</option><option value="remote">Modèle distant</option>
+          </select></label>
+          <button type="submit" class="run">Simuler le lot</button>
+        </form>
+        <p id="run-status" class="status" role="status" aria-live="polite"></p>
+      </div>
+      <div id="results" class="result-grid">
+        <article class="panel metrics">
+          <div class="result-head"><h3>Mesures estimées</h3><span id="outcome" class="outcome"></span></div>
+          <dl id="metric-list"></dl>
+          <p id="model-split" class="model-split"></p>
+        </article>
+        <article class="panel timeline">
+          <h3>Trajet et contrôles</h3>
+          <ol id="steps"></ol>
+          <ul id="warnings" class="warnings"></ul>
+        </article>
+      </div>
+      <details class="method panel">
+        <summary>Méthode de calcul et règles de routage</summary>
+        <ul>
+          <li>Chaque demande d’un lot partage le même scénario. Les compteurs et le coût sont multipliés par le nombre de demandes.</li>
+          <li>Pour C3/C4, un routeur privilégie la liaison sensible si elle existe. Un modèle distant simulé bloque toujours ces classes, même si aucune passerelle ne précède le modèle.</li>
+          <li>Une panne peut déclencher le repli du dernier routeur. Une tentative indisponible ajoute du délai et ne consomme aucun token. Un blocage de sécurité termine le trajet.</li>
+          <li>La latence représente un trajet unitaire estimé à partir de délais fixes et d’un débit de tokens fictif. Le modèle n’inclut ni attente en file ni concurrence réelle.</li>
+          <li>Un nœud de recherche ajoute des tokens d’entrée simulés. Chaque modèle facture ses propres tokens selon un barème fictif.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section id="historique" aria-labelledby="titre-historique">
+      <div class="section-head"><div><p class="eyebrow">03 / Comparaison</p><h2 id="titre-historique">Historique local</h2></div></div>
+      <div class="panel history">
+        <p>Le navigateur conserve les douze dernières simulations synthétiques. Le graphe et les paramètres permettent de rejouer chaque lot avec la même version du moteur.</p>
+        <p id="storage-status" class="status" role="status"></p>
+        <div class="history-controls">
+          <label for="history-pick">Choisir une simulation <select id="history-pick"></select></label>
+          <button id="replay" type="button" class="secondary" disabled>Rejouer la sélection</button>
+        </div>
+        <p id="comparison" class="comparison" aria-live="polite"></p>
+        <ol id="history-list"></ol>
+      </div>
+    </section>
+  </main>
+  <footer class="shell footer">
+    <span>AI FACTORY · LABORATOIRE R&amp;D</span>
+    <a href="./index.html">Guide d’exploitation</a>
+  </footer>
+</body>
+</html>
