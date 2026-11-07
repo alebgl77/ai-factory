@@ -5,6 +5,7 @@
   const categories = {
     security: ['Security', 'Sécurité'],
     automation: ['Automation', 'Automatisation'],
+    finance: ['Finance', 'Finance'],
     data: ['Data & quality', 'Données & qualité'],
     experience: ['Experience', 'Expérience'],
     adoption: ['Learning & adoption', 'Formation & adoption'],
@@ -13,12 +14,14 @@
   const tags = {
     access: ['Access', 'Accès'], compliance: ['Compliance', 'Conformité'],
     workflow: ['Workflow', 'Workflow'], integration: ['Integration', 'Intégration'],
+    financial_analysis: ['Financial analysis', 'Analyse financière'], budget: ['Budget', 'Budget'],
     analytics: ['Analytics', 'Analyse'], quality: ['Quality', 'Qualité'],
     usability: ['Usability', 'Ergonomie'], feedback: ['Feedback', 'Retours'],
     training: ['Training', 'Formation'], documentation: ['Documentation', 'Documentation'],
   };
   const tagCategories = {
     access: 'security', compliance: 'security', workflow: 'automation', integration: 'automation',
+    financial_analysis: 'finance', budget: 'finance',
     analytics: 'data', quality: 'data', usability: 'experience', feedback: 'experience',
     training: 'adoption', documentation: 'adoption',
   };
@@ -28,6 +31,8 @@
     compliance: 'audit conformite compliance cyber rgpd gdpr confidentialite privacy securite security',
     workflow: 'automatiser automatisation automate automation processus process workflow orchestration',
     integration: 'api connecteur connecteurs connector connectors crm erp integration integrations',
+    financial_analysis: 'finance financier financiere financiers financieres financial revenue revenus marge marges margin margins rentabilite profitability comptable comptabilite accounting',
+    budget: 'budget budgets budgetaire budgetaires tresorerie cash cout couts cost costs roi',
     analytics: 'analyse analytics donnees data metrique metriques metrics reporting tableau dashboard',
     quality: 'qualite quality validation nettoyage cleaning doublon doublons duplicate duplicates',
     usability: 'accessibilite accessibility ergonomie interface navigation utilisateur users ux ui',
@@ -37,10 +42,23 @@
   };
   const storeKey = 'ai-factory-coffee-demo-v1';
   const demoUnit = 'coffee-demo';
+  const administrationUnit = '@factory-administration';
+  const unitColors = new Map([
+    ['cc-ops', 'operations'], ['cc-rh', 'people'], ['cc-finance', 'finance'],
+    ['cc-relation', 'relations'], ['cc-observatoire', 'observatory'], ['cc-observatory', 'observatory'],
+    [administrationUnit, 'administration'],
+  ]);
+  const fallbackColors = ['ochre', 'indigo', 'forest', 'plum', 'brick', 'slate', 'marine', 'copper'];
+  function unitColor(id) {
+    if (unitColors.has(id)) return unitColors.get(id);
+    let hash = 2166136261;
+    for (const character of id) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    return fallbackColors[(hash >>> 0) % fallbackColors.length];
+  }
   const id = value => typeof value === 'string' && /^[a-f0-9]{32}$/.test(value);
   const bounded = (value, max) => typeof value === 'string' && value.length <= max * 2
     && Array.from(value).length <= max && value.trim().length > 0;
-  const key = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/.test(value);
+  const key = value => value === administrationUnit || (typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}$/.test(value));
   const fold = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
   const tokens = value => new Set(fold(value).match(/[a-z0-9]+/g) || []);
   const tx = (language, english, french) => language === 'fr' ? french : english;
@@ -56,6 +74,7 @@
   function parse(data) {
     const permissions = data?.permissions;
     if (!permissions || typeof permissions.create !== 'boolean'
+      || (permissions.trace !== undefined && typeof permissions.trace !== 'boolean')
       || typeof data.view !== 'string' || !/^[a-f0-9]{64}$/.test(data.view)
       || !Array.isArray(data.items) || data.items.length > 120 || !data.items.every(idea)
       || !Array.isArray(data.units)
@@ -64,6 +83,13 @@
     if (new Set(data.items.map(row => row.id)).size !== data.items.length
       || new Set(data.units.map(unit => unit.id)).size !== data.units.length) return null;
     return data;
+  }
+
+  function parseTrace(data, row, view) {
+    if (!data || data.id !== row.id || data.bu !== row.bu || data.view !== view
+      || data.created_at !== row.created_at || !['employee', 'agent', 'admin'].includes(data.kind)
+      || !bounded(data.subject, 256)) return null;
+    return { kind: data.kind, subject: data.subject, createdAt: data.created_at };
   }
 
   function classify(title, text) {
@@ -98,23 +124,32 @@
   function demo(language, notes = demoNotes()) {
     const t = (en, fr) => tx(language, en, fr);
     const seeds = [
-      ['automation', 'workflow', 'Automate incident summaries', 'Automatiser le résumé des incidents',
+      ['cc-ops', 'Operations', 'Opérations', 'automation', 'workflow', 'Automate incident summaries', 'Automatiser le résumé des incidents',
         'Prepare a short draft from the ticket so the on-call team can review it before handover.',
         'Préparer un brouillon à partir du ticket pour que l’astreinte puisse le relire avant la passation.'],
-      ['adoption', 'training', 'A 20-minute AI workshop', 'Un atelier IA de 20 minutes',
+      ['cc-ops', 'Operations', 'Opérations', 'finance', 'financial_analysis', 'Track the financial impact of incidents', 'Mesurer l’impact financier des incidents',
+        'Compare the cost of recurring failures before prioritising a fix.',
+        'Comparer le coût des incidents récurrents avant de prioriser une correction.'],
+      ['cc-rh', 'HR', 'Ressources humaines', 'adoption', 'training', 'A 20-minute AI workshop', 'Un atelier IA de 20 minutes',
         'Use a real example from the team and leave everyone with a short practice exercise.',
         'Partir d’un exemple de l’équipe et laisser à chacun un exercice court à refaire.'],
-      ['data', 'quality', 'Improve the CRM source data', 'Fiabiliser les données du CRM',
+      ['cc-relation', 'Customer relations', 'Relation client', 'data', 'quality', 'Improve the CRM source data', 'Fiabiliser les données du CRM',
         'Flag duplicates and incomplete fields before they reach the reporting dashboard.',
         'Signaler les doublons et les champs incomplets avant leur arrivée dans le tableau de bord.'],
+      ['cc-finance', 'Finance', 'Finance', 'automation', 'workflow', 'Prepare the monthly close', 'Préparer la clôture mensuelle',
+        'Collect recurring checks in a single checklist before the team starts its review.',
+        'Regrouper les contrôles récurrents dans une liste commune avant la revue de l’équipe.'],
+      ['cc-observatoire', 'Observatory', 'Observatoire', 'experience', 'feedback', 'Share lessons from field tests', 'Partager les retours terrain',
+        'Ask each pilot team to share a useful finding after its experiment.',
+        'Inviter chaque équipe pilote à partager un enseignement utile après son expérimentation.'],
     ];
-    const items = seeds.map(([category, tag, en, fr, enText, frText], index) => ({
-      id: String(index + 1).padStart(32, '0'), bu: demoUnit, title: t(en, fr), text: t(enText, frText),
+    const items = seeds.map(([bu, buEn, buFr, category, tag, en, fr, enText, frText], index) => ({
+      id: String(index + 1).padStart(32, '0'), bu, bu_label: t(buEn, buFr), title: t(en, fr), text: t(enText, frText),
       category, tags: [tag], visibility: 'factory',
-      created_at: `2026-11-0${5 - index}T09:00:00Z`,
+      created_at: `2026-11-0${7 - index}T09:00:00Z`,
     }));
     return { items: [...notes, ...items], units: [{ id: demoUnit, label: t('Demo team', 'Équipe démo') }],
-      permissions: { create: true }, truncated: false, total: notes.length + items.length };
+      permissions: { create: true, trace: false }, truncated: false, total: notes.length + items.length };
   }
 
   function demoCreate(fields, notes) {
@@ -191,17 +226,28 @@
 
     const status = node('p', 'ideas-status'); status.setAttribute('role', 'status');
     const retry = button('ideas-quiet', t('Try again', 'Réessayer'));
+    const tracePanel = node('aside', 'ideas-trace'); tracePanel.id = 'ideas-trace';
+    tracePanel.setAttribute('role', 'region'); tracePanel.setAttribute('aria-labelledby', 'ideas-trace-title');
+    const traceTitle = node('h4', '', t('Submission trace', 'Traçabilité du dépôt')); traceTitle.id = 'ideas-trace-title';
+    const traceClose = button('ideas-quiet', t('Close trace', 'Fermer la traçabilité'));
+    const traceHeader = node('div', 'ideas-trace-head'); traceHeader.append(traceTitle, traceClose);
+    const traceTarget = node('p', 'ideas-trace-target');
+    const traceStatus = node('p', 'ideas-trace-status'); traceStatus.setAttribute('role', 'status');
+    const traceDetails = node('dl', 'ideas-trace-details');
+    tracePanel.append(traceHeader, traceTarget, traceStatus, traceDetails);
     const search = node('input'); search.type = 'search'; search.id = 'ideas-search'; search.maxLength = 120;
     search.placeholder = t('Search notes', 'Rechercher un post-it');
     const searchField = field(t('Search', 'Recherche'), search);
     const filters = node('div', 'ideas-filters');
     filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', t('Categories', 'Catégories'));
-    const tools = node('div', 'ideas-tools'); tools.append(searchField, filters);
+    const clearUnit = button('ideas-clear-unit', '');
+    clearUnit.dataset.ideaClearUnit = '';
+    const tools = node('div', 'ideas-tools'); tools.append(searchField, filters, clearUnit);
     const count = node('p', 'ideas-count'); count.setAttribute('aria-live', 'polite');
     const wall = node('div', 'ideas-wall');
-    root.append(hero, composer, status, retry, tools, count, wall);
+    root.append(hero, composer, status, retry, tracePanel, tools, count, wall);
 
-    let current = null, active = '', composing = false;
+    let current = null, active = '', selectedUnit = null, composing = false;
     const categoryButtons = new Map();
     for (const category of ['', ...Object.keys(categories)]) {
       const control = button('ideas-filter', category ? label(categories[category]) : t('All', 'Toutes'));
@@ -220,6 +266,16 @@
     dismiss.addEventListener('click', () => showComposer(false));
     retry.addEventListener('click', actions.retry);
     search.addEventListener('input', paintWall);
+    clearUnit.addEventListener('click', () => {
+      const origin = selectedUnit?.origin;
+      selectedUnit = null; paintWall();
+      (wall.querySelector(`[data-idea-id="${origin}"] .idea-unit`) || search).focus({ preventScroll: true });
+    });
+    traceClose.addEventListener('click', () => {
+      const origin = current?.trace?.id;
+      actions.closeTrace();
+      (wall.querySelector(`[data-idea-id="${origin}"] [data-idea-trace]`) || search).focus({ preventScroll: true });
+    });
     composer.addEventListener('submit', event => {
       event.preventDefault();
       if (!current?.data?.permissions.create || current.pending) return;
@@ -235,6 +291,16 @@
     function card(row, units) {
       const note = node('article', `idea-note idea-note-${row.category}`);
       note.dataset.ideaId = row.id;
+      note.dataset.ideaColor = unitColor(row.bu);
+      const unitLabel = row.bu_label || units.get(row.bu) || row.bu;
+      const unitPill = button('idea-unit', row.bu === administrationUnit ? unitLabel : `BU · ${unitLabel}`);
+      unitPill.setAttribute('aria-pressed', String(selectedUnit?.id === row.bu));
+      unitPill.title = t('Filter by origin', 'Filtrer par origine');
+      unitPill.addEventListener('click', () => {
+        if (selectedUnit?.id === row.bu) { clearUnit.click(); return; }
+        selectedUnit = { id: row.bu, label: unitLabel, origin: row.id };
+        paintWall(); clearUnit.focus({ preventScroll: true });
+      });
       const category = node('span', 'idea-category', label(categories[row.category]));
       const heading = node('h4', '', row.title);
       const content = node('p', 'idea-text', row.text);
@@ -244,8 +310,17 @@
       const date = node('time', '', new Intl.DateTimeFormat(language, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(row.created_at)));
       date.dateTime = row.created_at;
       const meta = node('div', 'idea-meta');
-      meta.append(node('span', 'idea-unit', row.bu_label || units.get(row.bu) || row.bu), date);
-      note.append(category, heading, content, list, meta);
+      meta.append(date);
+      if (current.source === 'api' && current.data.permissions.trace) {
+        const trace = button('idea-trace-open', t('Trace submission', 'Tracer le dépôt'));
+        trace.dataset.ideaTrace = '';
+        trace.disabled = current.trace?.status === 'loading';
+        trace.setAttribute('aria-controls', tracePanel.id);
+        trace.setAttribute('aria-label', t(`Trace submission of ${row.title}`, `Tracer le dépôt de ${row.title}`));
+        trace.addEventListener('click', () => actions.trace(row.id));
+        meta.append(trace);
+      }
+      note.append(unitPill, category, heading, content, list, meta);
       return note;
     }
 
@@ -254,9 +329,14 @@
       const items = data?.items || [];
       const unitLabels = new Map((data?.units || []).map(item => [item.id, item.label]));
       const query = fold(search.value.trim());
-      const searched = query ? items.filter(row =>
+      const scoped = selectedUnit ? items.filter(row => row.bu === selectedUnit.id) : items;
+      const searched = query ? scoped.filter(row =>
         fold([row.title, row.text, label(categories[row.category]), ...row.tags.map(tag => label(tags[tag])),
-          row.bu_label || unitLabels.get(row.bu) || row.bu].join(' ')).includes(query)) : items;
+          row.bu_label || unitLabels.get(row.bu) || row.bu].join(' ')).includes(query)) : scoped;
+      clearUnit.hidden = !selectedUnit;
+      if (selectedUnit) clearUnit.textContent = selectedUnit.id === administrationUnit
+        ? t(`Clear filter · ${selectedUnit.label}`, `Effacer le filtre · ${selectedUnit.label}`)
+        : t(`Clear BU filter · ${selectedUnit.label}`, `Effacer le filtre BU · ${selectedUnit.label}`);
       const totals = new Map();
       for (const row of searched) totals.set(row.category, (totals.get(row.category) || 0) + 1);
       for (const [category, control] of categoryButtons) {
@@ -267,17 +347,22 @@
       const visibleCount = shown.length === 1 ? t('1 idea', '1 idée') : t(`${shown.length} ideas`, `${shown.length} idées`);
       count.textContent = !data ? '' : data.truncated ? t(`${visibleCount} · ${data.items.length} latest of ${data.total}`,
         `${visibleCount} · parmi les ${data.items.length} dernières sur ${data.total}`) : visibleCount;
+      const focus = wall.contains(document.activeElement) ? document.activeElement : null;
+      const focusId = focus?.closest('[data-idea-id]')?.dataset.ideaId;
+      const focusControl = focus?.matches('[data-idea-trace]') ? '[data-idea-trace]' : '.idea-unit';
       wall.replaceChildren();
       if (!data) return;
       if (shown.length) {
         wall.append(...shown.map(row => card(row, unitLabels)));
       } else {
         const empty = node('div', 'ideas-empty');
-        empty.append(node('h4', '', query || active ? t('No matching notes', 'Aucun post-it correspondant') : t('The wall is clear', 'Le mur est encore vide')),
-          node('p', '', query || active ? t('Try another search or category.', 'Essayez une autre recherche ou catégorie.')
+        const filtered = query || active || selectedUnit;
+        empty.append(node('h4', '', filtered ? t('No matching notes', 'Aucun post-it correspondant') : t('The wall is clear', 'Le mur est encore vide')),
+          node('p', '', filtered ? t('Try another search or filter.', 'Essayez une autre recherche ou un autre filtre.')
             : t('Ideas will appear here once they are posted.', 'Les idées apparaîtront ici après leur dépôt.')));
         wall.append(empty);
       }
+      if (focusId) (wall.querySelector(`[data-idea-id="${focusId}"] ${focusControl}`) || search).focus({ preventScroll: true });
     }
 
     function update(view) {
@@ -304,7 +389,7 @@
       unitField.hidden = !data || data.units.length <= 1;
       name.disabled = body.disabled = unit.disabled = submit.disabled = !!view.pending;
       if (view.completed && view.completed !== previous?.completed) {
-        composer.reset(); active = ''; search.value = ''; showComposer(false);
+        composer.reset(); active = ''; selectedUnit = null; search.value = ''; showComposer(false);
       }
       const states = {
         loading: t('Loading the idea wall…', 'Chargement du mur des idées…'),
@@ -316,11 +401,42 @@
         ? t('Fictional examples. Your notes stay in this browser.', 'Exemples fictifs. Vos post-it restent dans ce navigateur.') : '');
       retry.hidden = view.source !== 'api' || !['denied', 'error'].includes(view.status) || !!view.pending;
       tools.hidden = !data; count.hidden = !data;
-      if (previous?.data !== data || previous?.pending !== view.pending || previous?.completed !== view.completed) paintWall();
+      if (previous?.data !== data || previous?.pending !== view.pending || previous?.completed !== view.completed
+        || (previous?.trace?.status === 'loading') !== (view.trace?.status === 'loading')) paintWall();
+      if (!previous || previous.trace !== view.trace) paintTrace(view.trace, previous?.trace?.id);
+    }
+
+    function paintTrace(trace, previousId) {
+      tracePanel.hidden = !trace;
+      traceTarget.textContent = trace ? current.data?.items.find(row => row.id === trace.id)?.title || '' : '';
+      traceDetails.replaceChildren();
+      if (!trace) { traceStatus.textContent = ''; return; }
+      const states = {
+        loading: t('Looking up the submission…', 'Recherche du dépôt…'),
+        unavailable: t('No origin was recorded for this submission.', 'Aucune origine n’a été enregistrée pour ce dépôt.'),
+        error: t('The submission trace could not be loaded.', 'Impossible de charger la traçabilité du dépôt.'),
+        ready: t('This access was recorded in the audit log.', 'Cette consultation est enregistrée dans le journal d’audit.'),
+      };
+      traceStatus.textContent = states[trace.status] || '';
+      if (trace.author) {
+        const kinds = { employee: t('Employee', 'Employé'), agent: t('Agent', 'Agent'), admin: t('Administrator', 'Administrateur') };
+        const fields = [
+          [t('Author type', 'Type d’auteur'), kinds[trace.author.kind]],
+          [t('Author identifier', 'Identifiant de l’auteur'), trace.author.subject],
+          [t('Submission time', 'Date du dépôt'), new Intl.DateTimeFormat(language,
+            { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(trace.author.createdAt))],
+        ];
+        for (const [name, value] of fields) {
+          const field = node('div');
+          field.append(node('dt', '', name), node('dd', '', value));
+          traceDetails.append(field);
+        }
+      }
+      if (trace.id !== previousId) traceClose.focus();
     }
     return { root, update };
   }
 
-  window.FactoryIdeas = Object.freeze({ parse, idea, categoryName: (value, language) => tx(language, ...categories[value]),
+  window.FactoryIdeas = Object.freeze({ parse, parseTrace, idea, categoryName: (value, language) => tx(language, ...categories[value]),
     create, demo, demoNotes, demoCreate, storeKey });
 })();

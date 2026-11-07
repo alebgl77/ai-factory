@@ -416,21 +416,32 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .ideas-tools{display:grid;gap:7px}.ideas-tools>.ideas-field{max-width:360px}
 .ideas-filters{display:flex;gap:5px;flex-wrap:wrap}.ideas-filter{padding:4px 7px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--muted);font-size:11px}
 .ideas-filter[aria-pressed="true"]{border-color:var(--ideas-accent);background:var(--ideas-warm);color:var(--ideas-accent)}
+.ideas-clear-unit{justify-self:start;max-width:100%;padding:4px 8px;border:1px solid var(--ideas-accent);border-radius:6px;background:var(--ideas-warm);color:var(--ideas-accent);font-size:12px;overflow-wrap:anywhere}
 .ideas-count{margin:0;color:var(--muted)}
 .ideas-wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr));gap:12px;align-items:start;min-width:0}
-.idea-note{--paper:#ffefb8;--thread:#78571a;position:relative;display:grid;gap:7px;min-width:0;padding:15px 11px 10px;border:1px solid color-mix(in srgb,var(--thread) 29%,var(--paper));border-radius:3px 3px 11px 3px;background:var(--paper);color:#34281e;box-shadow:0 5px 10px #442a2018}
+.idea-note{--thread:#765018;--paper:color-mix(in srgb,var(--thread) 9%,#fffaee);position:relative;display:grid;gap:7px;min-width:0;padding:15px 11px 10px;border:1px solid color-mix(in srgb,var(--thread) 29%,var(--paper));border-left:3px solid var(--thread);border-radius:3px 3px 11px 3px;background:var(--paper);color:#34281e;box-shadow:0 5px 10px #442a2018}
 .idea-note::before{content:"";position:absolute;left:50%;top:-4px;width:33px;height:8px;transform:translateX(-50%) rotate(-5deg);background:color-mix(in srgb,var(--thread) 24%,var(--paper));border:1px solid color-mix(in srgb,var(--thread) 15%,var(--paper));border-radius:1px;pointer-events:none}
-.idea-note-security{--paper:#ffe4de;--thread:#813a32}.idea-note-automation{--paper:#ffe9be;--thread:#785019}
-.idea-note-data{--paper:#daedfb;--thread:#2a5972}.idea-note-experience{--paper:#e9e1f9;--thread:#593e80}
-.idea-note-adoption{--paper:#e2efcc;--thread:#40591f}.idea-note-uncategorized{--paper:#faf0de;--thread:#745138}
-.idea-category{color:var(--thread)}
+.idea-note[data-idea-color="operations"]{--thread:#1c5578;--paper:#eaf4fc}.idea-note[data-idea-color="people"]{--thread:#633779;--paper:#f5edf8}
+.idea-note[data-idea-color="finance"]{--thread:#3d5d24;--paper:#eff5e2}.idea-note[data-idea-color="relations"]{--thread:#8b3e35;--paper:#fff0e8}
+.idea-note[data-idea-color="observatory"]{--thread:#145c55;--paper:#e5f4ed}.idea-note[data-idea-color="administration"]{--thread:#3d4b62;--paper:#edf0f5}
+.idea-note[data-idea-color="indigo"]{--thread:#3f4e8a}.idea-note[data-idea-color="forest"]{--thread:#3d633f}
+.idea-note[data-idea-color="plum"]{--thread:#71445e}.idea-note[data-idea-color="brick"]{--thread:#893d42}
+.idea-note[data-idea-color="slate"]{--thread:#495e6c}.idea-note[data-idea-color="marine"]{--thread:#285f68}.idea-note[data-idea-color="copper"]{--thread:#7c4826}
+.idea-category{color:#5a4c40}
 .idea-note h4{margin:0;font-size:15px;line-height:1.25;overflow-wrap:anywhere}.idea-text{margin:0;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
 .idea-tags{display:flex;flex-wrap:wrap;gap:4px;margin:0;padding:0;list-style:none;font-size:11px}
-.idea-tags li{padding:1px 4px;border:1px solid color-mix(in srgb,var(--thread) 28%,var(--paper));border-radius:4px;color:var(--thread)}
-.idea-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 6px;padding-top:7px;border-top:1px solid color-mix(in srgb,var(--thread) 25%,var(--paper));font-size:11px;color:var(--thread)}
-.idea-unit{font-weight:700;overflow-wrap:anywhere}
+.idea-tags li{padding:1px 4px;border:1px solid #8b786255;border-radius:4px;color:#5a4c40}
+.idea-meta{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:3px 6px;padding-top:7px;border-top:1px solid color-mix(in srgb,var(--thread) 25%,var(--paper));font-size:11px;color:#5a4c40}
+.ideas .idea-unit{justify-self:start;max-width:100%;min-height:30px;padding:4px 7px;border:1px solid var(--thread);border-radius:5px;background:#ffffff86;color:var(--thread);text-align:left;font-size:12px;overflow-wrap:anywhere}
+.idea-unit[aria-pressed="true"]{background:var(--thread);color:#fff}
+.ideas .idea-trace-open{min-height:28px;padding:3px 0;border:0;background:none;color:#5a4c40;text-decoration:underline;font-size:11px}
+.ideas-trace{display:grid;gap:7px;padding:11px;border:1px solid var(--ideas-line);border-radius:8px;background:var(--ideas-warm)}
+.ideas-trace-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px}
+.ideas-trace h4,.ideas-trace p,.ideas-trace dl,.ideas-trace dd{margin:0}.ideas-trace-target{font-weight:650;overflow-wrap:anywhere}
+.ideas-trace-status{color:var(--muted);font-size:12px}.ideas-trace-details{display:flex;flex-wrap:wrap;gap:6px 20px}
+.ideas-trace-details div{min-width:0;max-width:100%}.ideas-trace dt{font-size:11px;color:var(--muted)}.ideas-trace dd{overflow-wrap:anywhere}
 .ideas-empty{grid-column:1/-1;padding:14px;border:1px dashed var(--ideas-line);border-radius:8px}.ideas-empty h4{margin:0 0 4px}.ideas-empty p{margin:0;font-size:13px;color:var(--muted)}
-@media(max-width:470px){.console.is-ideas .c-tabs{flex-wrap:nowrap}.ideas-hero,.ideas-compose{padding:11px}.ideas-wall{grid-template-columns:1fr}}
+@media(max-width:470px){.console.is-ideas .c-tabs,.ideas-filters{flex-wrap:nowrap}.ideas-filters{overflow-x:auto;scrollbar-width:thin;padding:2px 2px 4px}.ideas-filter{flex:none}.ideas-hero,.ideas-compose{padding:11px}.ideas-wall{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.console.is-ideas,.console.is-ideas.open{transition:none}}
 .portfolio{--portfolio-ink:#176d5c;--portfolio-warn:#a05a1e;display:grid;gap:14px;min-width:0}
 [data-theme="dark"] .portfolio{--portfolio-ink:#67c5ad;--portfolio-warn:#e9a357}
@@ -4080,6 +4091,11 @@ function renderIdeas() {
   if (!view.panel) {
     view.panel = helper.create(language, {
       create: fields => void submitIdea(view, fields),
+      trace: id => void traceIdea(view, id),
+      closeTrace: () => {
+        if (view !== ideasView || !view.trace) return;
+        view.trace = null; renderConsole();
+      },
       retry: () => {
         if (view !== ideasView || view.pending || view.source !== 'api') return;
         view.status = 'loading'; renderConsole();
@@ -4092,7 +4108,7 @@ function renderIdeas() {
   view.panel.update(view);
 }
 function failIdeas(view, status) {
-  view.pending = null; view.data = null; view.panel = null; view.viewer = null; view.message = '';
+  view.pending = null; view.data = null; view.panel = null; view.viewer = null; view.message = ''; view.trace = null;
   view.status = status === 401 || status === 403 ? 'denied' : 'error';
   renderConsole();
 }
@@ -4108,6 +4124,7 @@ async function loadIdeas(view, request, note) {
   if (!data) { failIdeas(view, result.status); return; }
   const changed = view.viewer !== null && view.viewer !== data.view;
   if (changed) { view.panel = null; view.message = ''; view.completed = null; }
+  if (changed || !data.permissions.trace || !data.items.some(row => row.id === view.trace?.id)) view.trace = null;
   view.pending = null; view.viewer = data.view; view.data = data; view.status = 'ready';
   if (note && !changed) { view.message = ideaPosted(note); view.completed = {}; }
   renderConsole();
@@ -4115,6 +4132,25 @@ async function loadIdeas(view, request, note) {
 function readIdeas(view) {
   const request = {}; view.pending = request;
   return loadIdeas(view, request);
+}
+async function traceIdea(view, id) {
+  if (view !== ideasView || view.source !== 'api' || !view.data?.permissions.trace
+    || view.trace?.status === 'loading' || view.trace?.id === id || document.hidden) return;
+  const row = view.data.items.find(item => item.id === id);
+  if (!row) return;
+  const viewer = view.viewer, pending = { id, status: 'loading' };
+  view.trace = pending; renderConsole();
+  const query = new URLSearchParams({ lang: view.language });
+  const result = await apiFetch(`/ideas/${encodeURIComponent(id)}/trace?${query}`,
+    { method: 'POST', body: '{}', mode: 'same-origin', redirect: 'error' }, 5000);
+  if (consoleKey !== 'ideas' || ideasView !== view || view.trace !== pending || view.viewer !== viewer
+    || view.scope !== ideasScope() || view.language !== language || document.hidden) return;
+  if (result.status === 401 || result.status === 403 || (result.ok && result.body?.view !== viewer)) {
+    failIdeas(view, 403); return;
+  }
+  const author = result.ok && window.FactoryIdeas.parseTrace(result.body, row, viewer);
+  view.trace = { id, status: author ? 'ready' : result.status === 404 ? 'unavailable' : 'error', author };
+  renderConsole();
 }
 async function submitIdea(view, fields) {
   if (view !== ideasView || view.pending || !view.data?.permissions.create || !view.data.units.some(unit => unit.id === fields.bu)) return;

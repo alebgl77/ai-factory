@@ -46,7 +46,7 @@ AUDIT_FILE = "audit.jsonl"
 GENESIS = "0" * 64
 RECORD_VERSION = 1
 REQUIRED_FIELDS = ("v", "seq", "ts", "actor", "role", "action", "target", "outcome", "prev_hash", "hash")
-ACTIONS = ("registry.model_version", "registry.assessment", "spaces.put", "placement.decide")
+ACTIONS = ("registry.model_version", "registry.assessment", "spaces.put", "placement.decide", "ideas.author_trace")
 OUTCOMES = ("success", "denied")
 
 
@@ -207,9 +207,11 @@ class AuditLog:
     # ------------------------------------------------------------------ writing
     def append(self, ctx: AuditContext, *, action: str, target: str, before: Any = None, after: Any = None,
                details: dict[str, Any] | None = None, outcome: str = "success",
-               now: dt.datetime | None = None) -> dict[str, Any]:
+               now: dt.datetime | None = None, require_intact: bool = False) -> dict[str, Any]:
         """Append one record (caller holds the state lock). Raises ``OSError`` on failure."""
         status = self.status()
+        if require_intact and not status.ok:
+            raise OSError("audit chain is not intact")
         moment = (now or dt.datetime.now(dt.timezone.utc)).astimezone(dt.timezone.utc)
         record: dict[str, Any] = {
             "v": RECORD_VERSION,

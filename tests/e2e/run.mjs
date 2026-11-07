@@ -252,10 +252,21 @@ if (!process.env.E2E_BASE_URL) {
   const portfolioRequests = [];
   let portfolioStatus = 200, portfolioConflict = false, portfolioRole = 'manager';
   const ideaRequests = [];
+  const traceRequests = [];
   const ideaMarkup = '<em data-idea-injected>Retour terrain</em>';
-  let ideasStatus = 200, ideasViewer = '2'.repeat(64), canPostIdeas = true;
-  let ideaItems = [{ id: '1'.repeat(32), bu: 'cc.relation:client', bu_label: 'Relation client', title: ideaMarkup, text: 'Exemple partagé.',
-    category: 'experience', tags: ['feedback'], visibility: 'factory', created_at: '2026-11-07T12:30:00+00:00' }];
+  const traceMarkup = '<em data-trace-injected>verified-subject</em>';
+  let ideasStatus = 200, ideasViewer = '2'.repeat(64), canPostIdeas = true, canTraceIdeas = false, traceStatus = 200;
+  const ideaCard = (id, bu, bu_label, title, category, tags) => ({
+    id: id.repeat(32), bu, bu_label, title, text: 'Exemple partagé.',
+    category, tags, visibility: 'factory', created_at: '2026-11-07T12:30:00+00:00',
+  });
+  let ideaItems = [
+    ideaCard('1', 'cc.relation:client', 'Relation client', ideaMarkup, 'experience', ['feedback']),
+    ideaCard('5', 'cc-ops', 'Opérations', 'Analyse du budget des interventions', 'finance', ['financial_analysis', 'budget']),
+    ideaCard('6', 'cc-ops', 'Opérations', 'Automatiser les alertes', 'automation', ['workflow']),
+    ideaCard('7', 'cc-finance', 'Finance', 'Automatiser les rapprochements', 'automation', ['workflow']),
+    ideaCard('8', '@factory-administration', 'Administration Factory', 'Réunir les guides', 'adoption', ['documentation']),
+  ];
   let workbenchOutcome = null;
   const portfolioId = n => n.toString(16).padStart(32, '0');
   const activityDay = Math.floor(Date.now() / 86400000) * 86400000;
@@ -343,7 +354,15 @@ if (!process.env.E2E_BASE_URL) {
         return route.fulfill({ status: 201, json: created });
       }
       return route.fulfill({ json: { items: ideaItems, view: ideasViewer, truncated: false, total: ideaItems.length,
-        units: canPostIdeas ? [{ id: 'cc.platform:ops', label: 'Delivery' }] : [], permissions: { create: canPostIdeas } } });
+        units: canPostIdeas ? [{ id: 'cc.platform:ops', label: 'Delivery' }] : [], permissions: { create: canPostIdeas, trace: canTraceIdeas } } });
+    }
+    const traceId = url.pathname.match(/^\/api\/v1\/ideas\/([a-f0-9]{32})\/trace$/)?.[1];
+    if (traceId) {
+      traceRequests.push({ id: traceId, method: route.request().method(), body: route.request().postDataJSON(), language: url.searchParams.get('lang') });
+      if (!canTraceIdeas) return route.fulfill({ status: 403, json: {} });
+      const row = ideaItems.find(item => item.id === traceId);
+      if (traceStatus !== 200 || !row) return route.fulfill({ status: 404, json: { detail: 'idea_origin_unavailable' } });
+      return route.fulfill({ json: { id: row.id, bu: row.bu, kind: 'employee', subject: traceMarkup, created_at: row.created_at, view: ideasViewer } });
     }
     if (url.pathname.startsWith('/api/v1/portfolio')) {
       const method = route.request().method();
@@ -678,8 +697,26 @@ if (!process.env.E2E_BASE_URL) {
   const protectedIdeas = scoped.locator('.ideas[data-ideas-state="ready"]');
   await protectedIdeas.getByRole('heading', { name: ideaMarkup }).waitFor();
   check('protected idea wall renders a shared note from another BU as text only',
-    await protectedIdeas.getByText('Relation client', { exact: true }).isVisible() &&
-    await protectedIdeas.locator('[data-idea-injected]').count() === 0);
+    await protectedIdeas.getByRole('button', { name: 'BU · Relation client', exact: true }).isVisible() &&
+    await protectedIdeas.locator('[data-idea-injected]').count() === 0 &&
+    await protectedIdeas.locator('[data-idea-trace]').count() === 0 && traceRequests.length === 0);
+  const ideaNote = id => protectedIdeas.locator(`[data-idea-id="${id.repeat(32)}"]`);
+  const paper = id => ideaNote(id).evaluate(el => getComputedStyle(el).backgroundColor);
+  check('BU colors follow provenance, including transversal administration, independently of topic',
+    await ideaNote('5').getByRole('button', { name: 'BU · Opérations' }).isVisible() &&
+    await ideaNote('5').locator('.idea-category').textContent() === 'Finance' &&
+    await ideaNote('8').getByRole('button', { name: 'Administration Factory', exact: true }).isVisible() &&
+    await paper('5') === await paper('6') && await paper('6') !== await paper('7'));
+  await ideaNote('5').getByRole('button', { name: 'BU · Opérations' }).click();
+  const clearIdeaUnit = protectedIdeas.getByRole('button', { name: 'Effacer le filtre BU · Opérations' });
+  const ideaTheme = protectedIdeas.locator('[data-idea-filter="finance"]');
+  await ideaTheme.click();
+  await protectedIdeas.locator('#ideas-search').fill('budget des interventions');
+  check('the BU pill composes with search and topic and can be cleared independently',
+    await clearIdeaUnit.isVisible() && await protectedIdeas.locator('.idea-note').count() === 1 && await ideaNote('5').isVisible());
+  await clearIdeaUnit.click();
+  check('clearing BU preserves the other idea filters',
+    await ideaTheme.getAttribute('aria-pressed') === 'true' && await protectedIdeas.locator('#ideas-search').inputValue() === 'budget des interventions');
   await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
   check('idea composer states the Factory-wide visibility before posting',
     await protectedIdeas.getByText('Visible par toute la Factory dès l’envoi.').isVisible());
@@ -692,15 +729,37 @@ if (!process.env.E2E_BASE_URL) {
     ideaWrite?.body?.bu === 'cc.platform:ops' && ideaWrite?.language === 'fr' && !Object.hasOwn(ideaWrite.body, 'category') &&
     await protectedIdeas.getByRole('heading', { name: 'Automatisation des passations' }).isVisible() &&
     await scoped.evaluate(() => localStorage.getItem(window.FactoryIdeas.storeKey) === null));
+  canTraceIdeas = true; ideasViewer = '6'.repeat(64);
+  await scoped.clock.fastForward(20000);
+  await ideaNote('1').locator('[data-idea-trace]').click();
+  const ideaTrace = protectedIdeas.getByRole('region', { name: 'Traçabilité du dépôt' });
+  await ideaTrace.getByText(traceMarkup, { exact: true }).waitFor();
+  check('admin trace uses one explicit exact POST and keeps the identity outside the wall and storage',
+    traceRequests.length === 1 && traceRequests[0].id === '1'.repeat(32) && traceRequests[0].method === 'POST' &&
+    traceRequests[0].language === 'fr' && JSON.stringify(traceRequests[0].body) === '{}' &&
+    await ideaTrace.locator('[data-trace-injected]').count() === 0 && !((await protectedIdeas.locator('.ideas-wall').textContent()).includes(traceMarkup)) &&
+    await scoped.evaluate(() => !JSON.stringify(localStorage).includes('verified-subject')));
+  await ideaTrace.getByRole('button', { name: 'Fermer la traçabilité' }).click();
+  check('closing idea trace removes the author from the document and restores focus',
+    await ideaTrace.count() === 0 && await protectedIdeas.getByText(traceMarkup, { exact: true }).count() === 0 &&
+    await ideaNote('1').locator('[data-idea-trace]').evaluate(el => el === document.activeElement));
+  traceStatus = 404;
+  await ideaNote('5').locator('[data-idea-trace]').click();
+  await ideaTrace.getByText('Aucune origine n’a été enregistrée pour ce dépôt.').waitFor();
+  check('legacy idea trace shows an unavailable state with no author', await ideaTrace.locator('dd').count() === 0);
+  traceStatus = 200;
+  await ideaNote('1').locator('[data-idea-trace]').click();
+  await ideaTrace.getByText(traceMarkup, { exact: true }).waitFor();
   await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
   await protectedIdeas.locator('#idea-title').fill('Do not retain this draft');
-  ideasViewer = '4'.repeat(64); canPostIdeas = false; ideaItems = [];
+  ideasViewer = '4'.repeat(64); canPostIdeas = false; canTraceIdeas = false; ideaItems = [];
   await scoped.clock.fastForward(20000);
   await protectedIdeas.getByText('Le mur est encore vide').waitFor();
   check('idea wall replaces the previous viewer projection and draft on revalidation',
     await protectedIdeas.locator('.idea-note').count() === 0 && !await protectedIdeas.locator('#ideas-compose').isVisible() &&
     await protectedIdeas.locator('#idea-title').inputValue() === '' &&
-    await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).count() === 0);
+    await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).count() === 0 &&
+    await protectedIdeas.getByText(traceMarkup, { exact: true }).count() === 0 && await ideaTrace.count() === 0);
   ideasStatus = 403;
   await scoped.clock.fastForward(20000);
   await scoped.locator('.ideas[data-ideas-state="denied"]').waitFor();
@@ -905,6 +964,7 @@ if (!process.env.E2E_BASE_URL) {
   await staticPage.keyboard.press('Escape');
   await staticPage.locator('#pilotPanel [data-ideas-open]').click();
   const demoIdeas = staticPage.locator('.ideas[data-ideas-state="ready"]');
+  if (visualDir) await staticPage.locator('#console').screenshot({ path: path.join(visualDir, 'ai-factory-coffee-board.png'), animations: 'disabled' });
   await demoIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
   await demoIdeas.locator('#idea-title').fill('Automatisation du relais 42');
   await demoIdeas.locator('#idea-text').fill('Rappel unique E2E. Un workflow pour transmettre les dossiers.');
@@ -916,6 +976,12 @@ if (!process.env.E2E_BASE_URL) {
     await demoIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible());
   await demoIdeas.locator('[data-idea-filter="security"]').click();
   check('unmatched idea filters offer a clear empty state', await demoIdeas.getByText('Aucun post-it correspondant').isVisible());
+  await demoIdeas.locator('#ideas-search').fill('');
+  await demoIdeas.locator('[data-idea-filter="finance"]').click();
+  check('demo illustrates a Finance topic with Operations provenance and never exposes trace',
+    await demoIdeas.getByRole('heading', { name: 'Mesurer l’impact financier des incidents' }).isVisible() &&
+    await demoIdeas.getByRole('button', { name: 'BU · Opérations' }).isVisible() &&
+    await demoIdeas.locator('[data-idea-trace]').count() === 0);
   await staticPage.keyboard.press('Escape');
   await staticPage.locator('#pilotPanel [data-ideas-open]').click();
   check('the posted demo idea survives reopening the wall', await demoIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible());
@@ -993,7 +1059,7 @@ if (!process.env.E2E_BASE_URL) {
   check('mobile idea wall retains browser-local notes and has no horizontal overflow', await mobileIdeas.isVisible() &&
     await mobileIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible() &&
     await mobileIdeas.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
-  if (visualDir) await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-coffee-mobile.png'), animations: 'disabled' });
+  if (visualDir) await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-coffee-board-mobile.png'), animations: 'disabled' });
   await mobile.close();
 }
 
