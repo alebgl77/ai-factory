@@ -20,12 +20,14 @@ from .adapters import OpportunityEvent, normalize_opportunity_event
 from .algorithms import MatchResult, ModelRoute, RoutePolicy, match_customer, review_priority, select_route
 from .connector import DraftConnector, validate_connector, write_and_verify
 from .crm import CRM_CONFLICT, CRMBlockedOpportunity, CRMError, validate_source
-from .cyberlog import append_event
+from .cyberlog import append_event, journal_enabled
 from .identity import ASSESSMENT, READ, Actor, WorkActor
 from .store import Store, WorkbenchError
 
 WORKSPACE = "demo"
 _SIMULATED_CRM_SOURCE = "crm-sim"
+_PORTFOLIO_SOURCE = "portfolio-review"
+_PORTFOLIO_SUBJECT = re.compile(r"portfolio/[0-9a-f]{32}/[1-9][0-9]{0,9}")
 _WORKSPACE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _SUBJECT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -34,6 +36,11 @@ _PROVENANCE_KEYS = frozenset({"issuer", "channel", "identity", "request_id", "pr
 _CASE_VISIBLE = (
     "(? OR (source <> 'sdk-review' AND json_type(record, '$.profile') IS NULL "
     "AND json_type(record, '$.private') IS NULL))"
+)
+_PORTFOLIO_CASE = (
+    "source = 'portfolio-review' AND json_extract(record, '$.source') = 'portfolio-review' "
+    "AND json_type(record, '$.action') = 'null' AND json_extract(record, '$.private') = 1 "
+    "AND json_extract(record, '$.kind') = 'strategic'"
 )
 APPROVAL_LIFETIME = dt.timedelta(days=7)
 DEMO_EVENT_ID = "demo-event-042"
@@ -184,18 +191,23 @@ class Workbench:
                  defer_execution: bool = False, cyber_audit: bool = False) -> None:
         if not isinstance(workspace, str) or not _WORKSPACE_ID.fullmatch(workspace):
             raise ValueError("invalid workspace")
-        if mode not in {"demo", "protected_demo"}:
+        if mode not in {"demo", "protected_demo", "portfolio"}:
             raise ValueError("invalid workbench mode")
-        if not isinstance(crm_source, str) or not _SUBJECT.fullmatch(crm_source):
+        if (not isinstance(crm_source, str) or not _SUBJECT.fullmatch(crm_source)
+                or crm_source == _PORTFOLIO_SOURCE):
             raise ValueError("invalid CRM source")
         try:
             if isinstance(crm_sources, (str, bytes)):
                 raise ValueError
             trusted_sources = frozenset(validate_source(source) for source in crm_sources)
-            if crm_source in trusted_sources:
+            if crm_source in trusted_sources or _PORTFOLIO_SOURCE in trusted_sources:
                 raise ValueError
         except (CRMError, TypeError, ValueError):
             raise ValueError("invalid trusted CRM sources") from None
+        if mode == "portfolio" and (advisor is not None or connector is not None or trusted_sources):
+            raise ValueError("portfolio Workbench only supports non-executable reviews")
+        if mode == "portfolio" and cyber_audit is not True:
+            raise ValueError("portfolio Workbench requires the security journal")
         self._workspace = workspace
         self._connector = connector
         self._target = validate_connector(connector) if connector is not None else "sandbox-erp"
@@ -231,7 +243,7 @@ class Workbench:
         return self.clock().astimezone(dt.timezone.utc).isoformat()
 
     def _requires_authentication(self) -> bool:
-        return (self.mode == "protected_demo" or self.workspace != WORKSPACE or self._connector is not None
+        return (self.mode != "demo" or self.workspace != WORKSPACE or self._connector is not None
                 or bool(self._crm_sources))
 
     def check_access(self, actor: WorkActor) -> None:
@@ -242,9 +254,23 @@ class Workbench:
 
     def capabilities(self, actor: WorkActor) -> dict[str, bool | str]:
         self.check_access(actor)
-        return {"can_submit": bool(actor.roles & SUBMIT_ROLES),
+        return {"can_submit": self.mode != "portfolio" and bool(actor.roles & SUBMIT_ROLES),
                 "can_decide": bool(actor.role_for(ASSESSMENT)),
-                "chat_source": "local" if self.advisor is not None else "simulation"}
+                "chat_source": "disabled" if self.mode == "portfolio" else
+                "local" if self.advisor is not None else "simulation"}
+
+    def _exclude_portfolio_mode(self) -> None:
+        if self.mode == "portfolio":
+            raise WorkbenchError("workbench_surface_disabled", 404)
+
+    def _require_portfolio_journal(self, connection: sqlite3.Connection) -> None:
+        if self.mode == "portfolio" and not journal_enabled(connection):
+            raise WorkbenchError("portfolio_security_journal_required", 503)
+
+    def _visible_cases(self) -> str:
+        if self.mode == "portfolio":
+            return f"(? AND {_PORTFOLIO_CASE})"
+        return f"({_CASE_VISIBLE} AND source <> 'portfolio-review')"
 
     @staticmethod
     def _owns(record: dict[str, Any], actor: WorkActor) -> bool:
@@ -288,14 +314,15 @@ class Workbench:
         if type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError("limit must be between 1 and 200")
         now = self.clock()
-        transaction = self.store.read_existing() if existing_only else self.store.transaction(write=False)
+        transaction = (self.store.read_existing() if existing_only or self.mode == "portfolio"
+                       else self.store.transaction(write=False))
         with transaction as connection:
             if connection is None:
                 return []
             connection.create_function("review_priority", 1, lambda raw: self._priority(json.loads(raw), now),
                                        deterministic=True)
             rows = connection.execute(
-                f"""SELECT record FROM cases WHERE {_CASE_VISIBLE}
+                f"""SELECT record FROM cases WHERE {self._visible_cases()}
                     ORDER BY CASE WHEN status IN ('waiting_review','applying') THEN 0 ELSE 1 END,
                              review_priority(record) DESC, json_extract(record,'$.created_at'), id
                     LIMIT ?""",
@@ -303,10 +330,9 @@ class Workbench:
             ).fetchall()
         return [self._public(json.loads(row["record"]), actor, now) for row in rows]
 
-    @staticmethod
-    def _load_visible_case(connection: sqlite3.Connection, case_id: str, actor: WorkActor) -> dict[str, Any]:
+    def _load_visible_case(self, connection: sqlite3.Connection, case_id: str, actor: WorkActor) -> dict[str, Any]:
         row = connection.execute(
-            f"SELECT record FROM cases WHERE id = ? AND {_CASE_VISIBLE}", (case_id, actor.authenticated),
+            f"SELECT record FROM cases WHERE id = ? AND {self._visible_cases()}", (case_id, actor.authenticated),
         ).fetchone()
         if row is None:
             raise WorkbenchError("case_not_found", 404)
@@ -327,7 +353,8 @@ class Workbench:
 
     def get_case(self, case_id: str, actor: WorkActor, *, existing_only: bool = False) -> dict[str, Any]:
         self.check_access(actor)
-        transaction = self.store.read_existing() if existing_only else self.store.transaction(write=False)
+        transaction = (self.store.read_existing() if existing_only or self.mode == "portfolio"
+                       else self.store.transaction(write=False))
         with transaction as connection:
             if connection is None:
                 raise WorkbenchError("case_not_found", 404)
@@ -337,7 +364,8 @@ class Workbench:
     def _new_case(self, *, case_id: str, source: str, subject: str, title: str, kind: str,
                   reason: str, evidence: list[str], actor: WorkActor, action: dict | None = None,
                   revision: int = 1, record_version: int = 0, source_payload_hash: str = "",
-                  profile: dict[str, str] | None = None, private: bool = False) -> dict:
+                  profile: dict[str, str] | None = None, private: bool = False,
+                  proposer_ids: tuple[str, ...] | None = None) -> dict:
         private = private or self._requires_authentication()
         now = self.clock().astimezone(dt.timezone.utc)
         expires_at = (now + APPROVAL_LIFETIME).isoformat() if action else None
@@ -352,7 +380,8 @@ class Workbench:
         record = {"id": case_id, "source": source, "subject": subject, "title": title, "kind": kind,
                   "status": "waiting_review", "revision": revision, "record_version": record_version,
                   "proposal_hash": digest(proposal), "source_payload_hash": source_payload_hash,
-                  "proposer_ids": sorted(actor.ids), "reason": reason, "action": action, "evidence": evidence,
+                  "proposer_ids": sorted(actor.ids if proposer_ids is None else proposer_ids),
+                  "reason": reason, "action": action, "evidence": evidence,
                   "receipt": None, "decision": None, "created_at": now.isoformat(), "expires_at": expires_at}
         if profile is not None:
             record["profile"] = profile
@@ -363,6 +392,7 @@ class Workbench:
     def propose_review(self, actor: WorkActor, *, subject: str, title: str, kind: str, reason: str,
                        evidence: list[str], profile: dict[str, str] | None = None) -> dict[str, Any]:
         """Open or revise a bounded, non-executable review in the current workspace."""
+        self._exclude_portfolio_mode()
         self.check_access(actor)
         if not actor.authenticated or not actor.ids:
             raise WorkbenchError("authentication_required", 401)
@@ -399,6 +429,65 @@ class Workbench:
             )
             self._save_proposal(connection, record, actor, previous=previous)
         return self._public(record, actor)
+
+    def _ensure_portfolio_review(self, *, subject: str, title: str, reason: str, evidence: list[str],
+                                 exclusions: tuple[str, ...]) -> tuple[str, int, str]:
+        """Replay a trusted outbox entry without ever revising its proposal."""
+        if self.mode != "portfolio" or not _PORTFOLIO_SUBJECT.fullmatch(subject) or not exclusions:
+            raise WorkbenchError("invalid_portfolio_review", 422)
+        proposer = Actor("portfolio-outbox", frozenset({"editor"}), authenticated=True)
+        fingerprint = digest([title, reason, evidence, list(exclusions)])
+        with self.store.transaction() as connection:
+            self._require_portfolio_journal(connection)
+            row = connection.execute(
+                "SELECT record FROM cases WHERE source = ? AND subject = ?", (_PORTFOLIO_SOURCE, subject),
+            ).fetchone()
+            if row:
+                record = json.loads(row["record"])
+                if (record["source_payload_hash"] != fingerprint or record["revision"] != 1
+                        or record["proposer_ids"] != sorted(exclusions)
+                        or not self._portfolio_review_matches(record, subject)):
+                    raise WorkbenchError("portfolio_review_conflict", 409)
+            else:
+                record = self._new_case(
+                    case_id=uuid.uuid4().hex, source=_PORTFOLIO_SOURCE, subject=subject,
+                    title=title, kind="strategic", reason=reason, evidence=evidence, actor=proposer,
+                    source_payload_hash=fingerprint, private=True, proposer_ids=exclusions,
+                )
+                self._save_proposal(connection, record, proposer)
+        return record["id"], record["revision"], record["proposal_hash"]
+
+    @staticmethod
+    def _portfolio_review_matches(record: dict[str, Any], subject: str) -> bool:
+        return (record.get("source") == _PORTFOLIO_SOURCE and record.get("subject") == subject
+                and record.get("private") is True and "action" in record and record["action"] is None
+                and record.get("kind") == "strategic")
+
+    def _portfolio_receipt(self, subject: str, case_id: str, revision: int,
+                           proposal_hash: str) -> tuple[str, str] | None:
+        """Resolve only a committed decision for the currently bound review."""
+        if self.mode != "portfolio":
+            return None
+        with self.store.read_existing() as connection:
+            if connection is None:
+                return None
+            self._require_portfolio_journal(connection)
+            row = connection.execute(
+                f"""SELECT c.record, d.decision, d.created_at FROM cases c
+                    JOIN decisions d ON d.case_id = c.id
+                    WHERE c.id = ? AND {_PORTFOLIO_CASE} AND d.revision = ? AND d.proposal_hash = ?""",
+                (case_id, revision, proposal_hash),
+            ).fetchone()
+            if row is None:
+                return None
+            record = json.loads(row["record"])
+            outcome = row["decision"]
+            expected = {"approve": "decided", "reject": "rejected", "request_changes": "changes_requested"}
+            if (not self._portfolio_review_matches(record, subject) or record["id"] != case_id
+                    or record["revision"] != revision or record["proposal_hash"] != proposal_hash
+                    or outcome not in expected or record["decision"] != outcome or record["status"] != expected[outcome]):
+                return None
+            return outcome, row["created_at"]
 
     def _save_proposal(self, connection: sqlite3.Connection, record: dict[str, Any], actor: WorkActor, *,
                        previous: dict[str, Any] | None = None, blocked_reason: str | None = None) -> None:
@@ -450,6 +539,7 @@ class Workbench:
 
     def _submit(self, payload: dict[str, Any], actor: WorkActor, *, seed: bool,
                 profile: dict[str, str] | None = None) -> dict[str, Any]:
+        self._exclude_portfolio_mode()
         self.check_access(actor)
         if not actor.roles & SUBMIT_ROLES:
             raise WorkbenchError("forbidden", 403)
@@ -494,6 +584,7 @@ class Workbench:
 
     def _check_crm_ingestion(self, source: str, actor: WorkActor, *,
                              profile: dict[str, str] | None) -> dict[str, str] | None:
+        self._exclude_portfolio_mode()
         self.check_access(actor)
         if not actor.authenticated or not actor.ids:
             raise WorkbenchError("authentication_required", 401)
@@ -617,9 +708,12 @@ class Workbench:
             raise WorkbenchError("invalid_decision", 422)
         _check_utf8(rationale)
         proof = _approval_proof(provenance)
+        if proof is not None and self.mode == "portfolio":
+            raise WorkbenchError("workbench_surface_disabled", 404)
         recorded = False
         with self.store.transaction() as connection:
             record = self._load_visible_case(connection, case_id, actor)
+            self._require_portfolio_journal(connection)
             if revision != record["revision"] or proposal_hash != record["proposal_hash"]:
                 raise WorkbenchError("stale_proposal", 409)
             if record.get("crm_reconciliation_required"):
@@ -629,7 +723,7 @@ class Workbench:
             if (decision == "approve" and record["status"] in QUEUE_STATES and record["action"] is not None
                     and not self._allows_draft_source(record["source"])):
                 raise WorkbenchError("simulated_crm_requires_sandbox", 409)
-            if decision == "approve" and self._owns(record, actor):
+            if (decision == "approve" or self.mode == "portfolio") and self._owns(record, actor):
                 raise WorkbenchError("self_approval_forbidden", 403)
             if proof is not None:
                 expires = dt.datetime.fromisoformat(proof["expires_at"])
@@ -691,6 +785,7 @@ class Workbench:
 
     def pending_execution_ids(self, limit: int = 100) -> list[str]:
         """Bounded queue for a trusted host worker after a restart."""
+        self._exclude_portfolio_mode()
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
             raise ValueError("limit must be between 1 and 1000")
         with self.store.transaction(write=False) as connection:
@@ -702,6 +797,7 @@ class Workbench:
 
     def reconcile_pending(self, case_id: str) -> dict[str, Any]:
         """Trusted host recovery. Resume only a stored, exact, previously approved draft."""
+        self._exclude_portfolio_mode()
         with self.store.transaction(write=False) as connection:
             record = self.store.load_case(connection, case_id)
             if record.get("crm_reconciliation_required"):
@@ -805,6 +901,7 @@ class Workbench:
         return current
 
     def feedback(self, case_id: str, actor: WorkActor, *, rating: str, comment: str) -> None:
+        self._exclude_portfolio_mode()
         self.check_access(actor)
         if rating not in FEEDBACK or len(comment) > 1000:
             raise WorkbenchError("invalid_feedback", 422)
@@ -821,7 +918,10 @@ class Workbench:
     def history(self, case_id: str, actor: WorkActor) -> dict[str, Any]:
         """Decision evidence plus feedback summaries scoped to the sandbox workspace."""
         self.check_access(actor)
-        with self.store.transaction(write=False) as connection:
+        transaction = self.store.read_existing() if self.mode == "portfolio" else self.store.transaction(write=False)
+        with transaction as connection:
+            if connection is None:
+                raise WorkbenchError("case_not_found", 404)
             record = self._load_visible_case(connection, case_id, actor)
             decisions = [dict(row) for row in connection.execute(
                 """SELECT d.revision, d.proposal_hash, d.actor, d.decision, d.rationale, d.created_at,
@@ -868,7 +968,7 @@ class Workbench:
         return record
 
     def seed(self) -> None:
-        if (self._seeded or self.workspace != WORKSPACE or self._connector is not None
+        if (self.mode == "portfolio" or self._seeded or self.workspace != WORKSPACE or self._connector is not None
                 or self._crm_source != _SIMULATED_CRM_SOURCE or self._crm_sources):
             return
         with self._seed_lock:
@@ -892,6 +992,7 @@ class Workbench:
 
     def chat(self, actor: WorkActor, *, agent: str, message: str, case_id: str | None = None,
              _on_advice: AdvisorObserver | None = None) -> dict[str, Any]:
+        self._exclude_portfolio_mode()
         self.check_access(actor)
         message = message.strip()
         if agent not in AGENTS or not message or len(message) > 1000:

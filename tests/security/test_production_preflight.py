@@ -77,6 +77,16 @@ def test_valid_private_hostname_and_explicit_public_edge_bind(valid_config):
     assert production_errors(valid_config) == []
 
 
+def test_production_allows_only_protected_portfolio_reviews(valid_config):
+    api = valid_config["services"]["api"]["environment"]
+    api["FACTORY_WORKBENCH_MODE"] = "portfolio"
+    assert any("FACTORY_WORKBENCH_CYBER_AUDIT" in error for error in production_errors(valid_config))
+    api["FACTORY_WORKBENCH_CYBER_AUDIT"] = "on"
+    assert production_errors(valid_config) == []
+    api["FACTORY_WORKBENCH_CHAT_MODE"] = "local"
+    assert any("Workbench chat disabled" in error for error in production_errors(valid_config))
+
+
 @pytest.mark.parametrize(("service", "key", "value", "label"), [
     ("edge", "FACTORY_HOST", "localhost", "FACTORY_HOST"),
     ("edge", "FACTORY_HOST", "demo.test", "FACTORY_HOST"),
@@ -145,6 +155,21 @@ def test_policy_mounts_must_be_read_only_and_unambiguous(valid_config):
     mounts.append(mounts[0].copy())
     errors = "\n".join(production_errors(valid_config))
     assert "FACTORY_BU_POLICY" in errors and "FACTORY_GATEWAY_POLICY" in errors
+
+
+def test_portfolio_runner_requires_read_only_binding_and_single_internal_api(valid_config):
+    api = valid_config["services"]["api"]
+    target = "/run/secrets/factory_portfolio_runner"
+    api["environment"].update(FACTORY_PORTFOLIO_RUNNER_FILE=target, LITELLM_URL="http://litellm:4000")
+    assert any("runner binding file" in error for error in production_errors(valid_config))
+    api["volumes"].append({"type": "bind", "source": "/operator/private-runner.json",
+                           "target": target, "read_only": True})
+    assert production_errors(valid_config) == []
+    api["deploy"] = {"replicas": 2}
+    assert any("one API replica" in error for error in production_errors(valid_config))
+    api["deploy"] = {"replicas": 1}
+    api["environment"]["LITELLM_URL"] = "https://untrusted.example"
+    assert any("internal LiteLLM origin" in error for error in production_errors(valid_config))
 
 
 def test_rejects_unintended_bindings(valid_config):

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+# Opt-in overlay. Keep the operator-owned secret outside the repository,
+# readable only by the API's container user and mounted read-only.
+services:
+  api:
+    environment:
+      FACTORY_PORTFOLIO_RUNNER_FILE: /run/secrets/factory_portfolio_runner
+    volumes:
+      - type: bind
+        source: ${FACTORY_PORTFOLIO_RUNNER_SOURCE:?set an absolute path to the private runner file}
+        target: /run/secrets/factory_portfolio_runner
+        read_only: true
+        bind:
+          create_host_path: false

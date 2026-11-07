@@ -29,3 +29,24 @@ shadow_teams:
   cc-rh: [human-resources]
   cc-finance: [finance]
   cc-relation: [customer-relations, marketing]
+
+# Optional portfolio grants. Add each of these groups to `groups` above
+# with [cc-ops] and to FACTORY_ROLE_MAP with the viewer role before enabling.
+# portfolio_roles:
+#   bu-ops-project-leads: [project_lead]
+#   bu-ops-managers: [manager]
+#   bu-ops-architects: [architect]
+#
+# Use a stable service subject from the identity proxy. Its dedicated viewer
+# group must also grant the BU of the agent's configured use case.
+# portfolio_agents:
+#   example-oidc-doc-agent: ag-doc-research
+#
+# Each unspecified mode requires a manager to authorize the agent's start.
+# Sensitive preparation stops at a Workbench handoff status. Existing Workbench
+# permissions and approval rules apply separately to any external action.
+# portfolio_autonomy:
+#   cc-ops:
+#     read_only: autonomous
+#     prepare: human_review
+#     sensitive: blocked

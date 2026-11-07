@@ -5,11 +5,14 @@ Run: ``uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log``
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import html
 import json
 import logging
 import secrets
+from collections.abc import Awaitable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable
 from urllib.parse import parse_qs
@@ -24,6 +27,9 @@ from . import metrics as metrics_mod
 from . import seclog
 from .activity import ActivityJournal, router as activity_router
 from .i18n import DEFAULT_LANG, msg, normalize_lang
+from .portfolio import router as portfolio_router
+from .portfolio_runner import POLL_SECONDS, PortfolioEngine
+from .portfolio_store import PortfolioStore
 from .routers import audit, core, grafana, placement, registry, spaces, workbench
 from .routers.shadow_ai import router as shadow_ai_router
 from .security import READ, Access, SecurityDenied, SecurityMiddleware, require
@@ -127,8 +133,40 @@ window.ui = SwaggerUIBundle({{url: {json.dumps(openapi_url)}, dom_id: "#swagger-
     return page, csp
 
 
+async def _portfolio_loop(tick: Callable[[], Awaitable[object]], event: str) -> None:
+    while True:
+        try:
+            await tick()
+        except Exception:
+            # Provider errors, database messages and task bodies can include private content.
+            seclog.emit(seclog.API_LOGGER, event, logging.ERROR)
+        await asyncio.sleep(POLL_SECONDS)
+
+
+@asynccontextmanager
+async def _portfolio_lifespan(app: FastAPI):
+    jobs = []
+    engine = getattr(app.state, "portfolio_engine", None)
+    if engine is not None:
+        jobs.append(asyncio.create_task(_portfolio_loop(engine.run_once, "portfolio.runner_tick_failed")))
+    if app.state.settings.workbench_mode == "portfolio":
+        from .portfolio_workbench import reconcile_portfolio_reviews
+
+        async def reconcile():
+            return await asyncio.to_thread(reconcile_portfolio_reviews, app)
+
+        jobs.append(asyncio.create_task(_portfolio_loop(reconcile, "portfolio.workbench_tick_failed")))
+    try:
+        yield
+    finally:
+        for job in jobs:
+            job.cancel()
+        await asyncio.gather(*jobs, return_exceptions=True)
+
+
 def create_app(settings: Settings | None = None, transport: httpx.BaseTransport | None = None,
-               clock: Callable[[], dt.datetime] | None = None) -> FastAPI:
+               clock: Callable[[], dt.datetime] | None = None, *,
+               portfolio_runner_transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     seclog.protect_uvicorn_errors()
     app = FastAPI(
@@ -141,6 +179,7 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
         redoc_url=None,
         openapi_url=None,    # served below, behind the read permission
         license_info={"name": "MIT", "identifier": "MIT"},
+        lifespan=_portfolio_lifespan,
     )
     service = FactoryService(settings, transport=transport, clock=clock)
     app.state.service = service
@@ -174,6 +213,19 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
         app.include_router(activity_router)
     if service.bu_policy is not None:
         app.include_router(spaces.recovery_router)
+        if settings.auth_mode == "proxy":
+            app.state.portfolio = PortfolioStore(settings.state_dir, clock=clock)
+            # The BU policy loads at startup. A new API instance must never
+            # accept an earlier pending grant, even after a policy rollback.
+            app.state.portfolio_grant_generation = f"{service.bu_policy.fingerprint}:{secrets.token_hex(32)}"
+            app.include_router(portfolio_router)
+    if settings.portfolio_runner_file:
+        if not hasattr(app.state, "portfolio"):
+            raise ValueError("Portfolio runner requires the authenticated portfolio")
+        app.state.portfolio_engine = PortfolioEngine(
+            service, app.state.portfolio, app.state.portfolio_grant_generation,
+            transport=portfolio_runner_transport,
+        )
     if settings.workbench_mode != "off":
         advisor = None
         if settings.workbench_chat_mode == "local":
@@ -183,6 +235,7 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
             Path(settings.state_dir) / f"workbench-{settings.workbench_mode}.sqlite3",
             settings.workbench_mode, clock=clock, advisor=advisor,
             cyber_audit=settings.workbench_cyber_audit == "on",
+            workspace="factory-portfolio" if settings.workbench_mode == "portfolio" else "demo",
         )
         app.include_router(workbench.router)
 

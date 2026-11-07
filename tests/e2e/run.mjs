@@ -212,6 +212,7 @@ if (!process.env.E2E_BASE_URL) {
   check('offline FR switch restores the French registry', await page.evaluate(() => window.__twin.UC['uc-04'].name) === frenchName);
 
   const fixtures = await page.evaluate(() => Object.fromEntries(['en', 'fr'].map(lang => [lang, JSON.parse(document.getElementById(`demo-snapshot-${lang}`).textContent)])));
+  const portfolioFixture = await page.evaluate(() => window.FactoryPortfolio.demo('fr'));
   await page.close();
   const html = fs.readFileSync(dashboardPath, 'utf8');
   const mock = await ctx.newPage();
@@ -235,6 +236,10 @@ if (!process.env.E2E_BASE_URL) {
   let workbenchRevision = 7, workbenchDecision = 'waiting', workbenchStatus = 200;
   const workbenchRequests = [];
   const activityRequests = [];
+  const portfolioRequests = [];
+  let portfolioStatus = 200, portfolioConflict = false, portfolioRole = 'manager';
+  let workbenchOutcome = null;
+  const portfolioId = n => n.toString(16).padStart(32, '0');
   const activityDay = Math.floor(Date.now() / 86400000) * 86400000;
   const activityTime = (age, hour = 0) => new Date(activityDay - age * 86400000 + hour * 3600000).toISOString();
   const activityEntry = (id, actor_type, actor_id, user_id, started_at, finished_at, duration_ms, tokens) => ({
@@ -307,6 +312,26 @@ if (!process.env.E2E_BASE_URL) {
       const reply = { json: { events: activityEmpty ? [] : view === 'all' ? [...activityOwn, activityExtra] : activityOwn,
         truncated: view === 'all', since: activityTime(days - 1), until: activityTime(0, 12), view: activityViewer, can_view_all: activityAllAllowed } };
       return days === 30 && holdActivity ? holdActivity.then(() => route.fulfill(reply)) : route.fulfill(reply);
+    }
+    if (url.pathname.startsWith('/api/v1/portfolio')) {
+      const method = route.request().method();
+      portfolioRequests.push({ method, path: url.pathname, body: method === 'POST' ? route.request().postDataJSON() : null });
+      if (portfolioStatus !== 200) return route.fulfill({ status: portfolioStatus, json: {} });
+      if (method !== 'GET') return route.fulfill({ status: portfolioConflict ? 409 : 200, json: {} });
+      const data = structuredClone(portfolioFixture);
+      data.tasks = data.tasks.filter(row => row.unit === 'delivery');
+      if (workbenchOutcome) {
+        const handoff = data.tasks.find(row => row.id === portfolioId(23));
+        handoff.status = workbenchOutcome === 'waiting' ? 'workbench' : 'done';
+        if (workbenchOutcome === 'approve') {
+          handoff.revision += 1;
+          handoff.workbench_decision = { outcome: 'approve', at: '2026-11-07T12:30:00+00:00' };
+        }
+      }
+      data.projects = data.projects.filter(project => data.tasks.some(task => task.project_id === project.id));
+      data.goals = data.goals.filter(goal => data.projects.some(project => project.goal_id === goal.id));
+      data.capabilities = { ...data.capabilities, global_admin: false, roles_by_unit: { delivery: [portfolioRole] } };
+      return route.fulfill({ json: data });
     }
     if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
       assessmentCalls.push(route.request().postDataJSON());
@@ -561,6 +586,62 @@ if (!process.env.E2E_BASE_URL) {
     await ledger.locator('[data-track="duration"] .activity-tick').count() === 90 && activityRequests.every(req => req.method === 'GET'));
   await scoped.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
   check('pagehide removes protected records before a document can enter browser history', await ledger.count() === 0);
+  await scoped.locator('#pilotPanel [data-portfolio-open]').click();
+  const protectedPortfolio = scoped.locator('.portfolio[data-portfolio-state="ready"]');
+  await protectedPortfolio.waitFor();
+  const planTask = (screen, number) => screen.locator(`[data-portfolio-choice="task:${portfolioId(number)}"]`);
+  await planTask(protectedPortfolio, 22).click();
+  check('protected portfolio renders only scoped work and a BU manager sees assignment without planning or execution',
+    await protectedPortfolio.getByRole('button', { name: 'Attribuer', exact: true }).isVisible() &&
+    await protectedPortfolio.getByRole('button', { name: 'Nouvelle tâche', exact: true }).count() === 0 &&
+    await protectedPortfolio.getByRole('button', { name: 'Démarrer', exact: true }).count() === 0 &&
+    !((await protectedPortfolio.textContent()).includes('Configurer l’indexation')));
+  portfolioConflict = true;
+  await protectedPortfolio.getByRole('button', { name: 'Attribuer', exact: true }).click();
+  await protectedPortfolio.locator('[data-portfolio-field="assignee"]').selectOption('employee:camille');
+  await protectedPortfolio.getByRole('button', { name: 'Confirmer', exact: true }).click();
+  await protectedPortfolio.getByText('Cette révision a changé.', { exact: false }).waitFor();
+  const portfolioWrite = portfolioRequests.find(request => request.method === 'POST');
+  check('portfolio conflicts use the exact revision and reload the authorized projection',
+    portfolioWrite?.path === `/api/v1/portfolio/tasks/${portfolioId(22)}/commands` &&
+    portfolioWrite.body?.revision === 1 && portfolioWrite.body?.assignee?.id === 'camille' &&
+    portfolioRequests.at(-1)?.method === 'GET' && await protectedPortfolio.locator('[data-portfolio-form]').count() === 0);
+  portfolioConflict = false;
+  await planTask(protectedPortfolio, 21).click();
+  await protectedPortfolio.locator(`[data-portfolio-action="command:delegate:${portfolioId(21)}"]`).click();
+  await protectedPortfolio.locator('[data-portfolio-field="title"]').fill('Sous-tâche à identifiant serveur');
+  await protectedPortfolio.locator('[data-portfolio-field="mode"]').selectOption('automatic');
+  await protectedPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  await protectedPortfolio.getByText('Modification consignée.', { exact: true }).waitFor();
+  const delegateWrite = portfolioRequests.find(request => request.path.endsWith('/subagents'));
+  portfolioRole = 'project_lead';
+  await scoped.clock.fastForward(20000);
+  await protectedPortfolio.getByRole('button', { name: 'Nouvelle tâche', exact: true }).click();
+  await protectedPortfolio.locator('[data-portfolio-field="title"]').fill('Tâche à identifiant serveur');
+  await protectedPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  await protectedPortfolio.getByText('Modification consignée.', { exact: true }).waitFor();
+  const taskWrite = portfolioRequests.find(request => request.path === '/api/v1/portfolio/tasks');
+  check('protected task and subagent creation leave identifiers to the server',
+    delegateWrite?.body?.revision === 1 && delegateWrite.body.mode === 'automatic' && delegateWrite.body.description === '' && !Object.hasOwn(delegateWrite.body, 'id') &&
+    taskWrite?.body?.unit === 'delivery' && !Object.hasOwn(taskWrite.body, 'id'));
+  workbenchOutcome = 'waiting';
+  await scoped.clock.fastForward(20000);
+  await planTask(protectedPortfolio, 23).click();
+  const decisionDetail = protectedPortfolio.locator('[data-portfolio-detail]');
+  await decisionDetail.getByRole('link', { name: 'Ouvrir Companion' }).waitFor();
+  workbenchOutcome = 'approve';
+  await scoped.clock.fastForward(20000);
+  await decisionDetail.getByText('Dernière décision Workbench', { exact: true }).waitFor();
+  check('exact Workbench outcome refreshes the selected task and retains drawer focus',
+    (await decisionDetail.textContent()).includes('Approuvée') &&
+    await decisionDetail.getByRole('link', { name: 'Ouvrir Companion' }).count() === 0 &&
+    await decisionDetail.evaluate(node => node === document.activeElement));
+  portfolioStatus = 403;
+  await scoped.clock.fastForward(20000);
+  await scoped.locator('.portfolio[data-portfolio-state="blocked"]').waitFor();
+  check('portfolio downgrade clears all previously rendered tasks and controls',
+    await scoped.locator('.portfolio-task').count() === 0 && await scoped.locator('[data-portfolio-form]').count() === 0);
+  await scoped.keyboard.press('Escape');
   await scoped.locator('#tabSpaces').click();
   await scoped.locator('#spacePanel button[data-res="D1"]').click();
   check('protected scheduling presents only its authorized case and verified booking identity',
@@ -582,6 +663,7 @@ if (!process.env.E2E_BASE_URL) {
   const shadowCallsBeforeStatic = shadowReads;
   const workbenchCallsBeforeStatic = workbenchRequests.length;
   const activityCallsBeforeStatic = activityRequests.length;
+  const portfolioCallsBeforeStatic = portfolioRequests.length;
   const staticPage = await ctx.newPage();
   const portraitScriptReads = [];
   staticPage.on('request', request => {
@@ -690,10 +772,75 @@ if (!process.env.E2E_BASE_URL) {
     await demoActivity.locator('[data-activity-filter="subject"] option').count() === 3 &&
     await demoActivity.locator('[data-activity-filter="scope"]').count() === 0);
   await staticPage.keyboard.press('Escape');
+  await staticPage.locator('#pilotPanel [data-portfolio-open]').click();
+  const demoPortfolio = staticPage.locator('.portfolio[data-portfolio-state="demo"]');
+  await demoPortfolio.waitFor();
+  const group = demoPortfolio.locator(`[data-portfolio-parent="${portfolioId(21)}"]`);
+  check('static portfolio relates objectives, projects and BU tasks with collapsed delegated work',
+    await demoPortfolio.locator('.portfolio-card').count() === 4 && await group.locator('summary').isVisible() &&
+    await group.getAttribute('open') === null && (await group.locator('summary').textContent()).includes('720'));
+  await group.locator('summary').click();
+  await planTask(demoPortfolio, 21).click();
+  for (const mode of ['manual', 'automatic']) {
+    await demoPortfolio.locator(`[data-portfolio-action="command:delegate:${portfolioId(21)}"]`).click();
+    await demoPortfolio.locator('[data-portfolio-field="title"]').fill(`Demo subagent ${mode}`);
+    await demoPortfolio.locator('[data-portfolio-field="mode"]').selectOption(mode);
+    await demoPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+    await group.getByText(`Demo subagent ${mode}`, { exact: true }).waitFor();
+  }
+  check('demo supports both delegation modes, preserves the folded hierarchy and enforces four children',
+    await group.locator('.portfolio-task').count() === 4 && await group.getAttribute('open') !== null &&
+    await demoPortfolio.locator(`[data-portfolio-action="command:delegate:${portfolioId(21)}"]`).count() === 0);
+  await planTask(demoPortfolio, 26).click();
+  const demoCommand = action => demoPortfolio.locator(`[data-portfolio-action="command:${action}:${portfolioId(26)}"]`);
+  await demoCommand('assign').click();
+  await demoPortfolio.locator('[data-portfolio-field="assignee"]').selectOption('agent:platform-agent');
+  await demoPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  check('a human-review BU requires the manager to authorize an assigned agent before it can start',
+    await demoCommand('start').count() === 0 && await demoCommand('authorize_start').isVisible());
+  await demoCommand('authorize_start').click();
+  await demoCommand('start').click();
+  await demoCommand('report_usage').click();
+  await demoPortfolio.locator('[data-portfolio-field="input"]').fill('0');
+  await demoPortfolio.locator('[data-portfolio-field="output"]').fill('0');
+  await demoPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  check('an active agent can report a known zero token counter without closing its task',
+    await demoCommand('report_usage').isVisible() && /(?:0 reported tokens|0 tokens déclarés)/.test(await demoPortfolio.locator('[data-portfolio-detail]').textContent()));
+  await demoCommand('report_usage').click();
+  await demoPortfolio.locator('[data-portfolio-field="input"]').fill('12');
+  await demoPortfolio.locator('[data-portfolio-field="output"]').fill('3');
+  await demoPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  await demoCommand('submit').click();
+  await demoPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  check('a technical task reaches separate review and preserves its latest live cumulative tokens',
+    await demoCommand('approve').isVisible() && /(?:15 reported tokens|15 tokens déclarés)/.test(await demoPortfolio.locator('[data-portfolio-detail]').textContent()));
+  await demoCommand('approve').click();
+  check('architect approval closes the preparation task without an external action',
+    (await planTask(demoPortfolio, 26).locator('[data-status]').getAttribute('data-status')) === 'done');
+  const demoField = key => demoPortfolio.locator(`[data-portfolio-field="${key}"]`);
+  const demoConfirm = () => demoPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
+  await demoPortfolio.locator('[data-portfolio-action="edit:goals"]').click();
+  await demoField('title').fill('Demo central objective');
+  await demoField('metric').fill('Score');
+  await demoField('target').fill('99');
+  await demoConfirm();
+  await demoPortfolio.locator('.portfolio-card').filter({ hasText: 'Demo central objective' }).click();
+  await demoPortfolio.locator('[data-portfolio-action="edit:projects"]').click();
+  await demoField('title').fill('Demo linked project');
+  await demoConfirm();
+  const demoProject = demoPortfolio.locator('.portfolio-card').filter({ hasText: 'Demo linked project' });
+  await demoProject.click();
+  const demoProjectId = (await demoProject.getAttribute('data-portfolio-choice')).slice('project:'.length);
+  await demoPortfolio.locator(`[data-portfolio-action="edit:projects:${demoProjectId}"]`).click();
+  await demoField('state').selectOption('active');
+  await demoConfirm();
+  check('central planning creates a linked project and edits mutable fields only',
+    /(?:Active|Actif)/.test(await demoProject.textContent()) && (await demoProject.textContent()).includes('Demo central objective'));
+  await staticPage.keyboard.press('Escape');
   await staticPage.clock.fastForward(30000);
-  check('published static mode never requests snapshot, Observatory, Workbench or activity APIs',
+  check('published static mode never requests snapshot, Observatory, Workbench, activity or portfolio APIs',
     snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic && workbenchRequests.length === workbenchCallsBeforeStatic &&
-    activityRequests.length === activityCallsBeforeStatic);
+    activityRequests.length === activityCallsBeforeStatic && portfolioRequests.length === portfolioCallsBeforeStatic);
   await staticPage.evaluate(() => { document.documentElement.removeAttribute('data-static-demo'); });
   const nextLanguage = await staticPage.locator('#languageSelect').inputValue() === 'fr' ? 'en' : 'fr';
   await staticPage.locator('#languageSelect').selectOption(nextLanguage);
@@ -751,8 +898,27 @@ if (!process.env.E2E_BASE_URL) {
   check('mobile history fits the console and gives the chart a daily table alternative', await mobileActivity.isVisible() &&
     await mobileActivity.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth) &&
     await mobileActivity.locator('.activity-daily summary').isVisible());
+  await mobile.keyboard.press('Escape');
+  await mobile.locator('#pilotPanel [data-portfolio-open]').click();
+  const mobilePortfolio = mobile.locator('.portfolio[data-portfolio-state="demo"]');
+  check('mobile portfolio keeps its task board and delegation controls within the viewport', await mobilePortfolio.isVisible() &&
+    await mobilePortfolio.locator('.portfolio-board').isVisible() &&
+    await mobilePortfolio.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
   await mobile.close();
 }
+
+const guide = await ctx.newPage();
+await guide.goto(new URL('docs/index.html#sous-agents', base).href);
+const guideNav = guide.getByRole('navigation', { name: 'Sommaire' });
+const anchorsMatch = await guideNav.getByRole('link').evaluateAll(links => links.length > 0 && links.every(link =>
+  document.getElementById(link.hash.slice(1))));
+const engineCurrent = await guideNav.getByRole('link', { name: 'Moteur des sous-agents' }).getAttribute('aria-current');
+await guide.getByRole('searchbox', { name: 'Rechercher dans le guide' }).fill('execution se bloque');
+await guide.locator('#guide-results').getByRole('link', { name: 'Supervision et incidents' }).click();
+check('operations guide deep links and accent-insensitive search open the relevant runbook',
+  anchorsMatch && engineCurrent === 'location' && new URL(guide.url()).hash === '#supervision' &&
+  await guide.locator('#supervision details[open]').getByText('Une exécution se bloque ou expire').isVisible());
+await guide.close();
 
 await browser.close();
 const failed = results.filter(r => !r.ok);

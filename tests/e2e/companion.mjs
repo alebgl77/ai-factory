@@ -256,6 +256,33 @@ try {
   await protectedPage.locator('#workspace-notice').getByText(/WK-42 · The workspace could not complete this request/).waitFor();
   await checkNarrow(protectedPage);
 
+  const portfolio = await context.newPage();
+  await portfolio.setViewportSize({ width: 1440, height: 900 });
+  let portfolioCase = { ...caseFixture, title: 'Portfolio review', kind: 'strategic', action: null, revision: 1 };
+  let portfolioDecision = null;
+  await serve(portfolio, async (route, url) => {
+    if (url.pathname.endsWith('/cases')) return route.fulfill({ json: {
+      mode: 'portfolio', cases: [portfolioCase], capabilities: { can_decide: true, chat_source: 'disabled' }
+    } });
+    if (url.pathname.endsWith('/decisions')) {
+      portfolioDecision = route.request().postDataJSON();
+      portfolioCase = { ...portfolioCase, status: 'decided', decision: 'approve', can_decide: false };
+      return route.fulfill({ json: portfolioCase });
+    }
+    return route.fulfill({ status: 404 });
+  });
+  await portfolio.goto('https://factory.test/project/companion/index.html?lang=en');
+  await portfolio.getByText('Protected portfolio reviews').waitFor();
+  assert.equal(await portfolio.locator('#chat-tab').isVisible(), false);
+  assert.equal(await portfolio.locator('#feedback-form').isVisible(), false);
+  await portfolio.getByLabel('Reason for the decision').fill('Portfolio review approved.');
+  await portfolio.getByRole('button', { name: 'Approve', exact: true }).click();
+  await portfolio.locator('#case-status').getByText('Decided').waitFor();
+  assert.deepEqual(portfolioDecision, { decision: 'approve', revision: 1, proposal_hash: 'f'.repeat(64),
+    rationale: 'Portfolio review approved.' });
+  assert.equal(await portfolio.locator('#receipt').isVisible(), false);
+  await portfolio.close();
+
   const applying = { ...caseFixture, status: 'applying', decision_rationale: 'Reason for the submitted proposal.' };
   const executed = { ...caseFixture, status: 'executed', receipt: { id: 'ERP-DRAFT-RACE' }, can_decide: false };
   const held = { ...applying, reconciliation_required: true, can_decide: false };

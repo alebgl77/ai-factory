@@ -266,6 +266,7 @@ citer le projet : [CITATION.cff](CITATION.cff).
 
 ## Documentation
 
+- [Guide interactif de mise en production](https://alebgl77.github.io/ai-factory/docs/#production) et [référence d’intégration du portefeuille](docs/fr/PORTFOLIO.md)
 - [docs/fr/ARCHITECTURE.md](docs/fr/ARCHITECTURE.md) : schéma, flux, choix techniques
 - [docs/CONTRACT.md](docs/CONTRACT.md) : contrat d'interface (schémas, API, métriques, services, i18n ; en anglais)
 - [docs/fr/GOVERNANCE.md](docs/fr/GOVERNANCE.md) : registre, niveaux de risque, réévaluation, correspondances, calendrier réglementaire et sources

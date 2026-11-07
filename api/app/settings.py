@@ -63,6 +63,7 @@ class Settings:
     demo_date: str | None = None  # optional ISO anchor date override (FACTORY_DEMO_DATE)
     state_dir: str = "/data"
     bu_policy_path: str | None = field(default=None, kw_only=True)
+    portfolio_runner_file: str | None = field(default=None, kw_only=True, repr=False)
     shadow_ai_enabled: bool = field(default=False, kw_only=True)
     shadow_ai_groups: tuple[str, ...] = field(default=(), kw_only=True)
     shadow_ai_privacy_threshold: int = field(default=5, kw_only=True)
@@ -90,7 +91,7 @@ class Settings:
     rate_limit_per_min: int = 60             # FACTORY_RATE_LIMIT_PER_MIN: write requests per actor/IP (0 = off)
     rate_limit_burst: int = 20               # FACTORY_RATE_LIMIT_BURST: bucket size
     cost_fx: float = 1.0                     # FACTORY_COST_FX: native gateway unit to EUR
-    workbench_mode: str = "off"              # off | demo | protected_demo
+    workbench_mode: str = "off"              # off | demo | protected_demo | portfolio
     workbench_chat_mode: str = "simulation"  # simulation | local
     workbench_cyber_audit: str = "off"        # off | on
 
@@ -102,12 +103,18 @@ class Settings:
             raise ValueError("Shadow AI requires proxy authentication and FACTORY_SHADOW_AI_GROUPS")
         if type(self.shadow_ai_privacy_threshold) is not int or not 5 <= self.shadow_ai_privacy_threshold <= 100:
             raise ValueError("FACTORY_SHADOW_AI_PRIVACY_THRESHOLD must be between 5 and 100")
-        if self.workbench_mode not in {"off", "demo", "protected_demo"}:
+        if self.workbench_mode not in {"off", "demo", "protected_demo", "portfolio"}:
             raise ValueError("invalid FACTORY_WORKBENCH_MODE")
+        if self.workbench_mode == "portfolio" and (
+            self.auth_mode != "proxy" or self.demo_mode != "never" or not self.bu_policy_path
+        ):
+            raise ValueError("portfolio Workbench requires live proxy auth and FACTORY_BU_POLICY")
         if self.workbench_chat_mode not in {"simulation", "local"}:
             raise ValueError("invalid FACTORY_WORKBENCH_CHAT_MODE")
         if self.workbench_cyber_audit not in {"off", "on"}:
             raise ValueError("invalid FACTORY_WORKBENCH_CYBER_AUDIT")
+        if self.workbench_mode == "portfolio" and self.workbench_cyber_audit != "on":
+            raise ValueError("portfolio Workbench requires FACTORY_WORKBENCH_CYBER_AUDIT=on")
         if self.auth_mode == "proxy" and self.demo_mode == "never" and not self.bu_policy_path:
             raise ValueError("live proxy mode requires FACTORY_BU_POLICY")
         if self.bu_policy_path and (self.auth_mode != "proxy" or self.workbench_chat_mode == "local"
@@ -157,6 +164,7 @@ class Settings:
             demo_date=_env("FACTORY_DEMO_DATE"),
             state_dir=_env("FACTORY_STATE_DIR", "/data") or "/data",
             bu_policy_path=_env("FACTORY_BU_POLICY"),
+            portfolio_runner_file=_env("FACTORY_PORTFOLIO_RUNNER_FILE"),
             shadow_ai_enabled=shadow_ai == "on",
             shadow_ai_groups=_env_list("FACTORY_SHADOW_AI_GROUPS"),
             shadow_ai_privacy_threshold=shadow_threshold,

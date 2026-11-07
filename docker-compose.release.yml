@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Install the first-party images of a verified release by digest.
+# Combine with docker-compose.yml and, if enabled, docker-compose.portfolio.yml.
+services:
+  api:
+    build: !reset null
+    image: "ghcr.io/alebgl77/api@sha256:${FACTORY_RELEASE_API_SHA256:?set the verified API image SHA-256}"
+    pull_policy: missing
+  dashboard:
+    build: !reset null
+    image: "ghcr.io/alebgl77/dashboard@sha256:${FACTORY_RELEASE_DASHBOARD_SHA256:?set the verified dashboard image SHA-256}"
+    pull_policy: missing
+  grafana-bootstrap:
+    build: !reset null
+    image: "ghcr.io/alebgl77/grafana-bootstrap@sha256:${FACTORY_RELEASE_GRAFANA_BOOTSTRAP_SHA256:?set the verified Grafana bootstrap image SHA-256}"
+    pull_policy: missing
