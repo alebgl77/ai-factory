@@ -7,9 +7,8 @@ ready-to-paste prompt for each one. The images are **optional**: if one is missi
 keeps its current procedural rendering. The prompts below are in English; the original French
 prompts are kept in [fr/ASSETS.md](fr/ASSETS.md). Either set produces the same files.
 
-The current bundle contains seven materials generated with ChatGPT. The scene uses oak, carpet,
-concrete and terrazzo for the floors, wood and acoustic felt for the furniture, and a landscaped
-surface for the plaza. The Observatory uses terrazzo. See the [source hashes and rebuild
+The dashboard bundles seven materials and single-view and four-view portraits for twelve
+fictional demo profiles. The Observatory uses terrazzo. See the [source hashes and rebuild
 instructions](../dashboard/assets/PROVENANCE.md).
 
 ## Procedure (≈ 30 min)
@@ -23,7 +22,7 @@ instructions](../dashboard/assets/PROVENANCE.md).
 4. Put the files in `dashboard/assets/src/`, then run:
    ```bash
    pip install -r scripts/requirements-assets.txt
-   python scripts/build_assets.py            # checks, optimizes and publishes dashboard/assets/assets.js
+   python scripts/build_assets.py --out path/to/asset-build
    python scripts/build_assets.py --check    # lists what is missing or does not match the format
    ```
 
@@ -32,8 +31,12 @@ The script:
 - removes magenta (`#FF00FF`) backgrounds when the image has no transparency;
 - slices the portrait sheet into 12 avatars;
 - converts to WebP;
-- writes a `dashboard/assets/assets.js` bundle that also works offline (`file://`);
-- records the provenance (SHA-256 hash, generator, date) in `dashboard/assets/PROVENANCE.md`.
+- writes a generated `assets.js` bundle that also works offline (`file://`);
+- records the provenance (SHA-256 hash, generator, date) in a generated `PROVENANCE.md`.
+
+Merge only the rebuilt entries into the shipped `dashboard/assets/assets.js`. Preserve
+`camille-turnaround`, which is packed separately from the portrait-sheet builder, and keep the
+other four-view atlases in `dashboard/assets/portrait-atlases.js`.
 
 ## Common rules
 
@@ -41,11 +44,9 @@ The script:
   readable text (unless stated otherwise).
 - **Flat magenta background** `#FF00FF` for elements to cut out: the script makes it
   transparent. ChatGPT does not guarantee native transparency, depending on the model used.
-- **License**: by decision of the author, the images of the visual pack are published under the
-  repository's MIT license, with their provenance (SHA-256). Under OpenAI's terms of use, the
-  generated images belong to the user, who may publish them; check the terms in force at the
-  time of generation. Copyright protection of a fully generated image is not guaranteed in every
-  country (see [LICENSES.md](LICENSES.md)).
+- The author's MIT approval covers the seven materials listed in the
+  [provenance record](../dashboard/assets/PROVENANCE.md). That record also documents the portrait
+  sources and their publication with the demo. See [LICENSES.md](LICENSES.md) for code licensing.
 
 ## Framing message (paste first)
 

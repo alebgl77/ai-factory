@@ -21,6 +21,20 @@ const check = (name, ok, info = '') => {
   results.push({ name, ok: !!ok, info });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${info ? '  — ' + info : ''}`);
 };
+const seatDemoRoster = page => page.evaluate(() => {
+  const twin = window.__twin, { S, Store, EMPLOYEES } = twin;
+  S.live = false; S.t = 600;
+  const bookings = EMPLOYEES.map(person => ({ resourceId: person.desk, employeeId: person.id,
+    date: S.date, start: 540, end: 660, activity: 'delivery' }));
+  Store.load({ persist: false, raw: JSON.stringify({ v: 2, bookings, dayStatus: {}, meta: { autoDemo: false } }) });
+  twin.refresh();
+});
+const mountedSeatPortraits = page => page.evaluate(() => Object.values(window.__twin.VIS)
+  .flatMap(space => space.avatars).filter(avatar => avatar.portrait && !avatar.head.visible)
+  .map(avatar => avatar.portrait.name).sort());
+const encounterPortraits = page => page.evaluate(() => window.__twin.VIS.D1.avatars[0].group.parent.parent.children
+  .filter(actor => actor.name === 'factory-encounter-actor')
+  .map(actor => actor.children.find(child => child.name.startsWith('factory-portrait-'))?.name || null));
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'fr-FR', timezoneId: 'Europe/Paris' });
@@ -217,6 +231,25 @@ if (!process.env.E2E_BASE_URL) {
     capabilities: { propose: ['editor', 'admin'].includes(shadowRole), decide: shadowRole === 'approver' },
   });
   let apiReady = false, buMode = false, buAuthorized = true, buWrites = 0, unscopedFirstRead = false;
+  const workbenchCase = 'a'.repeat(32);
+  let workbenchRevision = 7, workbenchDecision = 'waiting', workbenchStatus = 200;
+  const workbenchRequests = [];
+  const activityRequests = [];
+  const activityDay = Math.floor(Date.now() / 86400000) * 86400000;
+  const activityTime = (age, hour = 0) => new Date(activityDay - age * 86400000 + hour * 3600000).toISOString();
+  const activityEntry = (id, actor_type, actor_id, user_id, started_at, finished_at, duration_ms, tokens) => ({
+    id: id.repeat(32), actor_type, actor_id, user_id, unit: 'delivery', action: `Recorded action ${actor_id}`,
+    started_at, finished_at, duration_ms, status: 'completed', tokens, supports: [], source: 'reported',
+  });
+  const activityOwn = [
+    { ...activityEntry('a', 'agent', 'agent-alpha', 'operator-a', activityTime(2, 22), activityTime(1, 2), 14400000, { input: 100, output: 25, total: 125 }),
+      supports: [{ kind: 'file', label: '<img data-activity-injected>', ref: 'opaque-12' }] },
+    activityEntry('b', 'user', 'operator-a', 'operator-a', activityTime(1, .5), activityTime(1, 3), 9000000, { input: 0, output: 0, total: 0 }),
+    { ...activityEntry('c', 'user', 'operator-a', 'operator-a', null, activityTime(3, 8), null, null), source: 'workbench' },
+    activityEntry('d', 'user', 'operator-a', 'operator-a', activityTime(4, 8), activityTime(4, 8), 0, { input: 0, output: 0, total: 0 }),
+  ];
+  const activityExtra = { ...activityEntry('a', 'agent', 'agent-bravo', 'operator-b', activityTime(1, 1), activityTime(1, 2), 3600000, { input: 15, output: 5, total: 20 }), unit: 'platform' };
+  let activityAllAllowed = true, activityEmpty = false, holdActivity = null, activityViewer = 'e'.repeat(64);
   let holdFrench = null;
   const snapshotCalls = [];
   const assessmentCalls = [];
@@ -240,6 +273,7 @@ if (!process.env.E2E_BASE_URL) {
         if (unscopedFirstRead) { unscopedFirstRead = false; return route.fulfill({ json: data }); }
         data.meta.business_scope = true;
         data.meta.business_view = 'fictional-bu-view';
+        data.meta.security = { ...data.meta.security, auth_mode: 'proxy' };
         data.profiles.people = data.profiles.people.filter(person => person.id === 'p02');
         data.registry = data.registry.filter(usecase => usecase.id === 'uc-01');
         return route.fulfill({ json: data });
@@ -260,6 +294,19 @@ if (!process.env.E2E_BASE_URL) {
       if (route.request().method() === 'PUT') buWrites++;
       return route.fulfill({ json: { version: 0, view_token: 'f'.repeat(64), state: { v: 2, bookings: [], dayStatus: {}, meta: { autoDemo: false } },
         scope: { write: true, employee: 'p02', resources: ['D1'], resource_usecases: { D1: ['uc-01'] }, owned: [] } } });
+    }
+    if (url.pathname === '/api/v1/workbench/encounters') {
+      workbenchRequests.push({ method: route.request().method(), caseId: url.searchParams.get('case_id') });
+      return route.fulfill({ status: workbenchStatus,
+        json: workbenchStatus === 200 ? { encounters: [{ case_id: workbenchCase, revision: workbenchRevision, status: workbenchDecision }] } : {} });
+    }
+    if (url.pathname === '/api/v1/activity') {
+      const days = Number(url.searchParams.get('days')), view = url.searchParams.get('view');
+      activityRequests.push({ method: route.request().method(), days, view });
+      if (view === 'all' && !activityAllAllowed) return route.fulfill({ status: 403, json: { detail: 'activity_scope_forbidden' } });
+      const reply = { json: { events: activityEmpty ? [] : view === 'all' ? [...activityOwn, activityExtra] : activityOwn,
+        truncated: view === 'all', since: activityTime(days - 1), until: activityTime(0, 12), view: activityViewer, can_view_all: activityAllAllowed } };
+      return days === 30 && holdActivity ? holdActivity.then(() => route.fulfill(reply)) : route.fulfill(reply);
     }
     if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
       assessmentCalls.push(route.request().postDataJSON());
@@ -412,6 +459,7 @@ if (!process.env.E2E_BASE_URL) {
   buMode = true;
   unscopedFirstRead = true; // rolling transition: the first snapshot predates the scoped booking API
   const scoped = await ctx.newPage();
+  await scoped.emulateMedia({ reducedMotion: 'reduce' });
   await scoped.clock.install();
   await scoped.addInitScript(() => {
     localStorage.setItem('aiFactoryRef.v2', JSON.stringify({ v: 2, bookings: [], meta: { autoDemo: true } }));
@@ -423,6 +471,96 @@ if (!process.env.E2E_BASE_URL) {
   check('scoped booking response revalidates the snapshot, purges browser caches and does not reseed', buWrites === 0 &&
     await scoped.evaluate(() => window.__twin.SNAP.meta.business_scope === true) &&
     await scoped.evaluate(() => localStorage.getItem('aiFactoryRef.v2') === null && localStorage.getItem('aiFactoryRef.v2.backup') === null));
+  await scoped.evaluate(() => { window.__twin.renderer.render = () => {}; });
+  await scoped.locator('#encounterOpen').click();
+  check('Workbench projection requires explicit activation and exposes no demo control',
+    workbenchRequests.length === 0 && !(await scoped.locator('#encounterScenarioField').isVisible()));
+  await scoped.locator('#encounterFollow').click();
+  const waiting = scoped.locator('#encounterPanel[data-stage="waiting"]');
+  await waiting.waitFor();
+  check('authorized Workbench case uses symbolic participants and a link to the decision companion',
+    await scoped.locator('#encounterCompanion').isVisible() && !(await scoped.locator('#encounterForm').isVisible()) &&
+    await scoped.locator('#encounterCompanion').getAttribute('target') === '_blank' &&
+    !(await scoped.locator('#encounterPanel').textContent()).includes(workbenchCase));
+  workbenchRevision++;
+  workbenchDecision = 'approved';
+  await scoped.clock.fastForward(5000);
+  await scoped.locator('#encounterStatus').getByText('La révision suivie est indisponible.', { exact: false }).waitFor();
+  check('a decision at another revision clears the exchange',
+    !(await scoped.locator('#encounterQuestion').isVisible()) && !(await scoped.locator('#encounterReply').isVisible()));
+  workbenchDecision = 'waiting';
+  await scoped.clock.fastForward(5000);
+  await waiting.waitFor();
+  workbenchDecision = 'approved';
+  await scoped.clock.fastForward(5000);
+  await scoped.locator('#encounterReply').getByText('Décision consignée : approuvée.').waitFor();
+  check('the exact Workbench decision advances the animation with targeted GET requests only',
+    workbenchRequests.every(request => request.method === 'GET') && workbenchRequests[0]?.caseId === null &&
+    workbenchRequests.some(request => request.caseId === workbenchCase));
+  workbenchStatus = 403;
+  await scoped.clock.fastForward(5000);
+  await scoped.locator('#encounterStatus').getByText('Vous n’avez pas accès au suivi du Workbench.').waitFor();
+  check('Workbench authorization loss clears the panel decision and stops following',
+    !(await scoped.locator('#encounterReply').isVisible()) && await scoped.locator('#encounterFollow').isVisible());
+  await scoped.keyboard.press('Escape');
+  await scoped.locator('#tabPilot').click();
+  await scoped.locator('#pilotPanel [data-activity-open]').click();
+  const ledger = scoped.locator('.activity');
+  const activityState = state => scoped.locator(`.activity[data-activity-state="${state}"]`);
+  const filter = key => ledger.locator(`[data-activity-filter="${key}"]`);
+  const total = key => ledger.locator(`[data-activity-total="${key}"]`).textContent();
+  await activityState('ready').waitFor();
+  check('protected history defaults to own, unions overlapping traces per user and does not render markup',
+    activityRequests[0]?.view === 'own' && await total('duration') === '5 h' && await total('tokens') === '125' &&
+    !(await ledger.textContent()).includes('operator-b') && (await ledger.locator('.activity-supports').textContent()).includes('<img data-activity-injected>') &&
+    await ledger.locator('[data-activity-injected]').count() === 0);
+  check('UTC tracks split intervals at midnight, credit tokens at finish and distinguish zero from unknown',
+    await ledger.locator('[data-track="duration"] .activity-tick').count() === 7 &&
+    JSON.stringify(await ledger.locator('.activity-daily tbody tr').evaluateAll(rows => rows.slice(-5, -1).map(row => [...row.cells].slice(1).map(td => td.textContent)))) ===
+      JSON.stringify([['0 min', '0'], ['Non renseigné', 'Non renseigné'], ['2 h', 'Non renseigné'], ['3 h', '125']]) &&
+    await ledger.locator('[data-track="tokens"] .zero').count() === 1 && await ledger.locator('[data-track="tokens"] .unknown').count() === 1);
+  await filter('kind').selectOption('agent');
+  await filter('subject').selectOption('agent-alpha');
+  check('agent history exact filter excludes human records and keeps token attribution',
+    await total('duration') === '4 h' && await total('events') === '1' && await total('tokens') === '125' && activityRequests.length === 1);
+  await filter('kind').selectOption('user');
+  await filter('scope').selectOption('all');
+  await activityState('ready').waitFor();
+  check('explicit authorized all scope shows another owner with the same scoped event ID and flags a partial result',
+    await total('duration') === '6 h' && await total('tokens') === '145' && await total('events') === '5' &&
+    (await ledger.textContent()).includes('operator-b') && await ledger.locator('.activity-partial').isVisible());
+  activityViewer = 'f'.repeat(64);
+  const revalidatedActivity = scoped.waitForResponse(res => res.url().includes('/api/v1/activity?days=7&view=own'));
+  await scoped.clock.fastForward(20000);
+  await revalidatedActivity;
+  await activityState('ready').waitFor();
+  check('changed authorized identity resets all to own even when the booking scope did not change',
+    await filter('scope').inputValue() === 'own' && !(await ledger.textContent()).includes('operator-b'));
+  await filter('scope').selectOption('all');
+  await activityState('ready').waitFor();
+  activityAllAllowed = false;
+  await scoped.clock.fastForward(20000);
+  await activityState('blocked').waitFor();
+  check('administrator downgrade clears all history and the scope control on revalidation',
+    await filter('scope').count() === 0 && await ledger.locator('.activity-event').count() === 0 &&
+    !(await ledger.textContent()).includes('operator-b') && activityRequests.at(-1)?.view === 'all');
+  activityEmpty = true;
+  await ledger.locator('[data-activity-retry]').click();
+  await ledger.getByText('Aucune activité enregistrée sur cette période.').waitFor();
+  check('retry after lost access returns to own scope and exposes a true empty state', activityRequests.at(-1)?.view === 'own');
+  activityEmpty = false;
+  let releaseActivity;
+  holdActivity = new Promise(resolve => { releaseActivity = resolve; });
+  const previousActivity = scoped.waitForResponse(res => new URL(res.url()).searchParams.get('days') === '30');
+  await filter('days').selectOption('30');
+  await filter('days').selectOption('90');
+  await activityState('ready').waitFor();
+  releaseActivity(); holdActivity = null;
+  await (await previousActivity).finished();
+  check('late activity responses cannot overwrite the new period and the journal only reads the protected route',
+    await ledger.locator('[data-track="duration"] .activity-tick').count() === 90 && activityRequests.every(req => req.method === 'GET'));
+  await scoped.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true })));
+  check('pagehide removes protected records before a document can enter browser history', await ledger.count() === 0);
   await scoped.locator('#tabSpaces').click();
   await scoped.locator('#spacePanel button[data-res="D1"]').click();
   check('protected scheduling presents only its authorized case and verified booking identity',
@@ -442,21 +580,148 @@ if (!process.env.E2E_BASE_URL) {
   // Test a fresh static boot after releasing the live renderer and its clock.
   const callsBeforeStatic = snapshotCalls.length;
   const shadowCallsBeforeStatic = shadowReads;
+  const workbenchCallsBeforeStatic = workbenchRequests.length;
+  const activityCallsBeforeStatic = activityRequests.length;
   const staticPage = await ctx.newPage();
+  const portraitScriptReads = [];
+  staticPage.on('request', request => {
+    const name = new URL(request.url()).pathname.split('/').at(-1);
+    if (name === 'portrait-atlases.js' || name === 'camille-model.js') portraitScriptReads.push(name);
+  });
+  await staticPage.emulateMedia({ reducedMotion: 'reduce' });
   await staticPage.clock.install();
   await staticPage.goto('http://factory.test/?static', { waitUntil: 'commit', timeout: 15000 });
   await staticPage.waitForFunction(() => window.__appReady === true && window.__twin?.source === 'embedded', null, { timeout: 30000 });
   await staticPage.evaluate(() => window.__twin.openConsole('shadow'));
   await staticPage.locator('[data-shadow-state="demo"]').waitFor();
+  await staticPage.keyboard.press('Escape');
+  await staticPage.evaluate(() => { window.__twin.renderer.render = () => {}; });
+  await seatDemoRoster(staticPage);
+  await staticPage.waitForFunction(() => Object.values(window.__twin.VIS).flatMap(space => space.avatars)
+    .filter(avatar => avatar.portrait).length === 12, null, { timeout: 15000 });
+  const rosterPortraits = await mountedSeatPortraits(staticPage);
+  check('all twelve fictional identities mount distinct 3D portraits at their desks', new Set(rosterPortraits).size === 12);
+  check('all twelve portraits use calibrated neck heights and keep the garment collar', await staticPage.evaluate(() => {
+    const avatars = Object.values(window.__twin.VIS).flatMap(space => space.avatars).filter(avatar => avatar.portrait);
+    const drops = new Map(avatars.map(avatar => [avatar.emp, Math.round(-avatar.portrait.userData.headOffsetY * 1000)]));
+    return drops.get('p10') === 90 && drops.get('p06') === 63 && avatars.every(avatar => {
+      const neck = avatar.body.getObjectByName('neck'), drop = drops.get(avatar.emp);
+      return drop >= 63 && drop <= 97 && neck?.visible && neck.scale.y > 0 && neck.scale.y < 1 &&
+        neck.material !== avatar.skinMat && avatar.body.getObjectByName('collar')?.visible &&
+        typeof avatar.releasePortraitNeck === 'function';
+    });
+  }));
+  check('all twelve garments keep one closed indexed surface when the actor raises an arm', await staticPage.evaluate(() => {
+    const avatars = Object.values(window.__twin.VIS).flatMap(space => space.avatars).filter(avatar => avatar.portrait);
+    return avatars.every(avatar => {
+      const geometry = avatar.body.getObjectByName('garment')?.geometry;
+      const index = geometry?.index, position = geometry?.getAttribute('position');
+      if (!index || !position) return false;
+      const parent = Int32Array.from({ length: position.count }, (_, i) => i), edges = new Map();
+      const root = index => { while (index !== parent[index]) index = parent[index]; return index; };
+      for (let i = 0; i < index.count; i += 3) {
+        const a = index.getX(i), b = index.getX(i + 1), c = index.getX(i + 2);
+        if (a === b || b === c || c === a) return false;
+        for (const [u, v] of [[a, b], [b, c], [c, a]]) {
+          const edge = Math.min(u, v) * position.count + Math.max(u, v);
+          edges.set(edge, (edges.get(edge) || 0) + 1);
+          parent[root(u)] = root(v);
+        }
+      }
+      if (new Set(parent.map((_, i) => root(i))).size !== 1 || [...edges.values()].some(uses => uses !== 2)) return false;
+      const seated = position.array.slice();
+      avatar.rig.pose('request', 1.35);
+      const bent = geometry.index === index && position.array.some((coordinate, i) => Math.abs(coordinate - seated[i]) > .001);
+      avatar.rig.pose('seated');
+      return bent;
+    });
+  }));
+  check('the shared engine and atlas manifest each load once', portraitScriptReads.length === 2 && new Set(portraitScriptReads).size === 2);
+  const secondDesk = await staticPage.evaluate(() => window.__twin.Store.emp('p02').desk);
+  await staticPage.locator('#tabSpaces').click();
+  await staticPage.locator(`#spacePanel button[data-res="${secondDesk}"]`).click();
+  await staticPage.locator('#dFaceView').click();
+  await staticPage.locator('#dFaceAngles [data-face-angle="profile"]').click();
+  check('another fictional character can be inspected from the profile angle',
+    await staticPage.locator('#dFaceAngles [data-face-angle="profile"]').getAttribute('aria-pressed') === 'true');
+  await staticPage.locator('#dFaceAngles [data-face-angle="back"]').click();
+  check('rear close-up positions the camera behind the same rendered shoulder mesh', await staticPage.evaluate(id => {
+    const t = window.__twin, avatar = t.VIS[id].avatars[0];
+    const p = avatar.group.worldToLocal(t.camera.position.clone());
+    const target = avatar.group.worldToLocal(t.controls.target.clone());
+    return !!avatar.portrait && p.z > .9 && Math.abs(p.x) < .001 &&
+      Math.abs(target.y - 1.425 - avatar.portrait.userData.headOffsetY) < .001;
+  }, secondDesk));
+  await staticPage.keyboard.press('Escape');
+  check('leaving close-up keeps the ordinary seated portrait', (await mountedSeatPortraits(staticPage)).includes('factory-portrait-p02'));
+  await staticPage.locator('#encounterOpen').click();
+  await staticPage.locator('#encounterStart').click();
+  await staticPage.locator('#encounterPanel[data-stage="waiting"]').waitFor();
+  check('both inter-BU participants use their matching 3D portraits',
+    JSON.stringify(await encounterPortraits(staticPage)) === JSON.stringify(['factory-portrait-p01', 'factory-portrait-p10']));
+  await staticPage.locator('#encounterInput').fill('<b>Réponse locale</b>');
+  await staticPage.locator('#encounterSend').click();
+  check('the demo accepts a simulated human reply as literal text',
+    (await staticPage.locator('#encounterReply').textContent()) === '<b>Réponse locale</b>' &&
+    await staticPage.locator('#encounterReply b').count() === 0);
+  await staticPage.locator('#encounterCancel').click();
+  check('cancel removes both transient portrait instances', (await encounterPortraits(staticPage)).every(id => id === null));
+  await staticPage.locator('#encounterScenario').selectOption('agent-agent');
+  await staticPage.locator('#encounterStart').click();
+  check('synthetic agents retain the generic head', (await encounterPortraits(staticPage)).every(id => id === null));
+  await staticPage.locator('#encounterPanel[data-stage="complete"]').waitFor();
+  check('agents exchange a scripted answer without a human input',
+    await staticPage.locator('#encounterReply').isVisible() && !(await staticPage.locator('#encounterForm').isVisible()));
+  await staticPage.locator('#encounterScenario').selectOption('agent-human');
+  await staticPage.locator('#encounterStart').click();
+  await staticPage.locator('#encounterPanel[data-stage="waiting"]').waitFor();
+  check('agent-to-human scenario renders only the assigned human portrait',
+    JSON.stringify(await encounterPortraits(staticPage)) === JSON.stringify([null, 'factory-portrait-p01']));
+  await staticPage.keyboard.press('Escape');
+  check('agent-to-human demo can be closed from the waiting state', !(await staticPage.locator('#encounterPanel').isVisible()));
+  await staticPage.locator('#tabPilot').click();
+  await staticPage.locator('#pilotPanel [data-activity-open]').click();
+  const demoActivity = staticPage.locator('.activity[data-activity-state="demo"]');
+  await demoActivity.waitFor();
+  await demoActivity.locator('[data-activity-filter="days"]').selectOption('30');
+  check('static work history is labelled fictional and filters a deterministic local timeline',
+    /Démo fictive|Fictional demo/.test(await demoActivity.textContent()) &&
+    await demoActivity.locator('[data-track="duration"] .activity-tick').count() === 30 &&
+    await demoActivity.locator('[data-activity-filter="subject"] option').count() === 3 &&
+    await demoActivity.locator('[data-activity-filter="scope"]').count() === 0);
+  await staticPage.keyboard.press('Escape');
   await staticPage.clock.fastForward(30000);
-  check('published static mode never requests either API, including after a poll interval',
-    snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic);
+  check('published static mode never requests snapshot, Observatory, Workbench or activity APIs',
+    snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic && workbenchRequests.length === workbenchCallsBeforeStatic &&
+    activityRequests.length === activityCallsBeforeStatic);
+  await staticPage.evaluate(() => { document.documentElement.removeAttribute('data-static-demo'); });
+  const nextLanguage = await staticPage.locator('#languageSelect').inputValue() === 'fr' ? 'en' : 'fr';
+  await staticPage.locator('#languageSelect').selectOption(nextLanguage);
+  await staticPage.waitForFunction(() => window.__twin?.source === 'api');
+  check('switching the same document to API data clears demo portraits even for reused IDs',
+    (await mountedSeatPortraits(staticPage)).length === 0 && await staticPage.evaluate(() =>
+      Object.values(window.__twin.VIS).some(space => space.avatars.some(avatar => avatar.emp === 'p02' &&
+        avatar.head.visible && avatar.body.getObjectByName('neck')?.visible && !avatar.releasePortraitNeck &&
+        avatar.body.getObjectByName('neck').material === avatar.skinMat && avatar.body.getObjectByName('neck').scale.y === 1 &&
+        '#' + avatar.skinMat.color.getHexString() === (window.__twin.Store.emp('p02').skin || '#e8c4a0').toLowerCase()))));
   await staticPage.close();
 
   const mobile = await ctx.newPage();
   await mobile.setViewportSize({ width: 390, height: 844 });
-  await mobile.goto(pathToFileURL(dashboardPath).href + '?lang=fr');
+  const atlasManifest = fs.readFileSync(path.join(root, 'dashboard/assets/portrait-atlases.js'), 'utf8');
+  await mobile.route('**/assets/portrait-atlases.js', route => route.fulfill({ contentType: 'application/javascript',
+    body: `${atlasManifest}\nwindow.FactoryPortraitAtlases = {...window.FactoryPortraitAtlases,p02:{...window.FactoryPortraitAtlases.p02,src:'data:image/webp;base64,AAAA'}};` }));
+  await mobile.goto('http://factory.test/?static&lang=fr');
   await mobile.waitForFunction(() => window.__appReady === true, null, { timeout: 30000 });
+  await seatDemoRoster(mobile);
+  await mobile.waitForFunction(() => Object.values(window.__twin.VIS).flatMap(space => space.avatars)
+    .filter(avatar => avatar.portrait).length === 11, null, { timeout: 15000 });
+  check('one corrupt atlas falls back on mobile while the other eleven remain available', await mobile.evaluate(() =>
+    Object.values(window.__twin.VIS).some(space => space.avatars.some(avatar => avatar.emp === 'p02' && avatar.head.visible && !avatar.portrait))));
+  await mobile.locator('#encounterOpen').click();
+  check('mobile exchange controls are visible without horizontal overflow', await mobile.locator('#encounterScenario').isVisible() &&
+    await mobile.locator('#encounterPanel').evaluate(el => el.scrollWidth <= el.clientWidth));
+  await mobile.keyboard.press('Escape');
   await mobile.locator('#tabFactory').click();
   await mobile.locator('#factoryPanel [data-csec="shadow"]').click();
   const demoVisible = await mobile.locator('[data-shadow-state="demo"]').isVisible();
@@ -479,6 +744,13 @@ if (!process.env.E2E_BASE_URL) {
     await mobile.getByRole('heading', { name: 'Signaux par équipe et outil' }).evaluate(el => el.scrollIntoView({ block: 'start' }));
     await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-observatoire-mobile.png'), animations: 'disabled' });
   }
+  await mobile.keyboard.press('Escape');
+  await mobile.locator('#tabPilot').click();
+  await mobile.locator('#pilotPanel [data-activity-open]').click();
+  const mobileActivity = mobile.locator('.activity[data-activity-state="demo"]');
+  check('mobile history fits the console and gives the chart a daily table alternative', await mobileActivity.isVisible() &&
+    await mobileActivity.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth) &&
+    await mobileActivity.locator('.activity-daily summary').isVisible());
   await mobile.close();
 }
 

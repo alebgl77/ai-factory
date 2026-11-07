@@ -169,6 +169,23 @@ class Store:
             raise WorkbenchError("connector_target_mismatch", 409)
 
     @contextmanager
+    def read_existing(self) -> Iterator[sqlite3.Connection | None]:
+        """Read a bound snapshot without creating or migrating the store."""
+        uri = f"{self.path.resolve().as_uri()}?mode=ro"
+        try:
+            connection = sqlite3.connect(uri, uri=True, timeout=5, isolation_level=None)
+        except sqlite3.OperationalError as error:
+            if error.sqlite_errorcode != sqlite3.SQLITE_CANTOPEN or self.path.exists():
+                raise
+            yield None
+            return
+        with closing(connection):
+            connection.row_factory = sqlite3.Row
+            connection.execute("BEGIN")
+            self._check_binding(connection)
+            yield connection
+
+    @contextmanager
     def transaction(self, *, write: bool = True) -> Iterator[sqlite3.Connection]:
         try:
             self._initialize()

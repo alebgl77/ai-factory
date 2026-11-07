@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -101,7 +102,35 @@ def _approval_proof(provenance: dict[str, str] | None) -> dict[str, str] | None:
     return provenance.copy()
 
 
-def local_advisor(base_url: str, key: str, transport: httpx.BaseTransport | None = None) -> Callable:
+TokenUsage = dict[str, int]
+AdvisorObserver = Callable[[str, dt.datetime, dt.datetime, bool, TokenUsage | None], None]
+
+
+def _provider_usage(value: object) -> TokenUsage | None:
+    if not isinstance(value, dict):
+        return None
+    usage: TokenUsage = {}
+    for source, target in (("prompt_tokens", "input"), ("completion_tokens", "output"), ("total_tokens", "total")):
+        if source in value:
+            count = value[source]
+            if type(count) is not int or not 0 <= count <= 1_000_000_000:
+                return None
+            usage[target] = count
+    if len(usage) == 3 and usage["input"] + usage["output"] != usage["total"]:
+        return None
+    return usage or None
+
+
+class _LocalAdvisor:
+    def __init__(self, request: Callable[[str, str, dict[str, Any]], tuple[str, TokenUsage | None]]) -> None:
+        self.with_usage = request
+
+    def __call__(self, agent: str, message: str, record: dict[str, Any]) -> str:
+        answer, _ = self.with_usage(agent, message, record)
+        return answer
+
+
+def local_advisor(base_url: str, key: str, transport: httpx.BaseTransport | None = None) -> _LocalAdvisor:
     """Fixed local gateway alias. Model text has no ability to invoke actions."""
     instructions = (
         "Explain the supplied synthetic business case and distinguish facts from assumptions. "
@@ -109,7 +138,7 @@ def local_advisor(base_url: str, key: str, transport: httpx.BaseTransport | None
         "or execute an action. If the evidence is insufficient, say what a human should review."
     )
 
-    def advise(agent: str, message: str, record: dict[str, Any]) -> str:
+    def advise(agent: str, message: str, record: dict[str, Any]) -> tuple[str, TokenUsage | None]:
         context = json.dumps(
             {"specialty": agent, **{k: record[k] for k in ("title", "status", "kind", "reason", "action")}},
             ensure_ascii=False,
@@ -135,14 +164,15 @@ def local_advisor(base_url: str, key: str, transport: httpx.BaseTransport | None
                         if len(content) + len(chunk) > 32 * 1024:
                             raise ValueError("response limit")
                         content.extend(chunk)
-            answer = json.loads(content)["choices"][0]["message"]["content"]
+            result = json.loads(content)
+            answer = result["choices"][0]["message"]["content"]
             if not isinstance(answer, str) or not answer.strip():
                 raise ValueError("empty model answer")
-            return answer.strip()[:4000]
+            return answer.strip()[:4000], _provider_usage(result.get("usage"))
         except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError):
             raise WorkbenchError("local_agent_unavailable", 503) from None
 
-    return advise
+    return _LocalAdvisor(advise)
 
 
 class Workbench:
@@ -253,12 +283,15 @@ class Workbench:
         return (record["status"] == "waiting_review" and bool(record["expires_at"])
                 and now >= dt.datetime.fromisoformat(record["expires_at"]))
 
-    def cases(self, actor: WorkActor, *, limit: int = 200) -> list[dict[str, Any]]:
+    def cases(self, actor: WorkActor, *, limit: int = 200, existing_only: bool = False) -> list[dict[str, Any]]:
         self.check_access(actor)
         if type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError("limit must be between 1 and 200")
         now = self.clock()
-        with self.store.transaction(write=False) as connection:
+        transaction = self.store.read_existing() if existing_only else self.store.transaction(write=False)
+        with transaction as connection:
+            if connection is None:
+                return []
             connection.create_function("review_priority", 1, lambda raw: self._priority(json.loads(raw), now),
                                        deterministic=True)
             rows = connection.execute(
@@ -292,9 +325,12 @@ class Workbench:
             raise WorkbenchError("case_not_found", 404)
         return json.loads(row["record"])
 
-    def get_case(self, case_id: str, actor: WorkActor) -> dict[str, Any]:
+    def get_case(self, case_id: str, actor: WorkActor, *, existing_only: bool = False) -> dict[str, Any]:
         self.check_access(actor)
-        with self.store.transaction(write=False) as connection:
+        transaction = self.store.read_existing() if existing_only else self.store.transaction(write=False)
+        with transaction as connection:
+            if connection is None:
+                raise WorkbenchError("case_not_found", 404)
             record = self._load_visible_case(connection, case_id, actor)
         return self._public(record, actor)
 
@@ -569,7 +605,8 @@ class Workbench:
         return tuple(outcomes) if outcomes else ("ignored",)
 
     def decide(self, case_id: str, actor: WorkActor, *, decision: str, revision: int,
-               proposal_hash: str, rationale: str, provenance: dict[str, str] | None = None) -> dict[str, Any]:
+               proposal_hash: str, rationale: str, provenance: dict[str, str] | None = None,
+               _on_recorded: Callable[[], None] | None = None) -> dict[str, Any]:
         """Commit the exact decision. The embedding host verifies any external provenance."""
         self.check_access(actor)
         if not actor.role_for(ASSESSMENT):
@@ -580,6 +617,7 @@ class Workbench:
             raise WorkbenchError("invalid_decision", 422)
         _check_utf8(rationale)
         proof = _approval_proof(provenance)
+        recorded = False
         with self.store.transaction() as connection:
             record = self._load_visible_case(connection, case_id, actor)
             if revision != record["revision"] or proposal_hash != record["proposal_hash"]:
@@ -643,6 +681,10 @@ class Workbench:
                 append_event(connection, "decision.recorded", decision_outcome, case=record, actor=actor.actor,
                              channel=proof["channel"] if proof else "direct",
                              request_id=proof["request_id"] if proof else None)
+                recorded = True
+        # The decision is committed independently of any subsequent ERP dispatch.
+        if recorded and _on_recorded is not None:
+            _on_recorded()
         if record["status"] == "applying" and not self._defer_execution:
             record = self._apply(record)
         return self._public(record, actor)
@@ -848,7 +890,8 @@ class Workbench:
                      "The ERP record is missing the required supplier reference.",
                      ["A human must decide which document establishes the supplier identity."])
 
-    def chat(self, actor: WorkActor, *, agent: str, message: str, case_id: str | None = None) -> dict[str, Any]:
+    def chat(self, actor: WorkActor, *, agent: str, message: str, case_id: str | None = None,
+             _on_advice: AdvisorObserver | None = None) -> dict[str, Any]:
         self.check_access(actor)
         message = message.strip()
         if agent not in AGENTS or not message or len(message) > 1000:
@@ -875,7 +918,20 @@ class Workbench:
         if route.model_id is None:
             raise WorkbenchError("no_admissible_agent", 503)
         if use_local:
-            answer = self.advisor(agent, message, record)
+            if _on_advice is None:
+                answer = self.advisor(agent, message, record)
+            else:
+                started_at, tick = dt.datetime.now(dt.timezone.utc), time.perf_counter()
+                tokens, completed = None, False
+                try:
+                    if isinstance(self.advisor, _LocalAdvisor):
+                        answer, tokens = self.advisor.with_usage(agent, message, record)
+                    else:
+                        answer = self.advisor(agent, message, record)
+                    completed = True
+                finally:
+                    finished_at = started_at + dt.timedelta(seconds=time.perf_counter() - tick)
+                    _on_advice(record["id"], started_at, finished_at, completed, tokens)
         else:
             answer = f"{record['title']} · {record['status']}. {record['reason']} " + " ".join(record["evidence"])
         return {"answer": answer, "escalated": False, "case_id": record["id"],

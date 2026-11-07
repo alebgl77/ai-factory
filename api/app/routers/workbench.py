@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import datetime as dt
+import re
 import sqlite3
 import uuid
 from collections.abc import Iterable
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -19,6 +21,7 @@ from ai_factory_workbench.cyberlog import JournalError, journal_request
 from ai_factory_workbench.interface_models import CASE_ID_PATTERN, ReviewInput, SurfaceInput
 from ai_factory_workbench.profiles import WorkProfile, get_profile, list_profiles
 
+from ..activity import record_workbench_activity
 from ..security import READ, Access, require
 
 CaseID = Annotated[str, Path(pattern=CASE_ID_PATTERN)]
@@ -26,6 +29,15 @@ Comment = Annotated[str, StringConstraints(strip_whitespace=True, max_length=100
 RequiredText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
 Reader = Annotated[Access, Depends(require(READ))]
 Writer = Annotated[Access, Depends(require(READ, write=True))]
+
+_ENCOUNTER_STATUSES = {
+    ("waiting_review", None): "waiting",
+    ("applying", "approve"): "waiting",
+    ("decided", "approve"): "approved",
+    ("executed", "approve"): "approved",
+    ("rejected", "reject"): "rejected",
+    ("changes_requested", "request_changes"): "changes_requested",
+}
 
 
 def _origin(value: str) -> tuple[str, str, int] | None:
@@ -140,6 +152,33 @@ def _workbench(request: Request) -> Workbench:
     return request.app.state.workbench
 
 
+def _tracks_activity(workbench: Workbench, access: Access) -> bool:
+    return (workbench.mode == "protected_demo" and access.principal.authenticated
+            and access.principal.auth_mode == "proxy")
+
+
+def _record_activity(request: Request, access: Access, case_id: str, started_at: dt.datetime | None,
+                     finished_at: dt.datetime, *, agent: str | None = None,
+                     completed: bool = True, tokens: dict[str, int] | None = None) -> None:
+    try:
+        event = {
+            "id": uuid.uuid4().hex,
+            "actor_type": "agent" if agent else "user",
+            "action": "Conseil local Workbench" if agent else "Décision Workbench",
+            "started_at": started_at.isoformat() if started_at is not None else None,
+            "finished_at": finished_at.isoformat(),
+            "status": "completed" if completed else "failed",
+            "tokens": tokens,
+            "supports": [{"kind": "work", "label": "Dossier Workbench", "ref": case_id}],
+        }
+        if agent:
+            event["actor_id"] = agent
+        record_workbench_activity(request, access, event)
+    except Exception:
+        # Activity is best effort and independent of the governed operation.
+        pass
+
+
 def _profile(request: Request) -> WorkProfile:
     configured = getattr(request.app.state, "workbench_profile", None)
     return configured if configured is not None else get_profile()
@@ -168,6 +207,33 @@ def cases(request: Request, access: Reader):
         for case in queue:
             _hide_direct_decision(case)
     return {"mode": workbench.mode, "cases": queue, "capabilities": capabilities}
+
+
+@router.get("/encounters")
+def encounters(request: Request, access: Reader,
+               case_id: Annotated[str | None, Query(pattern=CASE_ID_PATTERN)] = None):
+    workbench = _workbench(request)
+    if workbench.mode != "protected_demo":
+        raise HTTPException(404, detail="workbench_encounters_disabled")
+    if case_id is None:
+        queue = workbench.cases(access.principal, limit=100, existing_only=True)
+    else:
+        if len(request.query_params.getlist("case_id")) != 1:
+            raise HTTPException(422, detail="invalid_request")
+        try:
+            queue = [workbench.get_case(case_id, access.principal, existing_only=True)]
+        except WorkbenchError as error:
+            if error.status != 404 or str(error) != "case_not_found":
+                raise
+            queue = []
+    projected = []
+    for case in queue:
+        status = _ENCOUNTER_STATUSES.get((case["status"], case["decision"]))
+        encounter_id, revision = case["id"], case["revision"]
+        if (status is not None and isinstance(encounter_id, str) and re.fullmatch(CASE_ID_PATTERN, encounter_id)
+                and type(revision) is int and 1 <= revision <= 2**53 - 1):
+            projected.append({"case_id": encounter_id, "revision": revision, "status": status})
+    return {"encounters": projected}
 
 
 @router.post("/events")
@@ -215,7 +281,14 @@ def history(request: Request, case_id: CaseID, access: Reader):
 def decide(request: Request, case_id: CaseID, decision: DecisionIn, access: Writer):
     if _signed_service_only(request, access):
         raise HTTPException(403, detail="signed_service_approval_required")
-    return _workbench(request).decide(case_id, access.principal, **decision.model_dump())
+    workbench = _workbench(request)
+    if not _tracks_activity(workbench, access):
+        return workbench.decide(case_id, access.principal, **decision.model_dump())
+
+    def recorded():
+        _record_activity(request, access, case_id, None, dt.datetime.now(dt.timezone.utc))
+
+    return workbench.decide(case_id, access.principal, **decision.model_dump(), _on_recorded=recorded)
 
 
 @router.post("/cases/{case_id}/feedback")
@@ -226,4 +299,12 @@ def feedback(request: Request, case_id: CaseID, feedback: FeedbackIn, access: Wr
 
 @router.post("/chat")
 def chat(request: Request, chat: ChatIn, access: Writer):
-    return _workbench(request).chat(access.principal, **chat.model_dump())
+    workbench = _workbench(request)
+    if not _tracks_activity(workbench, access):
+        return workbench.chat(access.principal, **chat.model_dump())
+
+    def advised(case_id, started_at, finished_at, completed, tokens):
+        _record_activity(request, access, case_id, started_at, finished_at,
+                         agent=chat.agent, completed=completed, tokens=tokens)
+
+    return workbench.chat(access.principal, **chat.model_dump(), _on_advice=advised)

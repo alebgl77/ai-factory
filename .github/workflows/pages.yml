@@ -33,6 +33,8 @@ jobs:
           mkdir -p _site/assets
           cp dashboard/index.html _site/index.html
           cp dashboard/assets/assets.js _site/assets/assets.js
+          cp dashboard/assets/camille-model.js dashboard/assets/portrait-atlases.js _site/assets/
+          cp dashboard/assets/factory-character.js dashboard/assets/factory-encounters.js dashboard/assets/factory-workbench-follow.js dashboard/assets/factory-activity.js _site/assets/
           cp -R dashboard/exercise _site/exercise
           cp -R dashboard/companion _site/companion
           # Static hosting: tell the page not to look for the aggregation API

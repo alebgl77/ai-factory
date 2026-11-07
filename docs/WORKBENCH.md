@@ -44,6 +44,66 @@ flowchart LR
     CLI["Read-only CLI probe"] -. HTTPS .-> Odoo["Odoo 19 partners"]
 ```
 
+## Follow a review from the 3D map
+
+On the protected dashboard, select **Follow the Workbench**, then **Enable follow**. The
+map uses the existing Workbench proxy sign-in on the same origin. If business unit scopes
+are configured, the caller needs global Workbench read access. Symbolic agent and reviewer
+avatars show a request in progress and the outcome recorded for that case revision. The map
+receives only the case ID, revision and status. It uses no proposal content or staff identity.
+Open the **Decision Companion** to read the case and submit decisions according to your role.
+
+The public dashboard offers **3D exchanges** with fictional scenarios and replies confined to
+the browser. A protected dashboard uses the read-only Workbench follow mode. It needs no
+additional setting beyond the existing protected Workbench and proxy configuration.
+
+## Work history and token evidence
+
+Open **Operations → Work history** to filter recorded work by agent or user. The static
+dashboard uses fictional records. The protected history uses the existing same-origin identity
+proxy. A user sees their own events for their current BU grants. An administrator whose role
+comes from a trusted group can explicitly select all users. With a BU policy, that same group
+must also grant global BU access. Global reads produce a security log entry with pseudonymous
+references.
+
+Use `GET /api/v1/activity?days=7&view=own` for the newest 300 events in the UTC window. Supported
+periods are 7, 30 and 90 days. Check `truncated` before interpreting aggregate values.
+`view=all` requires the global administrator grant. An agent event identifies the agent and the
+authenticated user who initiated or reported the work, so both filters refer to the same record.
+
+An authenticated editor or administrator can send `POST /api/v1/activity` as JSON through the
+identity proxy to report an instrumented run:
+
+```json
+{
+  "id": "763fcb2113ee49e481602a88a7ec326bc",
+  "actor_type": "agent",
+  "actor_id": "document-assistant",
+  "unit": "cc-ops",
+  "action": "Summarize reference material",
+  "started_at": "2026-11-06T10:00:00Z",
+  "finished_at": "2026-11-06T10:00:08Z",
+  "status": "completed",
+  "tokens": {"input": 1200, "output": 400},
+  "supports": [{"kind": "file", "label": "Reference.pdf", "ref": "doc-42"}]
+}
+```
+
+Reuse the same lower-case 32-hex ID and BU on retries. An exact replay for the same user and BU
+succeeds. A conflicting replay in that scope returns 409. Omit `actor_id` for user actions.
+The server supplies the user identity. Omit
+`unit` without a BU policy or when the writer has exactly one permitted unit. Support references
+are opaque IDs and display labels. Action and support labels come from the integration. The
+integration must supply display metadata free of prompts, document content, and secrets. The API
+rejects unknown fields, paths, and URLs.
+
+The protected Workbench records new decisions. It also records advice attempts when the local
+adviser is enabled. With a BU policy, external integrations declare runs through the activity
+API. Advice duration is elapsed execution time and token counts come from the provider when supplied. For a decision,
+duration and tokens are unknown. Reported runs keep their own provenance. Missing values stay
+unknown and an explicit zero stays zero. The journal measures execution intervals rather than
+staff presence or working hours. It starts with new events and uses the local state volume.
+
 ## Decisions and agent conversations
 
 - Readers can consult cases and history, ask questions and give feedback. Editors,
@@ -78,6 +138,7 @@ Routes below are relative to `/api/v1/workbench`. Browser writes use same-origin
 | Method and path | Behavior |
 |---|---|
 | `GET /cases` | Read the mode, caller capabilities and prioritized cases with their proposal versions. |
+| `GET /encounters` | Read the case IDs, revisions and statuses of up to 100 prioritized cases with protected Workbench read access. Add `?case_id=<id>` to follow one case even when it leaves the prioritized queue. |
 | `POST /events` | Submit the supported CloudEvents 1.0 subset for `crm.opportunity.won` from `crm-sim`. |
 | `POST /cases/{id}/decisions` | Submit `approve`, `reject` or `request_changes` with revision, hash and rationale. |
 | `GET /cases/{id}/history` | Read the receipt, role-scoped decisions and feedback summary. |

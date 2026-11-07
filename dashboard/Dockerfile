@@ -46,6 +46,12 @@ COPY exercise/ /build/site/exercise/
 COPY companion/ /build/site/companion/
 # Optional visual pack (data-URI bundle built by scripts/build_assets.py; empty when no image was generated)
 COPY assets/assets.js /build/site/assets/assets.js
+COPY assets/camille-model.js /build/site/assets/camille-model.js
+COPY assets/portrait-atlases.js /build/site/assets/portrait-atlases.js
+COPY assets/factory-character.js /build/site/assets/factory-character.js
+COPY assets/factory-encounters.js /build/site/assets/factory-encounters.js
+COPY assets/factory-workbench-follow.js /build/site/assets/factory-workbench-follow.js
+COPY assets/factory-activity.js /build/site/assets/factory-activity.js
 RUN set -eu; \
     if [ "$DASHBOARD_THREE_SOURCE" = "vendored" ]; then \
       sed -i \

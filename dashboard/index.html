@@ -9,6 +9,10 @@
 <link rel="stylesheet" href="companion/handoff.css">
 <script defer src="exercise/uc04.js"></script>
 <script defer src="companion/handoff.js"></script>
+<script defer src="assets/factory-character.js"></script>
+<script defer src="assets/factory-encounters.js"></script>
+<script defer src="assets/factory-workbench-follow.js"></script>
+<script defer src="assets/factory-activity.js"></script>
 <script>
   try { var p = JSON.parse(localStorage.getItem('aiFactoryRef.prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.setAttribute('data-theme', p.theme); } catch (e) {}
 </script>
@@ -161,7 +165,7 @@ button svg{pointer-events:none}
 .view-ctrl{position:absolute;top:12px;left:12px;display:flex;flex-wrap:wrap;max-width:calc(100% - 24px);gap:2px;padding:3px;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);z-index:4}
 .seg{white-space:nowrap;border:0;background:transparent;padding:6px 11px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
 .seg .i{width:14px;height:14px}
-.seg[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.seg:is([aria-pressed="true"],[aria-expanded="true"]){background:var(--accent-soft);color:var(--accent)}
 .legend{position:absolute;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 12px;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);z-index:3;max-width:calc(100% - 24px)}
 .legend span{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
 .legend span[data-st=free] .dot{--c:var(--free)} .legend span[data-st=busy] .dot{--c:var(--busy)}
@@ -211,6 +215,29 @@ button svg{pointer-events:none}
 .d-status>div{min-width:0}
 .d-status b{display:block}
 .d-status span{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+.d-status>.d-face{width:92px;height:92px;flex:none;object-fit:cover;border-radius:9px}
+.d-face-fallback{display:grid;place-items:center;background:var(--panel);font-size:24px;font-weight:700}
+.d-face-view{align-self:flex-start}
+.d-face-view[hidden]{display:none}
+.d-face-angles{align-self:flex-start;display:flex;flex-wrap:wrap;gap:4px;padding:4px;border:1px solid var(--border);border-radius:10px}
+.d-face-angles[hidden]{display:none}
+.stage.face-view .labels{visibility:hidden}
+.encounter-panel{position:absolute;z-index:7;top:10px;right:10px;width:min(310px,calc(100% - 20px));max-height:calc(100% - 20px);overflow:auto;display:grid;gap:10px;padding:14px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg)}
+.encounter-panel[hidden],.encounter-panel [hidden],#encounterOpen[hidden]{display:none}
+.encounter-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.encounter-head h2{margin:2px 0 0;font-size:16px;letter-spacing:-.015em}
+.encounter-panel p{margin:0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.encounter-panel label{display:grid;gap:4px;font-size:12px;font-weight:650}
+.encounter-panel :is(select,input){min-width:0;width:100%;padding:7px 8px;color:var(--text);background:var(--panel-2);border:1px solid var(--border-strong);border-radius:7px;font:inherit}
+.encounter-actions{display:flex;flex-wrap:wrap;gap:6px}
+.encounter-panel .encounter-message{padding:8px 9px;border-left:2px solid var(--accent);background:var(--panel-2);border-radius:0 6px 6px 0;color:var(--text)}
+.encounter-reply{display:grid;gap:6px;justify-items:start}
+.encounter-reply label{width:100%}
+.encounter-marker{display:flex;gap:5px;align-items:center;padding:4px 8px;color:var(--text);background:var(--panel);border:1px solid var(--border-strong);border-radius:7px;white-space:nowrap;pointer-events:none;font:650 11px/1.3 var(--font)}
+.encounter-marker[data-kind=agent]{color:#e8f9ff;background:#133447;border-color:#54b1c7}
+.encounter-marker small{color:inherit;opacity:.85;font:inherit}
+@media(min-width:861px){.stage:has(.encounter-panel:not([hidden])) .view-ctrl{max-width:calc(100% - 344px)}}
+@media(max-width:860px){.encounter-panel{top:auto;bottom:10px;max-height:54%}}
 .d-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
 .gantt{position:relative;height:44px;border-radius:9px;background:var(--panel-2);border:1px solid var(--border);margin-bottom:14px}
 .g-grid span{position:absolute;top:0;bottom:0;border-left:1px dashed var(--border)}
@@ -353,6 +380,54 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .ctab{border:0;background:transparent;padding:6px 10px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
 .ctab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
 .c-body{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px}
+.console.is-activity .c-tabs{flex:none}
+.activity{--activity-time:#188173;--activity-tokens:#ad651a;display:grid;gap:15px;min-width:0}
+[data-theme="dark"] .activity{--activity-time:#57c4b2;--activity-tokens:#e9a357}
+.activity-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:3px 0 13px;border-bottom:1px solid var(--border-strong)}
+.activity-head p{margin:0 0 4px;color:var(--activity-time);font:700 10px/1.2 var(--font);letter-spacing:.13em}
+.activity-head h3{margin:0;font-size:clamp(21px,3vw,27px);letter-spacing:-.035em;line-height:1.1}
+.activity-source{flex:none;max-width:43%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:var(--panel-2);font-size:11px;font-weight:650;text-align:center}
+.activity-filters{display:flex;gap:8px 11px;flex-wrap:wrap;align-items:end}
+.activity-filters label{flex:1 1 120px;max-width:100%;min-width:0;display:grid;gap:4px;color:var(--muted);font-size:11.5px;font-weight:650}
+.activity-filters select{width:100%;min-width:0;min-height:35px;padding:5px 8px;border:1px solid var(--border-strong);border-radius:7px;background:var(--panel-2);color:var(--text);font:inherit;font-size:12.5px}
+.activity-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.activity-kpi{display:grid;gap:4px;min-width:0;padding:8px 0 2px;border-top:2px solid var(--border-strong);overflow-wrap:anywhere}
+.activity-kpi:first-child{border-color:var(--activity-time)} .activity-kpi:nth-child(2){border-color:var(--activity-tokens)}
+.activity-kpi span,.activity-kpi small{color:var(--muted);font-size:11.5px;line-height:1.35}
+.activity-kpi strong{font-size:clamp(17px,3vw,25px);font-variant-numeric:tabular-nums;letter-spacing:-.035em;line-height:1.14}
+.activity-figure{margin:0;min-width:0;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);padding:11px 13px}
+.activity-figure figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 10px;padding-bottom:8px}
+.activity-figure figcaption b{font-size:13.5px}.activity-figure figcaption span,.activity-dates{font:600 10.5px/1.35 ui-monospace,monospace;color:var(--muted)}
+.activity-track-title{display:flex;justify-content:space-between;gap:8px;margin:5px 0 4px;font-size:11.5px;color:var(--muted)}
+.activity-track{--ink:var(--activity-time);display:grid;grid-template-columns:repeat(var(--days),minmax(0,1fr));gap:1px;align-items:end;height:48px;border-bottom:1px solid var(--border-strong);background:repeating-linear-gradient(to top,transparent 0 calc(25% - 1px),var(--border) calc(25% - 1px) 25%)}
+.activity-track[data-track="tokens"]{--ink:var(--activity-tokens)}
+.activity-tick.bar{height:var(--bar);min-height:1px;background:var(--ink);border-radius:2px 2px 0 0}
+.activity-tick.zero{height:2px;background:var(--ink)}.activity-tick.unknown{height:6px;border:1px dashed var(--ink)}
+.activity-dates{display:flex;justify-content:space-between;gap:8px;margin-top:5px}
+.activity-daily{margin-top:8px;color:var(--muted);font-size:11.5px}.activity-daily summary{cursor:pointer;font-weight:650}
+.activity-daily table{width:100%;text-align:left;border-collapse:collapse;margin-top:6px;font-variant-numeric:tabular-nums}
+.activity-daily :is(td,th){padding:5px 4px;border-top:1px solid var(--border)}
+.activity-note,.activity-empty{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+.activity-partial{padding:7px 9px;border-inline-start:2px solid var(--activity-tokens);background:var(--panel-2)}
+.activity-empty{padding:13px;border:1px solid var(--border);border-radius:8px;background:var(--panel-2)}
+.activity-ledger{min-width:0}.activity-ledger h4{margin:0 0 6px;font-size:15px;letter-spacing:-.012em}
+.activity-ledger ol,.activity-supports{list-style:none;margin:0;padding:0}
+.activity-event{display:grid;grid-template-columns:minmax(62px,.65fr) minmax(0,3.6fr) minmax(85px,1.15fr);gap:10px;padding:10px 0;border-top:1px solid var(--border);font-size:12.5px;overflow-wrap:anywhere}
+.activity-event time,.activity-values{display:flex;flex-direction:column;gap:3px;min-width:0;font-variant-numeric:tabular-nums}
+.activity-event time{font:600 11px/1.35 ui-monospace,monospace}.activity-event small,.activity-event p{color:var(--muted);font-size:11px;line-height:1.35}
+.activity-event p{margin:3px 0 0}.activity-event-title{display:flex;gap:4px 7px;align-items:baseline;flex-wrap:wrap}
+.activity-event-title span{padding:1px 5px;border-radius:5px;background:var(--panel-3);font-size:10px;color:var(--muted)}
+.activity-event-title span[data-status="failed"]{color:var(--busy-text)} .activity-event-title span[data-status="waiting"]{color:var(--soon-text)}
+.activity-supports{display:flex;flex-wrap:wrap;gap:3px 5px;margin-top:5px}
+.activity-supports li{max-width:100%;padding:2px 5px;border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10.5px}
+.activity-supports :is(span,code){color:var(--muted)}.activity-values{text-align:right}
+@media(max-width:660px){
+  .console.is-activity .c-tabs{flex-wrap:nowrap}.activity{gap:12px}
+  .activity-filters label{flex-basis:calc(50% - 11px)}.activity-kpis{gap:8px}
+  .activity-kpi small,.activity-kpi span{font-size:10px}.activity-figure{padding:9px}
+  .activity-event{grid-template-columns:minmax(55px,.7fr) minmax(0,3.3fr);gap:5px 9px}
+  .activity-values{grid-column:2;flex-direction:row;flex-wrap:wrap;gap:4px 8px;text-align:left;align-items:baseline}
+}
 .shadow-console{--shadow-ink:#e6f7ee;--shadow-field:#0e3735;display:grid;gap:17px;min-width:0}
 .shadow-hero{background:var(--shadow-field);color:var(--shadow-ink);border-radius:12px;padding:17px;display:grid;gap:8px;overflow-wrap:anywhere}
 .shadow-hero h3{margin:0;font-size:clamp(19px,3.6vw,25px);line-height:1.15;letter-spacing:-.026em}
@@ -688,7 +763,23 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
       <button type="button" class="seg" data-lens="status" aria-pressed="true" title="Vue Statut (1)">Statut</button>
       <button type="button" class="seg" data-lens="uc" aria-pressed="false" title="Vue Use cases (2)">Use cases</button>
       <button type="button" class="seg" data-lens="heat" aria-pressed="false" title="Vue Occupation du jour (3)">Occupation</button>
+      <button type="button" class="seg" id="encounterOpen" aria-expanded="false" aria-controls="encounterPanel" hidden>Échanges 3D</button>
     </div>
+    <section class="encounter-panel" id="encounterPanel" aria-labelledby="encounterTitle" hidden>
+      <div class="encounter-head"><div><div class="d-zone" id="encounterDemo">Simulation locale</div><h2 id="encounterTitle">Échanges 3D</h2></div><button class="btn" type="button" id="encounterClose" aria-label="Fermer les échanges">×</button></div>
+      <label id="encounterScenarioField"><span id="encounterScenarioLabel">Scénario</span><select id="encounterScenario">
+        <option value="bu-human">Échanges inter-BU</option><option value="agent-agent">Agent à agent</option><option value="agent-human">Agent à humain</option>
+      </select></label>
+      <div class="encounter-actions"><button type="button" class="btn primary" id="encounterStart">Lancer</button><button type="button" class="btn primary" id="encounterFollow" hidden>Activer le suivi</button><button type="button" class="btn" id="encounterCancel" hidden>Annuler</button></div>
+      <p id="encounterStatus" role="status" aria-atomic="true"></p>
+      <p id="encounterQuestion" class="encounter-message" hidden></p>
+      <p id="encounterReply" class="encounter-message" hidden></p>
+      <a id="encounterCompanion" class="btn ghost" href="companion/index.html" target="_blank" rel="noopener noreferrer" hidden>Ouvrir le Compagnon de décision</a>
+      <form id="encounterForm" class="encounter-reply" hidden>
+        <label><span id="encounterReplyLabel">Votre réponse simulée</span><input id="encounterInput" type="text" maxlength="280" required autocomplete="off"></label>
+        <button type="submit" class="btn primary" id="encounterSend">Répondre</button>
+      </form>
+    </section>
     <div class="legend" id="legend" aria-label="Légende">
       <span data-st="free"><i class="dot"></i>Libre</span>
       <span data-st="busy"><i class="dot"></i>Occupé</span>
@@ -729,6 +820,13 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
       </header>
       <div class="d-body">
         <div class="d-status" id="dStatus"></div>
+        <button type="button" class="btn d-face-view" id="dFaceView" aria-pressed="false" hidden></button>
+        <div class="d-face-angles" id="dFaceAngles" role="group" aria-label="Angles du visage" hidden>
+          <button type="button" class="seg" data-face-angle="front" aria-pressed="false">Face</button>
+          <button type="button" class="seg" data-face-angle="three" aria-pressed="false">¾</button>
+          <button type="button" class="seg" data-face-angle="profile" aria-pressed="false">Profil</button>
+          <button type="button" class="seg" data-face-angle="back" aria-pressed="false">Dos</button>
+        </div>
         <section>
           <div class="d-label">Planning · <span id="dDate"></span></div>
           <div class="gantt" id="dGantt"></div>
@@ -1373,20 +1471,118 @@ function glassWall(x1, z1, x2, z2, h = 2.5) {
 
 /* ---------- Furniture ---------- */
 const AV_GEO = {};
+const AV_DEMO_STYLE = {
+  p01: ['#6b3d29', 'long', '#d69676'], p02: ['#251d1b', 'short', '#c88155'], p03: ['#272028', 'long', '#d59872'],
+  p04: ['#a55228', 'short', '#e3ad90'], p05: ['#a97935', 'bun', '#e0a88a'], p06: ['#291f19', 'short', '#b67450'],
+  p07: ['#8d8b93', 'bob', '#dfa88d'], p08: ['#694326', 'short', '#e3a180'], p09: ['#452d25', 'long', '#c9865f'],
+  p10: ['#b2874a', 'short', '#e7ad8a'], p11: ['#241a17', 'bun', '#a56748'], p12: ['#322720', 'bun', '#d1936f'],
+};
+const AV_FACE_MATS = {};
+function avatarFaceMat(key, color, roughness = .65) {
+  return AV_FACE_MATS[key] ||= new THREE.MeshStandardMaterial({ color, roughness });
+}
+function makeAvatarHairCap() {
+  const positions = [], indices = [], rings = 9, sides = 28;
+  for (let row = 0; row <= rings; row++) for (let col = 0; col <= sides; col++) {
+    const phi = col * 2 * Math.PI / sides, z = Math.cos(phi);
+    const sweep = .11 * Math.sin(phi + .35) * Math.max(0, -z);
+    const theta = row / rings * (1.46 + .51 * z + sweep);
+    const r = Math.sin(theta);
+    const wave = .003 * Math.sin(8 * phi + 3 * theta) * r;
+    positions.push((.16 + wave) * r * Math.sin(phi), .169 * Math.cos(theta) + .004, (.15 + wave) * r * z + .006);
+    if (row < rings && col < sides) {
+      const a = row * (sides + 1) + col, b = a + sides + 1;
+      indices.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setIndex(indices); g.computeVertexNormals();
+  return g;
+}
+const skipFaceRaycast = () => {};
+function avatarDetail(parent, name, material, xyz, size, geometry, angle = 0) {
+  const sphere = cachedGeo('avatar-detail', () => new THREE.SphereGeometry(1, 14, 10));
+  const mesh = new THREE.Mesh(geometry || sphere, material);
+  mesh.position.set(...xyz); mesh.scale.set(...size); mesh.rotation.z = angle;
+  mesh.userData.avatarDetail = name;
+  mesh.raycast = skipFaceRaycast;
+  parent.add(mesh);
+  return mesh;
+}
+function makeAvatarFace(head, skinMat) {
+  const hairMat = new THREE.MeshStandardMaterial({ color: '#503626', roughness: .8 });
+  const eye = avatarFaceMat('eye', '#f1e5d7'), iris = avatarFaceMat('iris', '#673e25', .42);
+  const pupil = avatarFaceMat('pupil', '#1c1817'), light = avatarFaceMat('eyeLight', '#fff5e6', .25);
+  const lip = avatarFaceMat('lip', '#a96959'), seam = avatarFaceMat('seam', '#824c42');
+  const gold = avatarFaceMat('gold', '#dca351', .34);
+  const detail = new THREE.Group(), locks = new THREE.Group(), bun = new THREE.Group(), hoops = new THREE.Group();
+  head.add(detail); detail.add(locks, bun, hoops); detail.visible = false;
+  const part = (name, mat, xyz, size, angle) => avatarDetail(detail, name, mat, xyz, size, null, angle);
+  avatarDetail(head, 'hair-cap', hairMat, [0, 0, 0], [1, 1, 1], cachedGeo('avatar-cap', makeAvatarHairCap));
+  part('hair-part', hairMat, [-.048, .125, -.076], [.094, .026, .031], -.34);
+  part('lips', lip, [0, -.074, -.119], [.032, .0075, .008]);
+  const mouth = cachedGeo('avatar-mouth', () => new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-.029, -.067, -.119), new THREE.Vector3(-.015, -.071, -.126),
+    new THREE.Vector3(0, -.072, -.129), new THREE.Vector3(.015, -.070, -.127),
+    new THREE.Vector3(.029, -.066, -.119),
+  ]), 12, .0019, 5, false));
+  avatarDetail(detail, 'mouth', seam, [0, 0, 0], [1, 1, 1], mouth);
+  part('neck', skinMat, [0, -.18, .014], [.06, .085, .056]);
+  const hoop = cachedGeo('avatar-hoop', () => new THREE.TorusGeometry(.016, .0026, 6, 14));
+  for (const side of [-1, 1]) {
+    const x = side * .052;
+    part('eye', eye, [x, .028, -.123], [.030, .0125, .010], side * .09);
+    part('iris', iris, [x + .001, .028, -.132], [.010, .0105, .003]);
+    part('pupil', pupil, [x + .001, .028, -.135], [.0054, .0064, .0016]);
+    part('eye-light', light, [x - .002, .032, -.136], [.0021, .0021, .001]);
+    part('brow', hairMat, [x, .055, -.121], [.029, .0044, .0048], side * -.13);
+    part('ear', skinMat, [side * .14, -.014, .007], [.015, .027, .018], side * -.13);
+    avatarDetail(locks, 'hair-lock', hairMat, [side * .127, -.065, .021], [.039, .118, .055], null, side * .18);
+    avatarDetail(locks, 'hair-wave', hairMat, [side * .120, -.131, .012], [.043, .069, .047], null, side * -.32);
+    avatarDetail(hoops, 'hoop', gold, [side * .143, -.048, -.045], [1, 1, 1], hoop).rotation.y = side * .52;
+  }
+  avatarDetail(locks, 'hair-back', hairMat, [0, -.061, .075], [.126, .130, .078]);
+  avatarDetail(bun, 'hair-bun', hairMat, [0, .11, .13], [.067, .06, .069]);
+  return { detail, hairMat, locks, bun, hoops };
+}
 function makeAvatar(parent, x, z, ry) {
   const g = group(parent, x, z, ry);
   const bodyMat = new THREE.MeshStandardMaterial({ color: '#888', roughness: 0.6 });
   const skinMat = new THREE.MeshStandardMaterial({ color: '#e8c4a0', roughness: 0.7 });
-  const body = new THREE.Mesh(AV_GEO.body, bodyMat); body.position.y = 0.9;
+  const rig = window.FactoryCharacter?.create(THREE, { skinMat, accentMat: bodyMat });
+  const body = rig?.body || new THREE.Mesh(AV_GEO.body, bodyMat); body.position.y = 0.9;
   const head = new THREE.Mesh(AV_GEO.head, skinMat); head.position.y = 1.43;
-  const thighs = new THREE.Mesh(AV_GEO.thighs, MATS.pants); thighs.position.set(0, 0.52, -0.2);
-  const shins = new THREE.Mesh(AV_GEO.shins, MATS.pants); shins.position.set(0, 0.22, -0.38);
-  for (const m of [body, head, thighs, shins]) { m.castShadow = true; g.add(m); }
+  if (rig) {
+    g.add(rig.group); head.position.y = rig.pose('seated');
+  } else {
+    const thighs = new THREE.Mesh(AV_GEO.thighs, MATS.pants); thighs.position.set(0, 0.52, -0.2);
+    const shins = new THREE.Mesh(AV_GEO.shins, MATS.pants); shins.position.set(0, 0.22, -0.38);
+    for (const m of [body, thighs, shins]) { m.castShadow = true; g.add(m); }
+  }
+  head.castShadow = true; g.add(head);
+  const face = makeAvatarFace(head, skinMat);
   g.scale.setScalar(0.001); g.visible = false; g.userData.avatar = true;
-  return { group: g, bodyMat, skinMat, s: 0, target: 0, emp: null };
+  return { group: g, body, head, bodyMat, skinMat, face, rig, s: 0, target: 0, emp: null };
 }
 function setAvatar(av, e) {
-  if (e) { av.bodyMat.color.set(e.color); av.skinMat.color.set(e.skin || '#e8c4a0'); av.target = 1; av.emp = e.id; av.group.visible = true; }
+  const demo = demoPortraits();
+  if (faceView?.avatar === av && (e?.id !== faceView.emp || faceView.demo !== demo)) endFaceView(true);
+  syncAvatarPortrait(av, demo ? e?.id : null);
+  if (e) {
+    const demoStyle = demo && AV_DEMO_STYLE[e.id];
+    av.bodyMat.color.set(e.color);
+    av.skinMat.color.set(demoStyle?.[2] || e.skin || '#e8c4a0');
+    if (av.emp !== e.id || av.demo !== demo) {
+      av.rig?.setProfile(e.id, demo);
+      const [color, style] = demoStyle || ['#503626', 'short'];
+      const { hairMat, locks, bun, hoops } = av.face;
+      hairMat.color.set(color); locks.visible = style === 'long' || style === 'bob';
+      locks.scale.y = style === 'bob' ? .62 : 1; bun.visible = style === 'bun';
+      hoops.visible = demo && e.id === 'p01'; av.demo = demo;
+    }
+    av.target = 1; av.emp = e.id; av.group.visible = true;
+  }
   else { av.target = 0; av.emp = null; }
 }
 function chair(parent, x, z, ry = 0) {
@@ -1457,7 +1653,7 @@ function statusVisual(r, { x, z, hw, hd, pinY, haloOp = 0.85, focus, px = x, pz 
     focus: focus || new THREE.Vector3(x, 0, z), state: null, labelKey: '' };
   return VIS[r.id];
 }
-function pickMeshes(root, id) { root.traverse(o => { if (o.isMesh) { o.userData = { kind: 'res', id }; PICK.push(o); } }); }
+function pickMeshes(root, id) { root.traverse(o => { if (o.isMesh && !o.userData.avatarDetail) { o.userData = { kind: 'res', id }; PICK.push(o); } }); }
 function pickBox(id, [w, h, d], [x, y, z], ry = 0, kind = 'res') {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ visible: false }));
   m.position.set(x, y + h / 2, z); m.rotation.y = ry; m.userData = { kind, id };
@@ -1906,7 +2102,11 @@ function initScene() {
   controls.enableDamping = true; controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.47; controls.minDistance = 5; controls.maxDistance = 110;
   controls.screenSpacePanning = false;
-  controls.addEventListener('start', () => { camAnim = null; });
+  controls.addEventListener('start', () => {
+    camAnim = null;
+    encounter.follow = false;
+    if (faceView) { faceView.angle = null; renderFaceAngles(); }
+  });
 
   hemi = new THREE.HemisphereLight('#fff', '#999', 1.4); scene.add(hemi);
   amb = new THREE.AmbientLight('#ffffff', 0.3); scene.add(amb);
@@ -1928,7 +2128,20 @@ function initScene() {
   tileTex = makeTileTexture(); MATS.tile.map = tileTex;
   haloTex = makeHaloTexture();
   AV_GEO.body = new THREE.CapsuleGeometry(0.19, 0.36, 4, 12);
-  AV_GEO.head = new THREE.SphereGeometry(0.15, 20, 16);
+  AV_GEO.head = new THREE.SphereGeometry(0.15, 40, 28);
+  AV_GEO.head.scale(1, 1.04, .92);
+  const headPos = AV_GEO.head.attributes.position;
+  for (let i = 0; i < headPos.count; i++) {
+    const x = headPos.getX(i), y = headPos.getY(i), z = headPos.getZ(i);
+    headPos.setX(i, x * (1 - .18 * Math.max(0, -y / .156)));
+    // A continuous ridge and tip give the nose its profile without a separate bulb on the head.
+    if (z < -.08) {
+      const bridge = .013 * Math.exp(-((x / .025) ** 2 + ((y - .006) / .040) ** 2));
+      const tip = .024 * Math.exp(-((x / .032) ** 2 + ((y + .029) / .022) ** 2));
+      headPos.setZ(i, z - bridge - tip);
+    }
+  }
+  AV_GEO.head.computeVertexNormals();
   AV_GEO.thighs = new THREE.BoxGeometry(0.34, 0.13, 0.42);
   AV_GEO.shins = new THREE.BoxGeometry(0.3, 0.42, 0.12);
 
@@ -2009,7 +2222,11 @@ function doHover() {
 }
 
 /* ---------- Camera ---------- */
-let camAnim = null;
+let camAnim = null, faceView = null;
+const FACE_ANGLES = {
+  front: [0, 'Front', 'Face'], three: [Math.PI / 4, 'Three-quarter', 'Trois quarts'],
+  profile: [Math.PI / 2, 'Profile', 'Profil'], back: [Math.PI, 'Back', 'Dos'],
+};
 const HOME_TARGET = new THREE.Vector3(0.6, 0, 1.2);
 function viewPose(kind) {
   const el = $('canvasHost'), w = el.clientWidth || 1, h = el.clientHeight || 1;
@@ -2049,6 +2266,8 @@ function flyTo(p, t, ms = 850) {
   camAnim = { p0: camera.position.clone(), t0: controls.target.clone(), p1: p, t1: t, start: performance.now(), ms };
 }
 function setView(kind, instant = false) {
+  encounter.follow = false;
+  endFaceView();
   if (POV.active || POV.anim) exitPov(true);
   S.view = kind;
   applyViewLabels(kind);
@@ -2058,6 +2277,7 @@ function setView(kind, instant = false) {
 }
 function focusResource(id) {
   const v = VIS[id]; if (!v) return;
+  endFaceView();
   if (POV.active) { POV.turnTo = Math.atan2(-(v.focus.x - POV.pos.x), -(v.focus.z - POV.pos.z)); return; }  // visit mode: turn towards it
   const t = v.focus.clone();
   const dir = camera.position.clone().sub(controls.target);
@@ -2067,8 +2287,65 @@ function focusResource(id) {
   const dist = v.r.type === 'room' ? 15 : 11.5;
   flyTo(t.clone().addScaledVector(dir, dist), t, 800);
 }
+function faceViewButton(available) {
+  const b = $('dFaceView');
+  b.hidden = !available;
+  b.textContent = faceView ? ui('Return to previous view', 'Retour à la vue précédente') : ui('3D close-up', 'Gros plan 3D');
+  b.setAttribute('aria-pressed', String(!!faceView));
+  renderFaceAngles();
+}
+function renderFaceAngles() {
+  const group = $('dFaceAngles');
+  group.hidden = !faceView?.avatar.portrait;
+  if (group.hidden) return;
+  group.setAttribute('aria-label', ui('Face viewing angles', 'Angles du visage'));
+  for (const button of group.querySelectorAll('button')) {
+    const key = button.dataset.faceAngle, [, en, fr] = FACE_ANGLES[key];
+    const label = ui(en, fr);
+    button.textContent = key === 'three' ? '¾' : label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-pressed', String(faceView.angle === key));
+  }
+}
+function aimFaceView(angle = 'three') {
+  if (!faceView || !Object.hasOwn(FACE_ANGLES, angle)) return;
+  const a = faceView.avatar, q = a.group.getWorldQuaternion(new THREE.Quaternion());
+  const origin = a.group.getWorldPosition(new THREE.Vector3());
+  // The seated avatar faces local −Z. The camera presets match the four projections on the mesh.
+  const yaw = FACE_ANGLES[angle][0];
+  const distance = window.innerWidth <= 860 ? 1.19 : 1.04;
+  const headOffset = a.portrait?.userData.headOffsetY ?? 0;
+  const p = a.portrait ? new THREE.Vector3(distance * Math.sin(yaw), 1.49 + headOffset, -distance * Math.cos(yaw))
+    : new THREE.Vector3(.48, 1.60, -.99);
+  const t = new THREE.Vector3(0, a.portrait ? 1.425 + headOffset : 1.36, -.018);
+  faceView.angle = angle; renderFaceAngles();
+  flyTo(p.applyQuaternion(q).add(origin), t.applyQuaternion(q).add(origin), 750);
+}
+function endFaceView(restore = false, instant = false) {
+  if (!faceView) return;
+  const saved = faceView; faceView = null;
+  Object.assign(controls, saved.limits);
+  $('stage').classList.remove('face-view');
+  $('view3d').setAttribute('aria-pressed', String(S.view === '3d'));
+  $('viewTop').setAttribute('aria-pressed', String(S.view === 'top'));
+  applyViewLabels(S.view); faceViewButton(true);
+  if (restore) flyTo(saved.p, saved.t, instant ? 0 : 700);
+}
+function toggleFaceView() {
+  if (faceView) { endFaceView(true); return; }
+  const a = VIS[S.selected]?.avatars[0];
+  if (!a?.target || RES[S.selected]?.type !== 'desk' || snap?.res[S.selected]?.state !== 'busy') return;
+  if (POV.active || POV.anim) exitPov(true);
+  const { minDistance, maxPolarAngle, enablePan } = controls;
+  faceView = { avatar: a, emp: a.emp, demo: demoPortraits(), p: (camAnim?.p1 || camera.position).clone(), t: (camAnim?.t1 || controls.target).clone(),
+    limits: { minDistance, maxPolarAngle, enablePan } };
+  Object.assign(controls, { minDistance: .62, maxPolarAngle: Math.PI * .54, enablePan: false });
+  $('stage').classList.add('face-view');
+  $('view3d').setAttribute('aria-pressed', 'false'); $('viewTop').setAttribute('aria-pressed', 'false');
+  applyViewLabels('3d'); faceViewButton(true); aimFaceView();
+}
 
-let viewShift = 0, viewShiftApplied = -1;
+let viewShift = 0, viewShiftApplied = -1, viewShiftY = 0, viewShiftYApplied = -1;
 function resize() {
   const el = $('canvasHost'), w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight);
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
@@ -2078,12 +2355,16 @@ function resize() {
 function applyViewShift() {
   const el = $('canvasHost'), w = el.clientWidth, h = el.clientHeight;
   const wide = window.innerWidth > 860;
-  const target = POV.active || POV.anim ? 0 : wide && consoleKey ? Math.min(300, w * 0.3) : wide && S.selected !== null ? Math.min(200, w * 0.2) : 0;
-  viewShift += (target - viewShift) * (REDUCED ? 1 : 0.12);
+  const exchange = !$('encounterPanel').hidden;
+  const target = POV.active || POV.anim ? 0 : wide && consoleKey ? Math.min(300, w * 0.3)
+    : wide && S.selected !== null ? Math.min(200, w * 0.2) : wide && exchange ? Math.min(155, w * .2) : 0;
+  const vertical = !wide ? h * (faceView ? .04 : exchange ? .14 : 0) : 0, speed = REDUCED ? 1 : 0.12;
+  viewShift += (target - viewShift) * speed; viewShiftY += (vertical - viewShiftY) * speed;
   if (Math.abs(target - viewShift) < 0.5) viewShift = target;
-  if (Math.abs(viewShift - viewShiftApplied) < 0.25) return;
-  viewShiftApplied = viewShift;
-  if (viewShift === 0) camera.clearViewOffset(); else camera.setViewOffset(w, h, viewShift, 0, w, h);
+  if (Math.abs(vertical - viewShiftY) < 0.5) viewShiftY = vertical;
+  if (Math.abs(viewShift - viewShiftApplied) < 0.25 && Math.abs(viewShiftY - viewShiftYApplied) < 0.25) return;
+  viewShiftApplied = viewShift; viewShiftYApplied = viewShiftY;
+  if (!viewShift && !viewShiftY) camera.clearViewOffset(); else camera.setViewOffset(w, h, viewShift, viewShiftY, w, h);
 }
 
 /* ---------- Per-frame ---------- */
@@ -2107,6 +2388,7 @@ function frame(now) {
     controls.target.x = clamp(controls.target.x, -15, 15); controls.target.z = clamp(controls.target.z, -11, 11); controls.target.y = clamp(controls.target.y, 0, 2);
   }
   let shadowDirty = false;
+  updateEncounter(dt, now);
   // cut-away walls (wall-mounted objects disappear with their wall)
   for (const w of CUT_WALLS) {
     tmpV2.set(camera.position.x - w.cx, camera.position.z - w.cz);
@@ -2133,7 +2415,9 @@ function frame(now) {
       if (Math.abs(a.target - a.s) > 0.001) shadowDirty = true;
       a.s += (a.target - a.s) * (REDUCED ? 1 : 0.16);
       if (a.target === 0 && a.s < 0.02) { a.s = 0; a.group.visible = false; }
+      else a.group.visible = !encounter.activePeople.has(a.emp);
       a.group.scale.setScalar(Math.max(0.001, a.s));
+      a.face.detail.visible = a.group.visible && camera.position.distanceToSquared(a.head.getWorldPosition(tmpV)) < 25;
     }
   }
   for (const l of LOCKERS) l.ledMat.color.lerp(l.target, k);
@@ -2155,20 +2439,31 @@ function frame(now) {
 /* ---------- Optional visual pack (docs/ASSETS.md, built by scripts/build_assets.py) ---------- */
 // assets/assets.js is a data-URI bundle (works from file:// too). Whatever is missing keeps the
 // procedural look; nothing here may break the scene.
-const ASSET = { items: {}, img: {}, texMats: [], extras: [], version: '' };
-function loadAssetPack() {
+const ASSET = { load: null, items: {}, img: {}, texMats: [], extras: [], version: '' };
+function loadVisualScript(src) {
   return new Promise(resolve => {
     const s = document.createElement('script');
-    s.src = './assets/assets.js'; s.async = true;
-    s.onload = () => { const b = window.__AF_ASSETS || {}; ASSET.items = b.items || {}; ASSET.version = b.version || ''; resolve(); };
-    s.onerror = () => resolve();
+    s.src = src; s.async = true;
+    s.onload = resolve; s.onerror = resolve;
     document.head.appendChild(s);
   });
 }
+function loadAssetPack() {
+  return ASSET.load ||= loadVisualScript('./assets/assets.js').then(() => {
+    const b = window.__AF_ASSETS || {};
+    ASSET.items = b.items || {}; ASSET.version = b.version || '';
+  });
+}
+async function decodeVisualImage(src) {
+  if (typeof src !== 'string' || !src) return null;
+  const im = new Image(); im.decoding = 'async'; im.src = src;
+  try { await im.decode(); return im; } catch { return null; }
+}
 async function decodeAssets() {
   await Promise.all(Object.entries(ASSET.items).map(async ([id, it]) => {
-    const im = new Image(); im.decoding = 'async'; im.src = it.src;
-    try { await im.decode(); ASSET.img[id] = im; } catch (e) { /* corrupt entry: ignored */ }
+    if (id === 'camille-turnaround') return;
+    const im = await decodeVisualImage(it.src);
+    if (im) ASSET.img[id] = im;
   }));
 }
 function assetTexture(id, { repeat = true } = {}) {
@@ -2252,13 +2547,358 @@ function addAssetExtras() {
     scene.add(sky); ASSET.extras.push(sky);
   }
 }
+// The numbered portraits belong to the fictional roster in the embedded public demo.
+const demoPortraits = () => SNAP_SOURCE === 'embedded' && !apiReachable();
+const PORTRAIT_PROFILE = /^p(?:0[1-9]|1[0-2])$/;
+const portraitOf = id => demoPortraits() && PORTRAIT_PROFILE.test(id)
+  ? ASSET.img[`avatar-${id}`] || null : null;
+
+const portraitResources = new Map();
+let portraitEngine, portraitAtlases;
+async function buildDemoPortrait(id) {
+  try {
+    const entry = id === 'p01' ? await loadAssetPack().then(() => ASSET.items['camille-turnaround'])
+      : (await (portraitAtlases ||= loadVisualScript('./assets/portrait-atlases.js').then(() => window.FactoryPortraitAtlases)))?.[id];
+    if (!demoPortraits() || typeof entry?.src !== 'string' || !entry.src.startsWith('data:image/webp;base64,') ||
+        (id !== 'p01' && !entry.registration)) return null;
+    const [engine, image] = await Promise.all([
+      portraitEngine ||= loadVisualScript('./assets/camille-model.js').then(() => window.FactoryPortraitModel),
+      decodeVisualImage(entry.src),
+    ]);
+    return demoPortraits() && image ? engine?.create(THREE, image, entry.registration, id) : null;
+  } catch { return null; } // One unavailable profile must leave the other models and the 3D scene usable.
+}
+function clearAvatarPortrait(a) {
+  a.portraitRequest = null; a.portraitId = null;
+  if (!a.portrait) return;
+  a.releasePortraitNeck?.(); a.releasePortraitNeck = null;
+  a.portrait.removeFromParent(); a.portrait = null; a.head.visible = true;
+  if (a.portraitNeck) { a.portraitNeck.visible = true; a.portraitNeck = null; }
+}
+function syncAvatarPortrait(a, profile) {
+  const id = PORTRAIT_PROFILE.test(profile) ? profile : null;
+  if ((a.portraitId || null) === id) return;
+  clearAvatarPortrait(a);
+  if (!id) return;
+  a.portraitId = id;
+  const request = {}; a.portraitRequest = request;
+  if (!portraitResources.has(id)) portraitResources.set(id, buildDemoPortrait(id));
+  portraitResources.get(id).then(resource => {
+    if (!resource || a.portraitRequest !== request || a.emp !== id || !demoPortraits()) return;
+    const model = resource.instantiate({ onBody: !!a.rig });
+    if (!model) return;
+    model.name = `factory-portrait-${id}`;
+    model.position.y = a.head.position.y - 1.43;
+    a.group.add(model); a.portrait = model; a.head.visible = false;
+    const neck = a.rig && a.body.getObjectByName('neck');
+    if (neck?.visible) {
+      if (resource.hasNativeNeck) a.releasePortraitNeck = resource.bindNativeNeck?.(model, neck);
+      else { neck.visible = false; a.portraitNeck = neck; }
+    }
+    if (faceView?.avatar === a) {
+      if (faceView.angle) aimFaceView(faceView.angle);
+      else renderFaceAngles();
+    }
+    if (renderer) renderer.shadowMap.needsUpdate = true;
+  }).catch(() => {});
+}
+function releaseDemoPortraits() {
+  if (portraitResources.size === 0) return;
+  for (const v of Object.values(VIS)) for (const a of v.avatars) clearAvatarPortrait(a);
+  for (const a of encounter.actors) clearAvatarPortrait(a);
+  for (const resource of portraitResources.values()) void resource.then(model => model?.dispose());
+  portraitResources.clear();
+}
+
+/* ---------- Local 3D exchange simulations ---------- */
+const ENCOUNTER_D1 = [-7.05, 2], ENCOUNTER_X1 = [-11.7, -1.95], ENCOUNTER_O1 = [3.05, 8];
+const ENCOUNTER_SCENARIOS = {
+  'bu-human': { label: ['Business unit to business unit', 'Échange inter-BU'],
+    from: ENCOUNTER_D1, to: ENCOUNTER_X1, people: ['p01', 'p10'], units: [['Delivery', 'Delivery'], ['R&D', 'R&D']],
+    question: ['Can R&D review the evidence before we present this use case?', 'La R&D peut-elle relire les preuves avant la présentation du cas d’usage ?'] },
+  'agent-agent': { label: ['Agent to agent', 'Agent à agent'],
+    from: ENCOUNTER_D1, to: ENCOUNTER_O1, people: [null, null], units: [['Delivery agent', 'Agent Delivery'], ['Agent Ops', 'Agent Ops']],
+    question: ['Can Agent Ops verify the evaluation evidence is complete?', 'Agent Ops peut-il vérifier que le dossier d’évaluation est complet ?'],
+    reply: ['Simulation: the evidence is complete. A reviewer can now inspect it.', 'Simulation : le dossier est complet. Un relecteur peut maintenant l’examiner.'] },
+  'agent-human': { label: ['Agent to human', 'Agent à humain'],
+    from: ENCOUNTER_O1, to: ENCOUNTER_D1, people: [null, 'p01'], units: [['Agent Ops', 'Agent Ops'], ['Delivery', 'Delivery']],
+    question: ['May we move this simulated case to the next review step?', 'Peut-on faire passer ce cas simulé à la prochaine étape de revue ?'] },
+};
+const ENCOUNTER_STATUS = {
+  walking: ['Walking to the other participant', 'Déplacement vers l’autre participant'],
+  requesting: ['Asking the question', 'Question en cours'], waiting: ['Waiting for your simulated reply', 'En attente de votre réponse simulée'],
+  replying: ['Replying', 'Réponse en cours'], returning: ['Returning to the starting point', 'Retour au point de départ'],
+  complete: ['Simulation complete', 'Simulation terminée'], canceled: ['Simulation canceled', 'Simulation annulée'],
+};
+const WORKBENCH_ENCOUNTER = { from: ENCOUNTER_O1, to: ENCOUNTER_D1, people: [null, null], kinds: ['agent', 'human'],
+  units: [['Workbench agent', 'Agent Workbench'], ['Reviewer', 'Approbateur']],
+  question: ['A decision is requested in the Workbench.', 'Une décision est demandée dans le Workbench.'] };
+const WORKBENCH_DECISION = {
+  approved: ['Decision recorded: approved.', 'Décision consignée : approuvée.'],
+  rejected: ['Decision recorded: rejected.', 'Décision consignée : rejetée.'],
+  changes_requested: ['Decision recorded: changes requested.', 'Décision consignée : modifications demandées.'],
+};
+const WORKBENCH_NOTICE = {
+  complete: ['Exchange complete. Watching for new requests.', 'Échange terminé. Suivi des nouvelles demandes.'],
+  stale: ['The followed revision is unavailable. The exchange was cleared.', 'La révision suivie est indisponible. L’échange a été effacé.'],
+  unauthorized: ['You do not have access to Workbench follow.', 'Vous n’avez pas accès au suivi du Workbench.'],
+  offline: ['The Workbench is unavailable. Follow has stopped.', 'Le Workbench est indisponible. Le suivi a été arrêté.'],
+  malformed: ['The Workbench response is invalid. Follow has stopped.', 'La réponse du Workbench est invalide. Le suivi a été arrêté.'],
+  unreachable: ['The route is unavailable for this request.', 'Le trajet est indisponible pour cette demande.'],
+  stopped: ['Workbench follow stopped.', 'Suivi du Workbench arrêté.'],
+  limit: ['Follow session limit reached. Start a new session to continue.', 'Limite de session atteinte. Relancez le suivi pour continuer.'],
+};
+const encounter = { source: null, controller: null, follower: null, decision: null, notice: null,
+  actors: [], activePeople: new Set(), saved: null, follow: false, error: false };
+function encounterSource() {
+  if (!renderer || !window.FactoryCharacter || !window.FactoryEncounters) return null;
+  if (demoPortraits()) return 'demo';
+  return SNAP_SOURCE === 'api' && SNAP?.meta?.security?.auth_mode === 'proxy' && apiReachable() && window.FactoryWorkbenchFollow ? 'workbench' : null;
+}
+const encounterActive = state => !!state && state.stage !== 'complete' && state.stage !== 'canceled';
+
+function setEncounterLanguage() {
+  $('encounterOpen').textContent = $('encounterTitle').textContent = ui('3D exchanges', 'Échanges 3D');
+  $('encounterDemo').textContent = ui('Local simulation', 'Simulation locale');
+  $('encounterClose').setAttribute('aria-label', ui('Close exchanges', 'Fermer les échanges'));
+  $('encounterScenarioLabel').textContent = ui('Scenario', 'Scénario');
+  for (const option of $('encounterScenario').options) option.textContent = ui(...ENCOUNTER_SCENARIOS[option.value].label);
+  $('encounterStart').textContent = ui('Start', 'Lancer');
+  $('encounterFollow').textContent = ui('Enable follow', 'Activer le suivi');
+  $('encounterCompanion').textContent = ui('Open Decision Companion (new tab)', 'Ouvrir le Compagnon de décision (nouvel onglet)');
+  $('encounterCompanion').href = `companion/index.html?lang=${language}`;
+  $('encounterReplyLabel').textContent = ui('Your simulated reply', 'Votre réponse simulée');
+  $('encounterSend').textContent = ui('Reply', 'Répondre');
+}
+function encounterStatusText(state, live, following) {
+  if (live) {
+    if (state?.stage === 'waiting') return ui('Waiting for the Workbench result.', 'En attente du résultat dans le Workbench.');
+    if (state) return ui(...ENCOUNTER_STATUS[state.stage]);
+    if (encounter.notice) return ui(...WORKBENCH_NOTICE[encounter.notice]);
+    if (following) return ui('Watching for authorized requests.', 'Recherche de demandes autorisées.');
+    return ui('This view follows review status. Make decisions in the Decision Companion.', 'Cette vue suit le statut des revues. Les décisions se prennent dans le Compagnon.');
+  }
+  if (encounter.error) return ui('This route is unavailable.', 'Ce trajet est indisponible.');
+  return state ? ui(...ENCOUNTER_STATUS[state.stage]) : ui('Fictional participants. Replies stay in this simulation.', 'Participants fictifs. Les réponses restent dans cette simulation.');
+}
+function renderEncounter() {
+  const state = encounter.controller?.state, active = encounterActive(state);
+  const live = encounter.source === 'workbench', following = !!encounter.follower?.enabled;
+  $('encounterDemo').textContent = live ? ui('Read-only · Workbench', 'Lecture seule · Workbench') : ui('Local simulation', 'Simulation locale');
+  $('encounterTitle').textContent = live ? ui('Follow the Workbench', 'Suivre le Workbench') : ui('3D exchanges', 'Échanges 3D');
+  $('encounterScenarioField').hidden = $('encounterStart').hidden = live;
+  $('encounterFollow').hidden = !live || following;
+  $('encounterStart').disabled = $('encounterScenario').disabled = active;
+  $('encounterCancel').hidden = live ? !following : !active;
+  $('encounterCancel').textContent = live ? ui('Stop following', 'Arrêter le suivi') : ui('Cancel', 'Annuler');
+  $('encounterCompanion').hidden = !live || !active;
+  $('encounterPanel').dataset.stage = state?.stage || 'ready';
+  $('encounterStatus').textContent = encounterStatusText(state, live, following);
+  $('encounterQuestion').hidden = !state?.question;
+  $('encounterQuestion').textContent = state?.question || '';
+  $('encounterReply').hidden = !state?.reply;
+  $('encounterReply').textContent = state?.reply || '';
+  $('encounterForm').hidden = live || state?.stage !== 'waiting';
+}
+function clearEncounterActors() {
+  encounter.activePeople.clear();
+  for (const a of encounter.actors) {
+    a.group.visible = false;
+    clearAvatarPortrait(a);
+  }
+  if (renderer) {
+    if (!POV.active && !POV.anim) applyViewLabels(S.view);
+    renderer.shadowMap.needsUpdate = true;
+  }
+}
+function closeEncounter(restore = false) {
+  if ($('encounterPanel').hidden) return;
+  encounter.follower?.stop(); encounter.follower = null; encounter.source = null; encounter.notice = null; encounter.decision = null;
+  encounter.controller?.cancel(); encounter.controller = null; encounter.error = false; encounter.follow = false;
+  clearEncounterActors();
+  $('encounterPanel').hidden = true;
+  $('encounterOpen').setAttribute('aria-expanded', 'false');
+  $('encounterInput').value = '';
+  renderEncounter();
+  if (restore && encounter.saved && renderer) {
+    const { p, t, view } = encounter.saved;
+    if (view !== S.view) setView(view, true);
+    flyTo(p, t);
+  }
+  encounter.saved = null;
+  if (restore && !$('encounterOpen').hidden) $('encounterOpen').focus({ preventScroll: true });
+}
+function renderEncounterGate() {
+  const source = encounterSource();
+  $('encounterOpen').hidden = !source;
+  $('encounterOpen').textContent = source === 'workbench' ? ui('Follow the Workbench', 'Suivre le Workbench') : ui('3D exchanges', 'Échanges 3D');
+  if (encounter.source && encounter.source !== source) closeEncounter();
+}
+function openEncounter() {
+  const source = encounterSource();
+  if (!source) return;
+  if (!$('encounterPanel').hidden) { closeEncounter(true); return; }
+  if (POV.active || POV.anim) exitPov(true);
+  if (consoleKey) closeConsole();
+  if (S.selected) closeDrawer();
+  encounter.source = source;
+  encounter.saved = { p: (camAnim?.p1 || camera.position).clone(), t: (camAnim?.t1 || controls.target).clone(), view: S.view };
+  $('encounterPanel').hidden = false;
+  $('encounterOpen').setAttribute('aria-expanded', 'true');
+  renderEncounter();
+  $(source === 'workbench' ? 'encounterFollow' : 'encounterScenario').focus({ preventScroll: true });
+}
+function createEncounterActor() {
+  const a = makeAvatar(scene, 0, 0, 0);
+  a.group.name = 'factory-encounter-actor'; a.group.scale.setScalar(1);
+  a.group.traverse(obj => { if (obj.isMesh) obj.raycast = skipFaceRaycast; });
+  const visor = avatarFaceMat('encounter-visor', '#147d9e', .28);
+  a.visor = avatarDetail(a.head, 'encounter-visor', visor, [0, .018, -.127], [.23, .079, .05], null);
+  a.marker = document.createElement('div'); a.marker.className = 'encounter-marker';
+  a.marker.setAttribute('aria-hidden', 'true');
+  a.marker.append(document.createElement('span'), document.createElement('small'));
+  a.label = new CSS2DObject(a.marker); a.group.add(a.label);
+  return a;
+}
+function configureEncounterActor(a, id, unit, kind = id ? 'human' : 'agent') {
+  const person = id ? Store.emp(id) : null;
+  setAvatar(a, person);
+  if (!person) {
+    a.rig.setProfile(null, false);
+    a.bodyMat.color.set(kind === 'agent' ? '#32687e' : '#465970');
+    a.skinMat.color.set(kind === 'agent' ? '#d3e9ee' : '#c49372');
+  }
+  a.visor.visible = kind === 'agent';
+  for (const part of a.head.children) if (part !== a.visor) part.visible = kind === 'human';
+  if (kind === 'human' && !person) {
+    const { hairMat, locks, bun, hoops } = a.face;
+    hairMat.color.set('#392a22'); locks.visible = bun.visible = hoops.visible = false;
+  }
+  a.marker.dataset.kind = kind;
+  a.marker.firstElementChild.textContent = person ? shortName(person.name) + ' · ' + unit : unit;
+  a.marker.lastElementChild.textContent = '';
+  a.pose = null;
+  a.group.visible = true;
+}
+function poseEncounterActor(a, state) {
+  a.group.position.set(state.x, 0, state.z);
+  a.group.rotation.y = state.yaw;
+  const poseChanged = a.pose !== state.pose;
+  if (poseChanged || a.phase !== state.phase) {
+    a.head.position.y = a.rig.pose(state.pose, state.phase);
+    if (a.portrait) a.portrait.position.y = a.head.position.y - 1.43;
+    a.label.position.y = a.head.position.y + .37;
+    a.phase = state.phase;
+  }
+  if (poseChanged) {
+    a.pose = state.pose;
+    a.marker.lastElementChild.textContent = state.pose === 'request' ? ui('Asking', 'Question')
+      : state.pose === 'reply' ? ui('Replying', 'Réponse') : '';
+  }
+}
+function startEncounter() {
+  if (encounter.source !== 'demo' || encounterSource() !== 'demo') return;
+  const mode = $('encounterScenario').value, scenario = ENCOUNTER_SCENARIOS[mode];
+  if (scenario) beginEncounter(mode, scenario);
+}
+function beginEncounter(mode, scenario) {
+  if (encounterActive(encounter.controller?.state)) return false;
+  encounter.controller ||= window.FactoryEncounters.createController();
+  const { x0, x1, z0, z1 } = POV_BOUNDS;
+  encounter.error = !encounter.controller.start({ mode, from: scenario.from, to: scenario.to,
+    question: ui(...scenario.question), simulatedReply: scenario.reply ? ui(...scenario.reply) : undefined,
+    blocked: (x, z) => povBlocked(x, z, .28), bounds: [x0, x1, z0, z1], reducedMotion: REDUCED });
+  renderEncounter();
+  if (encounter.error) return false;
+  $('encounterInput').value = '';
+  if (!encounter.actors.length) encounter.actors = [createEncounterActor(), createEncounterActor()];
+  scenario.people.forEach((id, i) => {
+    if (id) encounter.activePeople.add(id);
+    configureEncounterActor(encounter.actors[i], id, ui(...scenario.units[i]), scenario.kinds?.[i]);
+  });
+  if (S.view !== '3d') setView('3d', true);
+  else applyViewLabels('3d');
+  const state = encounter.controller.state, at = state.actor;
+  encounter.follow = true;
+  flyTo(new THREE.Vector3(at.x + 3.4, 3.25, at.z + 4.1), new THREE.Vector3(at.x, .9, at.z), 650);
+  poseEncounterActor(encounter.actors[0], at); poseEncounterActor(encounter.actors[1], state.target);
+  if (encounter.source === 'demo') $('encounterCancel').focus({ preventScroll: true });
+  return true;
+}
+async function readWorkbenchEncounters({ signal, caseId }) {
+  const query = caseId ? `?${new URLSearchParams({ case_id: caseId })}` : '';
+  const response = await fetch(`${API_BASE}/workbench/encounters${query}`, { method: 'GET', mode: 'same-origin',
+    credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { accept: 'application/json' },
+    signal: AbortSignal.any([signal, AbortSignal.timeout(4500)]) });
+  return { status: response.status, body: response.ok ? await response.json() : null };
+}
+function clearWorkbenchEncounter(reason) {
+  encounter.controller?.cancel(); encounter.controller = null;
+  encounter.decision = null; encounter.follow = false; encounter.notice = reason;
+  clearEncounterActors(); renderEncounter();
+}
+function startWorkbenchFollow() {
+  if (encounter.source !== 'workbench' || encounterSource() !== 'workbench') return;
+  encounter.follower ||= window.FactoryWorkbenchFollow.create({ read: readWorkbenchEncounters,
+    onStart: () => { encounter.notice = null; return beginEncounter('agent-human', WORKBENCH_ENCOUNTER); },
+    onDecision: event => { encounter.decision = event.status; },
+    onClear: clearWorkbenchEncounter });
+  encounter.notice = null; encounter.follower.start(); renderEncounter();
+  $('encounterCancel').focus({ preventScroll: true });
+}
+function cancelEncounter() {
+  if (encounter.source === 'workbench') {
+    encounter.follower?.stop(); $('encounterFollow').focus({ preventScroll: true });
+    return;
+  }
+  if (!encounter.controller?.cancel()) return;
+  encounter.follow = false; clearEncounterActors(); renderEncounter();
+  $('encounterInput').value = '';
+  $('encounterStart').focus({ preventScroll: true });
+}
+function updateEncounter(dt, now) {
+  if (!encounter.source) return;
+  if (encounterSource() !== encounter.source) { renderEncounterGate(); return; }
+  const live = encounter.source === 'workbench';
+  if (live) void encounter.follower?.tick(now);
+  const previous = encounter.controller?.state;
+  if (!encounterActive(previous)) return;
+  let state = encounter.controller.update(dt);
+  if (live && state.stage === 'waiting' && encounter.decision) {
+    encounter.controller.respond(ui(...WORKBENCH_DECISION[encounter.decision]));
+    encounter.decision = null; state = encounter.controller.state;
+  }
+  if (previous.stage !== state.stage) renderEncounter();
+  if (!encounterActive(state)) {
+    if (live) { encounter.follower.done(); clearWorkbenchEncounter('complete'); }
+    else { clearEncounterActors(); encounter.follow = false; }
+    return;
+  }
+  const { actor, target } = state;
+  poseEncounterActor(encounter.actors[0], actor); poseEncounterActor(encounter.actors[1], target);
+  if (encounter.follow && previous.stage !== state.stage && state.stage === 'requesting') {
+    const middle = new THREE.Vector3((actor.x + target.x) / 2, .9, (actor.z + target.z) / 2);
+    const side = new THREE.Vector3(target.z - actor.z, 0, actor.x - target.x).normalize();
+    if (side.x * (camera.position.x - middle.x) + side.z * (camera.position.z - middle.z) < 0) side.negate();
+    const p = middle.clone().addScaledVector(side, 5); p.y = 2.65;
+    flyTo(p, middle, 540);
+  }
+  if (encounter.follow && !camAnim) {
+    const close = state.stage === 'requesting' || state.stage === 'waiting' || state.stage === 'replying';
+    const k = REDUCED ? 1 : 1 - Math.exp(-5 * dt);
+    const dx = ((close ? (actor.x + target.x) / 2 : actor.x) - controls.target.x) * k;
+    const dz = ((close ? (actor.z + target.z) / 2 : actor.z) - controls.target.z) * k;
+    camera.position.x += dx; camera.position.z += dz; controls.target.x += dx; controls.target.z += dz;
+  }
+}
+
 // UI: portraits on the avatar chips, mascot on the visit button, logo, help illustration
 function applyAssetUI() {
   const css = [];
-  EMPLOYEES.forEach((e, i) => {
-    const it = ASSET.items[`avatar-p${String(i + 1).padStart(2, '0')}`];
-    if (it) css.push(`.avatar[data-emp="${CSS.escape(e.id)}"]{background:url(${it.src}) center/cover,var(--c);color:transparent}`);
-  });
+  for (const e of EMPLOYEES) {
+    const face = portraitOf(e.id);
+    if (face) css.push(`[data-demo-portraits] .avatar[data-emp="${CSS.escape(e.id)}"]{background:url(${JSON.stringify(face.src)}) center/cover,var(--c);color:transparent}`);
+  }
   if (css.length) { const st = document.createElement('style'); st.id = 'assetAvatars'; st.textContent = css.join('\n'); document.head.appendChild(st); }
   const mascot = ASSET.items['mascot-visitor'];
   if (mascot) for (const host of [$('pegBtn'), $('pegGhost')]) {
@@ -2293,9 +2933,6 @@ async function applyAssetPack() {
     if (snap) refresh();
   } catch (err) { console.warn('Pack visuel ignoré :', err); }
 }
-// Portrait of a person for canvas drawings (visio tiles), or null
-const portraitOf = id => { const i = EMPLOYEES.findIndex(e => e.id === id); return i < 0 ? null : ASSET.img[`avatar-p${String(i + 1).padStart(2, '0')}`] || null; };
-
 /* ---------- Visit mode: drag the little character into the model, then walk in first person ---------- */
 // Street View-like: drop the character on the floor, look around by dragging, walk with the keyboard,
 // the on-screen pad or a click on the floor; colliders keep the visitor out of walls and furniture.
@@ -2410,7 +3047,7 @@ function applyViewLabels(kind) {
     v.home ||= { pos: v.label.position.clone(), center: v.label.center.clone() };
     const plan = v.planLabel && (kind === 'top' || v.front) ? v.planLabel : null;
     v.label.position.copy(plan ? v.planLabel.pos : v.home.pos); v.label.center.copy(plan ? v.planLabel.center : v.home.center);
-    v.pin.visible = kind !== 'top' || v.r.type === 'room';
+    v.pin.visible = !faceView && !encounterActive(encounter.controller?.state) && (kind !== 'top' || v.r.type === 'room');
   }
   labelRenderer.domElement.classList.toggle('plan', kind === 'top');
 }
@@ -2433,6 +3070,8 @@ function enterPov(x, z, yaw) {
   if (!renderer || (POV.anim && !POV.active)) return false;
   const f = povFree(x, z, 1.2);
   if (!f) { toast('Zone inaccessible : déposez le personnage sur le sol libre'); return false; }
+  closeEncounter();
+  endFaceView(true, true);
   if (consoleKey) closeConsole();
   if (S.selected) closeDrawer();
   const was = POV.active;
@@ -2989,7 +3628,8 @@ function recommendations(sn) {
 function renderPilot(sn) {
   const days = weekDays(sn.date), N = Store.employees.length;
   const pres = days.map(d => new Set(Store.day(d).map(b => b.employeeId)).size), maxP = Math.max(...pres);
-  let html = `<div class="grp"><div class="grp-h">Semaine du ${esc(shortDate(days[0]))}<em>présents / jour</em></div><div class="week">`;
+  let html = `<div class="grp"><div class="grp-h">${ui('Work history', 'Historique du travail')}</div><button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Time, tokens and records', 'Temps, tokens et supports')}</button></div>`;
+  html += `<div class="grp pilot-sec"><div class="grp-h">Semaine du ${esc(shortDate(days[0]))}<em>présents / jour</em></div><div class="week">`;
   days.forEach((d, i) => {
     const team = pres[i] && pres[i] === maxP && pres[i] >= Math.ceil(N / 2);
     html += `<button type="button" class="wday${d === sn.date ? ' is-sel' : ''}" data-day="${d}" aria-pressed="${d === sn.date}" aria-label="${esc(dayName(d))} ${esc(shortDate(d))} : ${pres[i]} sur ${N} sur site${team ? ', jour d’équipe' : ''}">
@@ -3116,14 +3756,15 @@ const CONSOLE_SECTIONS = {
   dataloop: { title: 'Boucle de données', icon: 'reset' },
   placement: { title: 'Placement hybride', icon: 'building' },
   agentops: { title: 'Agent Ops', icon: 'clock' },
+  activity: { icon: 'clock' },
   catalog: { title: 'Catalogue libre-service', icon: 'desk' },
   skills: { title: 'Skills Lab & R&D Lab', icon: 'users' },
   rnd: { title: 'Skills Lab & R&D Lab', icon: 'users', alias: 'skills' },
   shadow: { icon: 'shield' },
   grafana: { title: 'Grafana', icon: 'info' },
 };
-const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'catalog', 'skills', 'grafana'];
-const consoleTitle = key => key === 'shadow' ? shadowTitle() : CONSOLE_SECTIONS[key]?.title || 'Console';
+const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'activity', 'catalog', 'skills', 'grafana'];
+const consoleTitle = key => key === 'shadow' ? shadowTitle() : key === 'activity' ? ui('Work history', 'Historique du travail') : CONSOLE_SECTIONS[key]?.title || 'Console';
 const TIER_BADGES = new Map([
   ['prohibited', { className: 't-prohibited', label: 'Interdit (art. 5)' }],
   ['high', { className: 't-high', label: 'Haut risque' }],
@@ -3171,15 +3812,18 @@ function tierChip(r) {
 
 let consoleKey = null, consoleReturn = null, catalogFilter = 'models';
 let shadowView = null;
+let activityView = null;
 function selectConsole(key) {
   if (key === consoleKey) return;
   consoleKey = key;
+  activityView = null;
   shadowView = key === 'shadow' ? { status: apiReachable() ? 'loading' : 'demo', filters: {}, revision: 0, draft: { tool: '', status: 'reviewing', alternative: '' } } : null;
   if (shadowView?.status === 'loading') void loadShadow(shadowView);
 }
 function openConsole(key) {
   key = CONSOLE_SECTIONS[key]?.alias || key;
   if (!CONSOLE_SECTIONS[key]) key = 'registry';
+  closeEncounter();
   if (S.selected) closeDrawer();
   if (!consoleKey) consoleReturn = document.activeElement;
   selectConsole(key);
@@ -3188,12 +3832,12 @@ function openConsole(key) {
 }
 function closeConsole() {
   if (!consoleKey) return;
-  const wasShadow = consoleKey === 'shadow';
+  const wasPrivate = consoleKey === 'shadow' || consoleKey === 'activity';
   selectConsole(null);
   const c = $('console'), had = c.contains(document.activeElement);
   c.classList.remove('open'); c.setAttribute('aria-hidden', 'true');
   if (had) (consoleReturn?.isConnected ? consoleReturn : $('tabFactory')).focus({ preventScroll: true });
-  if (wasShadow) { $('cBody').replaceChildren(); $('cBody').__html = ''; }
+  if (wasPrivate) { $('cBody').replaceChildren(); $('cBody').__html = ''; }
 }
 function sourceBadge() {
   const m = SNAP?.meta || {}, src = m.sources || {};
@@ -3209,8 +3853,9 @@ function sourceBadge() {
 function renderConsole() {
   if (!consoleKey) return;
   $('console').classList.toggle('is-shadow', consoleKey === 'shadow');
+  $('console').classList.toggle('is-activity', consoleKey === 'activity');
   $('cTitle').textContent = consoleTitle(consoleKey);
-  $('cSrc').innerHTML = consoleKey === 'shadow' ? '' : sourceBadge();
+  $('cSrc').innerHTML = consoleKey === 'shadow' || consoleKey === 'activity' ? '' : sourceBadge();
   setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(k === 'shadow' ? ui('Observatory', 'Observatoire') : consoleTitle(k).split(' ·')[0].replace(' & risques', ''))}</button>`).join(''));
   if (consoleKey === 'shadow') {
     const stamp = `${language}:${shadowView.revision}`;
@@ -3220,10 +3865,68 @@ function renderConsole() {
     }
     return;
   }
+  if (consoleKey === 'activity') {
+    setHTMLKeepFocus($('cBody'), window.FactoryActivity?.render(prepareActivity(), language, esc) || '');
+    return;
+  }
   const fn = { registry: secRegistry, finops: secFinops, pipeline: secPipeline, dataloop: secDataloop, placement: secPlacement, agentops: secAgentops, catalog: secCatalog, skills: secSkills, grafana: secGrafana }[consoleKey];
   setHTMLKeepFocus($('cBody'), fn ? fn() : '');
 }
 const apiOnly = () => SNAP_SOURCE === 'api' ? '' : ' disabled title="Nécessite l’API d’agrégation (stack déployée)"';
+
+/* Activity rows remain in the open console only, scoped by the server. */
+function activitySource() {
+  if (demoPortraits()) return 'demo';
+  return SNAP_SOURCE === 'api' && apiReachable() && SNAP?.meta?.security?.auth_mode === 'proxy' ? 'api' : 'unavailable';
+}
+function activityScopeKey() {
+  return activitySource() === 'api' ? (SNAP.meta.business_view || 'proxy') : null;
+}
+function prepareActivity() {
+  const source = activitySource(), scopeKey = activityScopeKey();
+  if (!activityView || activityView.source !== source || activityView.scopeKey !== scopeKey) {
+    activityView = { source, scopeKey, scope: 'own', days: 7, kind: 'user', subject: '', status: source === 'api' ? 'loading' : source,
+      pending: null, data: null, viewer: null, canViewAll: false };
+  }
+  const view = activityView;
+  if (source === 'demo' && (!view.data || view.language !== language)) {
+    view.data = window.FactoryActivity.demo(view.days, Date.now(), language); view.language = language;
+  }
+  if (source === 'api' && view.status === 'loading' && !view.pending && !document.hidden) void loadActivity(view);
+  return view;
+}
+async function loadActivity(view) {
+  const request = {}; view.pending = request;
+  const query = new URLSearchParams({ days: view.days, view: view.scope });
+  const result = await apiFetch(`/activity?${query}`, { mode: 'same-origin', redirect: 'error' }, 5000);
+  if (activityView !== view || view.pending !== request || consoleKey !== 'activity' || view.scopeKey !== activityScopeKey()) return;
+  view.pending = null;
+  const data = result.ok ? window.FactoryActivity.parse(result.body) : null;
+  if (!data || (view.scope === 'all' && !data.canViewAll)) {
+    view.data = null; view.canViewAll = false; view.viewer = null; view.scope = 'own'; view.subject = '';
+    view.status = result.status === 401 || result.status === 403 || data ? 'blocked' : 'error';
+  } else if (view.viewer && view.viewer !== data.viewer && view.scope === 'all') {
+    view.canViewAll = false; view.viewer = null; view.scope = 'own'; view.subject = ''; view.status = 'loading';
+  } else {
+    if (view.viewer !== data.viewer) view.subject = '';
+    view.data = data; view.canViewAll = data.canViewAll; view.viewer = data.viewer; view.status = 'ready';
+  }
+  renderConsole();
+}
+function reloadActivity(view) {
+  view.data = null; view.pending = null;
+  if (view.source === 'api') view.status = 'loading';
+  renderConsole();
+}
+function activityFilter(key, value) {
+  const view = activityView;
+  if (!view) return;
+  if (key === 'days' && ['7', '30', '90'].includes(value)) { view.days = Number(value); reloadActivity(view); }
+  else if (key === 'scope' && view.source === 'api' && view.canViewAll && ['own', 'all'].includes(value)) {
+    view.scope = value; view.subject = ''; reloadActivity(view);
+  } else if (key === 'kind' && ['agent', 'user'].includes(value)) { view.kind = value; view.subject = ''; renderConsole(); }
+  else if (key === 'subject') { view.subject = value; renderConsole(); }
+}
 
 /* Isolated Observatory data. Only the explicitly static edition uses these fictional rows. */
 const SHADOW_DEMO = {
@@ -3486,7 +4189,7 @@ function secAgentops() {
   const a = SNAP?.agentops || {}, g = a.global || {}, s = a.slo || {}, ser = a.series || [];
   const tile = (label, v, lim, unit, key) => { const bad = Number.isFinite(v) && Number.isFinite(lim) && v > lim;
     return `<div class="ctile ${bad ? 'warn' : 'ok'}"><b>${num(v)}${unit}</b><span>${label} · SLO ${num(lim)}${unit}</span>${sparkSvg(ser.map(p => p[key]), 120, 26)}</div>`; };
-  return `<section class="csec"><h3>Fenêtre ${esc(a.window || '1h')} · ${num(g.tasks)} tâches · succès ${pctS(g.success_rate)}</h3><div class="ctiles">
+  return `<section class="csec"><h3>Fenêtre ${esc(a.window || '1h')} · ${num(g.tasks)} tâches · succès ${pctS(g.success_rate)}</h3><button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Work history', 'Historique du travail')}</button><div class="ctiles">
     ${tile('TTFT p95', g.ttft_ms_p95, s.ttft_ms_p95, ' ms', 'ttft_ms_p95')}${tile('Tokens par tâche p95', g.tokens_per_task_p95, s.tokens_per_task_p95, '', 'tokens_per_task_avg')}${tile('Latence vectorielle p95', g.vector_latency_ms_p95, s.vector_latency_ms_p95, ' ms', 'vector_latency_ms_p95')}
     <div class="ctile"><b>${num(g.ttft_ms_p50)} ms</b><span>TTFT p50</span></div><div class="ctile"><b>${num(g.tokens_per_task_avg)}</b><span>tokens par tâche (moyenne)</span></div><div class="ctile"><b>${num(g.vector_latency_ms_p50)} ms</b><span>latence vectorielle p50</span></div></div></section>
     <section class="csec"><h3>Par agent</h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>Agent</th><th>Use case</th><th>TTFT p95</th><th>Tokens/tâche p95</th><th>Latence vect. p95</th><th>Succès</th><th>€/tâche</th><th>Tâches</th></tr></thead><tbody>${(a.by_agent || []).map(x => `<tr class="${(x.breaches || []).length ? 'row-warn' : ''}"><td><b>${esc(SNAP?.catalog?.agents?.find(c => c.id === x.agent)?.name || x.agent)}</b>${(x.breaches || []).length ? `<small class="warn">⚠ ${esc(x.breaches.map(b => BREACH_FR[b] || b).join(', '))}</small>` : ''}</td><td>${ucCode(x.usecase)}</td><td>${num(x.ttft_ms_p95)} ms</td><td>${num(x.tokens_per_task_p95)}</td><td>${num(x.vector_latency_ms_p95)} ms</td><td>${pctS(x.success_rate)}</td><td>${eurFine(x.eur_per_task)}</td><td>${num(x.tasks)}</td></tr>`).join('')}</tbody></table></div></section>`;
@@ -3579,6 +4282,9 @@ function protectedOffline() {
   closeConsole(); if (S.selected && snap) closeDrawer();
   Remote.clearPrivate();
   SNAP = null; SNAP_SOURCE = 'none'; snap = null; initDomain(null);
+  renderEncounterGate();
+  releaseDemoPortraits();
+  document.documentElement.removeAttribute('data-demo-portraits');
   const app = $('app');
   app.inert = true; app.style.visibility = 'hidden';
   let notice = $('businessOffline');
@@ -3597,6 +4303,7 @@ function restoreProtectedView() {
 }
 
 function setLanguage(lang) {
+  if (lang !== language) closeEncounter(true);
   language = lang;
   document.documentElement.lang = lang;
   $('languageSelect').value = lang;
@@ -3612,6 +4319,7 @@ function setLanguage(lang) {
   $('viewTop').textContent = ui('Floor plan', 'Plan');
   $('viewLabels').textContent = ui('Labels', 'Étiquettes');
   $('pegBtn').querySelector('span').textContent = ui('Visit', 'Visite');
+  setEncounterLanguage();
   if ($('shadowMapOpen')) $('shadowMapOpen').textContent = shadowTitle();
   const url = new URL(location.href);
   if (url.searchParams.has('lang') && url.searchParams.get('lang') !== lang) {
@@ -3624,6 +4332,7 @@ function applySnapshot(next, source, lang) {
   const roster = new Set(EMPLOYEES.map(e => e.id));
   const useCaseIds = new Set(USE_CASES.map(u => u.id));
   const languageChanged = lang !== language;
+  if (encounter.source === 'workbench' && SNAP?.meta?.business_view !== next?.meta?.business_view) closeEncounter();
   SNAP = next;
   SNAP_SOURCE = source;
   if (languageChanged) {
@@ -3715,7 +4424,7 @@ function setHTMLKeepFocus(root, html) {
   if (root.__html === html) return;
   root.__html = html;
   const a = document.activeElement;
-  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter'].find(x => a.dataset[x] !== undefined) : null;
+  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry'].find(x => a.dataset[x] !== undefined) : null;
   const v = k && a.dataset[k];
   root.innerHTML = html;
   if (k) {
@@ -3935,8 +4644,10 @@ function showLockerToast(n) {
 let drawerReturn = null;
 function selectResource(id, focus = false, prefillEmp = null) {
   if (!RES[id]) return;
+  closeEncounter();
   if (consoleKey) closeConsole();
   const changed = S.selected !== id;
+  if (changed) endFaceView(true);
   if (S.selected === null) {
     const a = document.activeElement;
     drawerReturn = a?.matches?.('.srow-btn[data-res]') ? `.srow-btn[data-res="${CSS.escape(a.dataset.res)}"]`
@@ -3954,6 +4665,7 @@ function selectResource(id, focus = false, prefillEmp = null) {
   if (window.innerWidth <= 860) $('stage').scrollIntoView({ block: 'start', behavior: REDUCED ? 'auto' : 'smooth' });
 }
 function closeDrawer() {
+  endFaceView(true);
   S.selected = null; S.editingId = null;
   const d = $('drawer'), had = d.contains(document.activeElement);
   d.classList.remove('open'); d.setAttribute('aria-hidden', 'true');
@@ -3965,6 +4677,9 @@ function closeDrawer() {
 function renderDrawerInfo(sn) {
   if (!S.selected) return;
   const r = RES[S.selected], st = sn.res[r.id];
+  const canFocus = r.type === 'desk' && st.state === 'busy' && !!VIS[r.id]?.avatars[0]?.target;
+  if (!canFocus) endFaceView(true);
+  faceViewButton(canFocus);
   $('dZone').textContent = ZONES[r.zone];
   $('dTitle').textContent = r.name;
   $('dDate').textContent = longDate(sn.date);
@@ -3975,7 +4690,13 @@ function renderDrawerInfo(sn) {
   else if (st.state === 'soon' || st.state === 'later') detail = `Prochaine réservation : ${esc(e?.name)} à ${fmt(b.start)}${what ? ' · ' + esc(what) : ''}`;
   else detail = st.list.length ? 'Plus aucune réservation après cette heure.' : 'Aucune réservation ce jour.';
   const ds = $('dStatus'); ds.style.setProperty('--c', cssVar(st.state)); ds.dataset.st = st.state;
-  ds.innerHTML = `<i class="dot"></i><div><b>${fmt(sn.t)} · ${esc(stateWord(r, st.state))}</b><span>${detail}</span></div>`;
+  let portrait = '';
+  if (demoPortraits() && st.state === 'busy' && r.type !== 'room' && e) {
+    const face = portraitOf(e.id);
+    portrait = face ? `<img class="d-face" src="${esc(face.src)}" alt="">`
+      : `<div class="d-face d-face-fallback" aria-hidden="true">${esc(initials(e.name))}</div>`;
+  }
+  ds.innerHTML = `${portrait}<i class="dot"></i><div><b>${fmt(sn.t)} · ${esc(stateWord(r, st.state))}</b><span>${detail}</span></div>`;
   // gantt
   let g = '<div class="g-grid">';
   for (let hh = 8; hh <= 19; hh++) g += `<span style="left:${pct(hh * 60)}%">${hh % 2 === 0 || hh === 19 ? `<em>${hh}h</em>` : ''}</span>`;
@@ -4209,6 +4930,10 @@ function toast(msg) {
    6. Controller
    ===================================================================== */
 function refresh() {
+  const demo = demoPortraits();
+  document.documentElement.toggleAttribute('data-demo-portraits', demo);
+  renderEncounterGate();
+  if (!demo) releaseDemoPortraits();
   snap = snapshot();
   updateScene(snap);
   renderKpis(snap);
@@ -4280,6 +5005,23 @@ function bindUI() {
   $('ticks').innerHTML = ticks;
 
   $('view3d').addEventListener('click', () => setView('3d'));
+  $('encounterOpen').addEventListener('click', openEncounter);
+  $('encounterClose').addEventListener('click', () => closeEncounter(true));
+  $('encounterStart').addEventListener('click', startEncounter);
+  $('encounterFollow').addEventListener('click', startWorkbenchFollow);
+  $('encounterCancel').addEventListener('click', cancelEncounter);
+  $('encounterForm').addEventListener('submit', e => {
+    e.preventDefault();
+    if (encounter.source !== 'demo' || encounterSource() !== 'demo' ||
+        !encounter.controller?.respond($('encounterInput').value.trim())) return;
+    $('encounterInput').value = '';
+    renderEncounter(); $('encounterCancel').focus({ preventScroll: true });
+  });
+  window.addEventListener('offline', () => encounter.follower?.stop('offline'));
+  window.addEventListener('pagehide', () => {
+    encounter.follower?.stop();
+    if (consoleKey === 'activity' && activityView?.source === 'api') closeConsole();
+  });
   $('viewTop').addEventListener('click', () => setView('top'));
   $('viewLabels').addEventListener('click', () => {
     Prefs.p.labels = !Prefs.p.labels; Prefs.save(); applyLabels();
@@ -4331,7 +5073,12 @@ function bindUI() {
   });
   $('cBody').addEventListener('click', e => { const b = e.target.closest('[data-cact]'); if (b && !b.disabled) consoleAction(b); });
   $('cBody').addEventListener('click', e => { const b = e.target.closest('[data-shadow-action]'); if (b && !b.disabled) shadowAction(b.dataset.shadowAction); });
+  $('cBody').addEventListener('click', e => {
+    if (e.target.closest('[data-activity-open]')) openConsole('activity');
+    else if (e.target.closest('[data-activity-retry]') && activityView?.source === 'api') reloadActivity(activityView);
+  });
   $('cBody').addEventListener('change', e => {
+    if (e.target.matches('[data-activity-filter]')) { activityFilter(e.target.dataset.activityFilter, e.target.value); return; }
     if (!shadowView || !e.target.matches('[data-shadow-filter]')) return;
     const key = e.target.dataset.shadowFilter, { filters } = shadowView;
     if (key === 'period') filters.team = '';
@@ -4345,6 +5092,7 @@ function bindUI() {
     e.preventDefault(); submitShadowProposal(e.target);
   });
   $('pilotPanel').addEventListener('click', e => {
+    if (e.target.closest('[data-activity-open]')) { openConsole('activity'); return; }
     const d = e.target.closest('[data-day]');
     if (d) { const t = timeForDay(d.dataset.day); stopPlay(); S.live = false; changeDay(d.dataset.day, t); return; }
     const u = e.target.closest('[data-uc]');
@@ -4383,6 +5131,11 @@ function bindUI() {
   // Drawer
   $('dClose').innerHTML = icon('x');
   $('dClose').addEventListener('click', closeDrawer);
+  $('dFaceView').addEventListener('click', toggleFaceView);
+  $('dFaceAngles').addEventListener('click', e => {
+    const button = e.target.closest('[data-face-angle]');
+    if (faceView?.avatar.portrait && button) aimFaceView(button.dataset.faceAngle);
+  });
   $('dForm').addEventListener('submit', submitForm);
   $('fCancel').addEventListener('click', () => { resetForm(); renderDrawerInfo(snap); });
   $('fPresets').addEventListener('click', e => { const b = e.target.closest('[data-preset]'); if (b) applyPreset(b.dataset.preset); });
@@ -4440,7 +5193,7 @@ function bindUI() {
 
   document.addEventListener('keydown', e => {
     if (e.target.closest?.('#uc04-dialog')) return;
-    if (e.key === 'Escape') { if (!$('help').hidden) closeHelp(); else if (consoleKey) closeConsole(); else if (S.selected) closeDrawer(); else if (POV.active) exitPov(); return; }
+    if (e.key === 'Escape') { if (!$('help').hidden) closeHelp(); else if (consoleKey) closeConsole(); else if (S.selected) closeDrawer(); else if (!$('encounterPanel').hidden) closeEncounter(true); else if (POV.active) exitPov(); return; }
     if (e.key === 'Tab' && !$('help').hidden) { e.preventDefault(); $('helpClose').focus(); return; }
     const t = e.target;
     if (e.ctrlKey || e.metaKey || e.altKey || t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || !$('help').hidden) return;
@@ -4462,7 +5215,17 @@ function bindUI() {
     const fn = map[e.key] || map[e.key.toLowerCase()];
     if (fn) { e.preventDefault(); fn(); }
   });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && S.live) goLive(); });
+  document.addEventListener('visibilitychange', () => {
+    if (consoleKey === 'activity' && activitySource() === 'api') { activityView = null; renderConsole(); }
+    if (!document.hidden && S.live) goLive();
+  });
+  window.addEventListener('offline', () => {
+    if (consoleKey === 'activity' && activityView?.source === 'api') { activityView = null; renderConsole(); }
+  });
+  // The proxy identity can change independently of the current booking view.
+  setInterval(() => {
+    if (!document.hidden && consoleKey === 'activity' && activityView?.source === 'api' && activityView.status === 'ready') reloadActivity(activityView);
+  }, 20000);
   // Another tab changed the saved data: reload it instead of overwriting it later
   window.addEventListener('storage', e => {
     if (Remote.private || Remote.memoryOnly) return;
