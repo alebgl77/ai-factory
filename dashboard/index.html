@@ -14,6 +14,7 @@
 <script defer src="assets/factory-workbench-follow.js"></script>
 <script defer src="assets/factory-activity.js"></script>
 <script defer src="assets/factory-portfolio.js"></script>
+<script defer src="assets/factory-ideas.js"></script>
 <script>
   try { var p = JSON.parse(localStorage.getItem('aiFactoryRef.prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.setAttribute('data-theme', p.theme); } catch (e) {}
 </script>
@@ -202,6 +203,9 @@ button svg{pointer-events:none}
 .zone.zone-shadow{pointer-events:auto;min-height:32px;padding:6px 11px;border:1px solid #17706b;border-radius:8px;background:#123e3c;color:#e4faf1;opacity:1;text-shadow:none;letter-spacing:.035em;text-transform:none;box-shadow:0 3px 10px #123e3c55}
 .zone-shadow:hover{background:#18514b}
 .zone-shadow:focus-visible{outline:2px solid #8ee6bb;outline-offset:2px}
+.zone.zone-coffee{pointer-events:auto;min-height:32px;padding:6px 11px;border:1px solid #ad732f;border-radius:8px;background:#522e1d;color:#ffedcb;opacity:1;text-shadow:none;letter-spacing:.035em;text-transform:none;box-shadow:0 3px 10px #4c281f55}
+.zone-coffee:hover{background:#754522}
+.zone-coffee:focus-visible{outline:2px solid #ffc76e;outline-offset:2px}
 
 /* ---------- Drawer ---------- */
 .drawer{position:absolute;top:10px;right:10px;bottom:10px;width:min(390px,calc(100% - 20px));display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow-lg);z-index:8;transform:translateX(calc(100% + 24px));visibility:hidden;transition:transform .28s cubic-bezier(.2,.8,.2,1),visibility .28s}
@@ -385,6 +389,49 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .c-body{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px}
 .console.is-activity .c-tabs{flex:none}
 .console.is-portfolio .c-tabs{flex:none}
+.console.is-ideas .c-tabs{flex:none}
+.ideas{--ideas-accent:#7c3c22;--ideas-warm:#fbf2e2;--ideas-line:#e1cbb0;display:grid;gap:14px;min-width:0}
+[data-theme="dark"] .ideas{--ideas-accent:#f0bc8e;--ideas-warm:#32251f;--ideas-line:#684c3c}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .ideas{--ideas-accent:#f0bc8e;--ideas-warm:#32251f;--ideas-line:#684c3c}}
+.ideas [hidden]{display:none}
+.ideas-hero{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px 18px;padding:16px 17px;border:1px solid var(--ideas-line);border-radius:11px;background:var(--ideas-warm)}
+.ideas-intro{min-width:0;max-width:50ch}.ideas-kicker,.ideas-mode,.ideas-count,.idea-category{font:700 10.5px/1.3 ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase}
+.ideas-kicker,.ideas-mode{color:var(--ideas-accent)}
+.ideas-hero h3{margin:3px 0 5px;font:700 clamp(27px,4vw,43px)/1.06 Georgia,serif;letter-spacing:-.045em}
+.ideas-hero p,.ideas-compose p{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
+.ideas-hero-actions{display:flex;flex-wrap:wrap;gap:7px 10px;align-items:center}
+.ideas-mode{padding:5px 7px;border:1px solid var(--ideas-line);border-radius:5px;white-space:nowrap}
+.ideas button{min-height:38px;font-weight:650}.ideas button:focus-visible,.ideas input:focus-visible,.ideas textarea:focus-visible,.ideas select:focus-visible{outline:2px solid var(--ideas-accent);outline-offset:2px}
+.ideas-primary{padding:7px 11px;border:1px solid #683722;border-radius:7px;background:#683722;color:#fff7eb}
+.ideas-primary:hover:not(:disabled){background:#864a2b}.ideas button:disabled{cursor:wait;opacity:.6}
+.ideas-quiet{padding:4px 7px;border:1px solid currentColor;border-radius:6px;background:transparent;color:inherit}
+.ideas-quiet:hover:not(:disabled){background:#61371913}
+.ideas-compose{display:grid;gap:10px;padding:12px;border:1px solid var(--ideas-line);border-radius:10px;background:var(--panel)}
+.ideas-compose-head,.ideas-compose-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.ideas-compose h4{margin:0;font-size:16px}
+.ideas-field{display:grid;gap:3px;min-width:0;font-size:12px;font-weight:650}
+.ideas-field :is(input,textarea,select){width:100%;min-width:0;min-height:38px;padding:7px 9px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500}
+.ideas-field textarea{resize:vertical;min-height:62px}
+.ideas-status{margin:0;color:var(--ideas-accent);font-size:13px;overflow-wrap:anywhere}.ideas-status:empty{display:none}
+.ideas-tools{display:grid;gap:7px}.ideas-tools>.ideas-field{max-width:360px}
+.ideas-filters{display:flex;gap:5px;flex-wrap:wrap}.ideas-filter{padding:4px 7px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--muted);font-size:11px}
+.ideas-filter[aria-pressed="true"]{border-color:var(--ideas-accent);background:var(--ideas-warm);color:var(--ideas-accent)}
+.ideas-count{margin:0;color:var(--muted)}
+.ideas-wall{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr));gap:12px;align-items:start;min-width:0}
+.idea-note{--paper:#ffefb8;--thread:#78571a;position:relative;display:grid;gap:7px;min-width:0;padding:15px 11px 10px;border:1px solid color-mix(in srgb,var(--thread) 29%,var(--paper));border-radius:3px 3px 11px 3px;background:var(--paper);color:#34281e;box-shadow:0 5px 10px #442a2018}
+.idea-note::before{content:"";position:absolute;left:50%;top:-4px;width:33px;height:8px;transform:translateX(-50%) rotate(-5deg);background:color-mix(in srgb,var(--thread) 24%,var(--paper));border:1px solid color-mix(in srgb,var(--thread) 15%,var(--paper));border-radius:1px;pointer-events:none}
+.idea-note-security{--paper:#ffe4de;--thread:#813a32}.idea-note-automation{--paper:#ffe9be;--thread:#785019}
+.idea-note-data{--paper:#daedfb;--thread:#2a5972}.idea-note-experience{--paper:#e9e1f9;--thread:#593e80}
+.idea-note-adoption{--paper:#e2efcc;--thread:#40591f}.idea-note-uncategorized{--paper:#faf0de;--thread:#745138}
+.idea-category{color:var(--thread)}
+.idea-note h4{margin:0;font-size:15px;line-height:1.25;overflow-wrap:anywhere}.idea-text{margin:0;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.idea-tags{display:flex;flex-wrap:wrap;gap:4px;margin:0;padding:0;list-style:none;font-size:11px}
+.idea-tags li{padding:1px 4px;border:1px solid color-mix(in srgb,var(--thread) 28%,var(--paper));border-radius:4px;color:var(--thread)}
+.idea-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 6px;padding-top:7px;border-top:1px solid color-mix(in srgb,var(--thread) 25%,var(--paper));font-size:11px;color:var(--thread)}
+.idea-unit{font-weight:700;overflow-wrap:anywhere}
+.ideas-empty{grid-column:1/-1;padding:14px;border:1px dashed var(--ideas-line);border-radius:8px}.ideas-empty h4{margin:0 0 4px}.ideas-empty p{margin:0;font-size:13px;color:var(--muted)}
+@media(max-width:470px){.console.is-ideas .c-tabs{flex-wrap:nowrap}.ideas-hero,.ideas-compose{padding:11px}.ideas-wall{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.console.is-ideas,.console.is-ideas.open{transition:none}}
 .portfolio{--portfolio-ink:#176d5c;--portfolio-warn:#a05a1e;display:grid;gap:14px;min-width:0}
 [data-theme="dark"] .portfolio{--portfolio-ink:#67c5ad;--portfolio-warn:#e9a357}
 .portfolio-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px 18px;padding:5px 0 12px;border-bottom:1px solid var(--border-strong)}
@@ -1676,6 +1723,17 @@ function buildShadowObservatory() {
   const label = new CSS2DObject(button); label.position.set(9.81, 0.7, -6.67);
   scene.add(label); ZONE_LABELS.push(label);
 }
+function ideasTitle() { return ui('Coffee corner · Idea wall', 'Coin café · Boîte à idées'); }
+function buildCoffeeCorner() {
+  const button = document.createElement('button');
+  button.type = 'button'; button.id = 'coffeeMapOpen'; button.className = 'zone zone-coffee';
+  button.setAttribute('aria-controls', 'console');
+  button.textContent = ui('Coffee corner', 'Coin café');
+  button.title = ideasTitle();
+  button.addEventListener('click', event => { event.stopPropagation(); openConsole('ideas'); });
+  const label = new CSS2DObject(button); label.position.set(4.4, .35, -5);
+  scene.add(label); ZONE_LABELS.push(label);
+}
 
 /* ---------- Status visuals (halo + pin + label) ---------- */
 function statusVisual(r, { x, z, hw, hd, pinY, haloOp = 0.85, focus, px = x, pz = z }) {
@@ -2090,7 +2148,7 @@ function buildBuilding() {
   // Zone labels
   zoneLabel('War Room', -9.25, -3.15);
   zoneLabel('Lab sécurisé', -2.6, -4.1);
-  zoneLabel('Coin café', 4.4, -5.0);
+  buildCoffeeCorner();
   zoneLabel('Focus pods', 11.2, -0.5);
   zoneLabel('Delivery floor', -0.7, 1.45);
   zoneLabel('R&D Lab', -11.6, 4.4);
@@ -3674,6 +3732,7 @@ function renderPilot(sn) {
   const pres = days.map(d => new Set(Store.day(d).map(b => b.employeeId)).size), maxP = Math.max(...pres);
   let html = `<div class="grp"><div class="grp-h">${ui('Delivery operations', 'Pilotage des opérations')}</div>
     <button type="button" class="mini" data-portfolio-open>${icon('layers')} ${ui('Portfolio and tasks', 'Portefeuille et tâches')}</button>
+    <button type="button" class="mini" data-ideas-open>${icon('desk')} ${ideasTitle()}</button>
     <button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Time, tokens and records', 'Temps, tokens et supports')}</button>
     <p class="pilot-guide"><a href="./docs/index.html">${ui('Operations guide (French)', 'Guide d’exploitation')}</a></p></div>`;
   html += `<div class="grp pilot-sec"><div class="grp-h">Semaine du ${esc(shortDate(days[0]))}<em>présents / jour</em></div><div class="week">`;
@@ -3805,15 +3864,16 @@ const CONSOLE_SECTIONS = {
   agentops: { title: 'Agent Ops', icon: 'clock' },
   activity: { icon: 'clock' },
   portfolio: { icon: 'layers' },
+  ideas: { icon: 'desk' },
   catalog: { title: 'Catalogue libre-service', icon: 'desk' },
   skills: { title: 'Skills Lab & R&D Lab', icon: 'users' },
   rnd: { title: 'Skills Lab & R&D Lab', icon: 'users', alias: 'skills' },
   shadow: { icon: 'shield' },
   grafana: { title: 'Grafana', icon: 'info' },
 };
-const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'activity', 'portfolio', 'catalog', 'skills', 'grafana'];
+const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'activity', 'portfolio', 'ideas', 'catalog', 'skills', 'grafana'];
 const consoleTitle = key => key === 'shadow' ? shadowTitle() : key === 'activity' ? ui('Work history', 'Historique du travail')
-  : key === 'portfolio' ? ui('Portfolio and tasks', 'Portefeuille et tâches') : CONSOLE_SECTIONS[key]?.title || 'Console';
+  : key === 'portfolio' ? ui('Portfolio and tasks', 'Portefeuille et tâches') : key === 'ideas' ? ideasTitle() : CONSOLE_SECTIONS[key]?.title || 'Console';
 const TIER_BADGES = new Map([
   ['prohibited', { className: 't-prohibited', label: 'Interdit (art. 5)' }],
   ['high', { className: 't-high', label: 'Haut risque' }],
@@ -3863,11 +3923,13 @@ let consoleKey = null, consoleReturn = null, catalogFilter = 'models';
 let shadowView = null;
 let activityView = null;
 let portfolioView = null, portfolioDemo = null;
+let ideasView = null;
 function selectConsole(key) {
   if (key === consoleKey) return;
   consoleKey = key;
   activityView = null;
   portfolioView = null;
+  ideasView = null;
   shadowView = key === 'shadow' ? { status: apiReachable() ? 'loading' : 'demo', filters: {}, revision: 0, draft: { tool: '', status: 'reviewing', alternative: '' } } : null;
   if (shadowView?.status === 'loading') void loadShadow(shadowView);
 }
@@ -3883,7 +3945,7 @@ function openConsole(key) {
 }
 function closeConsole() {
   if (!consoleKey) return;
-  const wasPrivate = ['shadow', 'activity', 'portfolio'].includes(consoleKey);
+  const wasPrivate = ['shadow', 'activity', 'portfolio', 'ideas'].includes(consoleKey);
   selectConsole(null);
   const c = $('console'), had = c.contains(document.activeElement);
   c.classList.remove('open'); c.setAttribute('aria-hidden', 'true');
@@ -3906,8 +3968,9 @@ function renderConsole() {
   $('console').classList.toggle('is-shadow', consoleKey === 'shadow');
   $('console').classList.toggle('is-activity', consoleKey === 'activity');
   $('console').classList.toggle('is-portfolio', consoleKey === 'portfolio');
+  $('console').classList.toggle('is-ideas', consoleKey === 'ideas');
   $('cTitle').textContent = consoleTitle(consoleKey);
-  $('cSrc').innerHTML = ['shadow', 'activity', 'portfolio'].includes(consoleKey) ? '' : sourceBadge();
+  $('cSrc').innerHTML = ['shadow', 'activity', 'portfolio', 'ideas'].includes(consoleKey) ? '' : sourceBadge();
   setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(k === 'shadow' ? ui('Observatory', 'Observatoire') : consoleTitle(k).split(' ·')[0].replace(' & risques', ''))}</button>`).join(''));
   if (consoleKey === 'shadow') {
     const stamp = `${language}:${shadowView.revision}`;
@@ -3925,6 +3988,7 @@ function renderConsole() {
     setHTMLKeepFocus($('cBody'), window.FactoryPortfolio?.render(preparePortfolio(), language, esc) || '');
     return;
   }
+  if (consoleKey === 'ideas') { renderIdeas(); return; }
   const fn = { registry: secRegistry, finops: secFinops, pipeline: secPipeline, dataloop: secDataloop, placement: secPlacement, agentops: secAgentops, catalog: secCatalog, skills: secSkills, grafana: secGrafana }[consoleKey];
   setHTMLKeepFocus($('cBody'), fn ? fn() : '');
 }
@@ -3990,6 +4054,90 @@ const portfolioSource = () => {
   return source === 'api' && SNAP?.meta?.business_scope !== true ? 'unavailable' : source;
 };
 const portfolioScope = () => portfolioSource() === 'api' ? SNAP.meta.business_view : null;
+
+/* Ideas use the same authenticated snapshot boundary as Portfolio. The fixture is browser-local only. */
+const ideasSource = () => {
+  const source = portfolioSource();
+  return source === 'api' && (!navigator.onLine || !portfolioScope()) ? 'unavailable' : source;
+};
+const ideasScope = () => ideasSource() === 'api' ? portfolioScope() : null;
+const ideasPath = view => `/ideas?${new URLSearchParams({ lang: view.language })}`;
+const currentIdeas = (view, request) => consoleKey === 'ideas' && ideasView === view && view.pending === request
+  && view.source === ideasSource() && view.scope === ideasScope() && view.language === language;
+function renderIdeas() {
+  const helper = window.FactoryIdeas;
+  if (!helper) { $('cBody').replaceChildren(); $('cBody').__html = ''; return; }
+  const source = ideasSource(), scope = ideasScope();
+  if (!ideasView || ideasView.source !== source || ideasView.scope !== scope || ideasView.language !== language) {
+    ideasView = { source, scope, language, data: null, panel: null, pending: null, viewer: null, message: '',
+      status: source === 'api' ? 'loading' : source === 'demo' ? 'ready' : 'unavailable' };
+    if (source === 'demo') {
+      ideasView.notes = helper.demoNotes();
+      ideasView.data = helper.demo(language, ideasView.notes);
+    }
+  }
+  const view = ideasView;
+  if (!view.panel) {
+    view.panel = helper.create(language, {
+      create: fields => void submitIdea(view, fields),
+      retry: () => {
+        if (view !== ideasView || view.pending || view.source !== 'api') return;
+        view.status = 'loading'; renderConsole();
+      },
+    });
+  }
+  const host = $('cBody');
+  if (!host.contains(view.panel.root)) { host.replaceChildren(view.panel.root); host.__html = ''; }
+  if (view.status === 'loading' && !view.pending && !document.hidden) void readIdeas(view);
+  view.panel.update(view);
+}
+function failIdeas(view, status) {
+  view.pending = null; view.data = null; view.panel = null; view.viewer = null; view.message = '';
+  view.status = status === 401 || status === 403 ? 'denied' : 'error';
+  renderConsole();
+}
+function ideaPosted(note, saved = true) {
+  const category = window.FactoryIdeas.categoryName(note.category, language);
+  return saved ? ui(`Idea posted · ${category}`, `Idée déposée · ${category}`)
+    : ui(`Idea shown for this visit · ${category}`, `Idée affichée pour cette visite · ${category}`);
+}
+async function loadIdeas(view, request, note) {
+  const result = await apiFetch(ideasPath(view), { mode: 'same-origin', redirect: 'error' }, 5000);
+  if (!currentIdeas(view, request)) return;
+  const data = result.ok && window.FactoryIdeas.parse(result.body);
+  if (!data) { failIdeas(view, result.status); return; }
+  const changed = view.viewer !== null && view.viewer !== data.view;
+  if (changed) { view.panel = null; view.message = ''; view.completed = null; }
+  view.pending = null; view.viewer = data.view; view.data = data; view.status = 'ready';
+  if (note && !changed) { view.message = ideaPosted(note); view.completed = {}; }
+  renderConsole();
+}
+function readIdeas(view) {
+  const request = {}; view.pending = request;
+  return loadIdeas(view, request);
+}
+async function submitIdea(view, fields) {
+  if (view !== ideasView || view.pending || !view.data?.permissions.create || !view.data.units.some(unit => unit.id === fields.bu)) return;
+  const helper = window.FactoryIdeas;
+  if (view.source === 'demo') {
+    const { note, notes, saved } = helper.demoCreate(fields, view.notes);
+    view.notes = notes; view.data = helper.demo(language, notes); view.message = ideaPosted(note, saved); view.completed = {};
+    renderConsole();
+    return;
+  }
+  const request = {}; view.pending = request; view.message = ''; renderConsole();
+  const result = await apiFetch(ideasPath(view), { method: 'POST', body: JSON.stringify(fields), mode: 'same-origin', redirect: 'error' }, 5000);
+  if (!currentIdeas(view, request)) return;
+  if (result.ok && helper.idea(result.body)) { await loadIdeas(view, request, result.body); return; }
+  if (result.status === 401 || result.status === 403 || result.status === 0 || result.status >= 500) {
+    failIdeas(view, result.status); return;
+  }
+  view.pending = null;
+  view.message = result.status === 429 ? ui('Please wait before posting another idea.', 'Patientez avant de déposer une autre idée.')
+    : ui('The idea could not be posted. Check the fields and try again.', 'Impossible de déposer l’idée. Vérifiez les champs puis réessayez.');
+  renderConsole();
+}
+
 const portfolioConflict = ['This revision changed. The current task or record has been reloaded.', 'Cette révision a changé. La version actuelle a été rechargée.'];
 const portfolioInvalid = ['The change does not satisfy the portfolio rules.', 'La modification ne respecte pas les règles du portefeuille.'];
 function preparePortfolio() {
@@ -4419,6 +4567,7 @@ function renderFactoryPanel() {
   const rows = [
     ['registry', `${reg.length} use cases · ${reg.filter(u => u.risk?.tier === 'high').length} haut risque · ${reg.filter(u => u.risk?.reevaluation_required).length} réévaluation(s)`],
     ['shadow', ui('Shadow AI signals, adoption and governance', 'Signaux Shadow AI, adoption et gouvernance')],
+    ['ideas', ui('Post notes and explore ideas by theme', 'Déposer des post-it et explorer les idées par thème')],
     ['finops', `${eur(c.totals?.total_eur)} / ${num(c.days || 30)} j · ${(c.alerts || []).length} alerte(s) de gaspillage`],
     ['pipeline', `${(p.items || []).filter(i => i.blocked_by).length} déploiement(s) bloqué(s) · ${(p.rollbacks || []).length} rollback(s)`],
     ['dataloop', `${(sn.dataloop?.events || []).length} événement(s) · réentraînement désactivé`],
@@ -4512,6 +4661,10 @@ function setLanguage(lang) {
   $('pegBtn').querySelector('span').textContent = ui('Visit', 'Visite');
   setEncounterLanguage();
   if ($('shadowMapOpen')) $('shadowMapOpen').textContent = shadowTitle();
+  if ($('coffeeMapOpen')) {
+    $('coffeeMapOpen').textContent = ui('Coffee corner', 'Coin café');
+    $('coffeeMapOpen').title = ideasTitle();
+  }
   const url = new URL(location.href);
   if (url.searchParams.has('lang') && url.searchParams.get('lang') !== lang) {
     url.searchParams.set('lang', lang);
@@ -4615,7 +4768,7 @@ function setHTMLKeepFocus(root, html) {
   if (root.__html === html) return;
   root.__html = html;
   const a = document.activeElement;
-  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioFilter', 'portfolioAction', 'portfolioField'].find(x => a.dataset[x] !== undefined) : null;
+  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioFilter', 'portfolioAction', 'portfolioField', 'ideasOpen'].find(x => a.dataset[x] !== undefined) : null;
   const v = k && a.dataset[k];
   root.innerHTML = html;
   if (k) {
@@ -5211,7 +5364,8 @@ function bindUI() {
   window.addEventListener('offline', () => encounter.follower?.stop('offline'));
   window.addEventListener('pagehide', () => {
     encounter.follower?.stop();
-    if ((consoleKey === 'activity' && activityView?.source === 'api') || (consoleKey === 'portfolio' && portfolioView?.source === 'api')) closeConsole();
+    if ((consoleKey === 'activity' && activityView?.source === 'api') || (consoleKey === 'portfolio' && portfolioView?.source === 'api')
+      || (consoleKey === 'ideas' && ideasView?.source === 'api')) closeConsole();
   });
   $('viewTop').addEventListener('click', () => setView('top'));
   $('viewLabels').addEventListener('click', () => {
@@ -5236,6 +5390,10 @@ function bindUI() {
     }
     clearTimeout(resetArm); disarm();
     Store.reseed(true); densityKey = '';
+    if (demoPortraits() && window.FactoryIdeas) {
+      try { localStorage.removeItem(window.FactoryIdeas.storeKey); } catch (e) {}
+      ideasView = null;
+    }
     if (S.selected) closeDrawer();
     goLive(); toast('Données de démonstration réinitialisées');
   });
@@ -5321,6 +5479,7 @@ function bindUI() {
   });
   $('pilotPanel').addEventListener('click', e => {
     if (e.target.closest('[data-portfolio-open]')) { openConsole('portfolio'); return; }
+    if (e.target.closest('[data-ideas-open]')) { openConsole('ideas'); return; }
     if (e.target.closest('[data-activity-open]')) { openConsole('activity'); return; }
     const d = e.target.closest('[data-day]');
     if (d) { const t = timeForDay(d.dataset.day); stopPlay(); S.live = false; changeDay(d.dataset.day, t); return; }
@@ -5447,20 +5606,30 @@ function bindUI() {
   document.addEventListener('visibilitychange', () => {
     if (consoleKey === 'activity' && activitySource() === 'api') { activityView = null; renderConsole(); }
     if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
+    if (consoleKey === 'ideas' && ideasView?.source === 'api') { ideasView = null; renderConsole(); }
     if (!document.hidden && S.live) goLive();
   });
   window.addEventListener('offline', () => {
     if (consoleKey === 'activity' && activityView?.source === 'api') { activityView = null; renderConsole(); }
     if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
+    if (consoleKey === 'ideas' && ideasView?.source === 'api') { ideasView = null; renderConsole(); }
   });
+  window.addEventListener('online', () => { if (consoleKey === 'ideas' && ideasView?.source !== 'demo') renderConsole(); });
   // The proxy identity can change independently of the current booking view.
   setInterval(() => {
     if (!document.hidden && consoleKey === 'activity' && activityView?.source === 'api' && activityView.status === 'ready') reloadActivity(activityView);
     if (!document.hidden && consoleKey === 'portfolio' && portfolioView?.source === 'api' && portfolioView.status === 'ready'
         && !portfolioView.pending && !portfolioView.editor) void readPortfolio(portfolioView);
+    if (!document.hidden && consoleKey === 'ideas' && ideasView?.source === 'api' && ideasView.status === 'ready'
+        && !ideasView.pending) void readIdeas(ideasView);
   }, 20000);
   // Another tab changed the saved data: reload it instead of overwriting it later
   window.addEventListener('storage', e => {
+    if (consoleKey === 'ideas' && ideasView?.source === 'demo' && (e.key === window.FactoryIdeas.storeKey || e.key === null)) {
+      ideasView.notes = window.FactoryIdeas.demoNotes();
+      ideasView.data = window.FactoryIdeas.demo(language, ideasView.notes);
+      renderConsole();
+    }
     if (Remote.private || Remote.memoryOnly) return;
     if (e.key !== STORE_KEY && e.key !== null) return;
     Store.load({ persist: false }); Store.version++; densityKey = '';

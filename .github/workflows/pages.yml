@@ -36,6 +36,7 @@ jobs:
           cp dashboard/assets/camille-model.js dashboard/assets/portrait-atlases.js _site/assets/
           cp dashboard/assets/factory-character.js dashboard/assets/factory-encounters.js dashboard/assets/factory-workbench-follow.js dashboard/assets/factory-activity.js _site/assets/
           cp dashboard/assets/factory-portfolio.js _site/assets/factory-portfolio.js
+          cp dashboard/assets/factory-ideas.js _site/assets/factory-ideas.js
           cp -R dashboard/exercise _site/exercise
           cp -R dashboard/companion _site/companion
           cp -R dashboard/docs _site/docs
