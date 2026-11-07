@@ -53,6 +53,7 @@ COPY assets/factory-character.js /build/site/assets/factory-character.js
 COPY assets/factory-encounters.js /build/site/assets/factory-encounters.js
 COPY assets/factory-workbench-follow.js /build/site/assets/factory-workbench-follow.js
 COPY assets/factory-activity.js /build/site/assets/factory-activity.js
+COPY assets/factory-demo-decision.js /build/site/assets/factory-demo-decision.js
 COPY assets/factory-portfolio.js /build/site/assets/factory-portfolio.js
 COPY assets/factory-assist.js /build/site/assets/factory-assist.js
 COPY assets/factory-ideas.js /build/site/assets/factory-ideas.js

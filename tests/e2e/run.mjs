@@ -1347,6 +1347,41 @@ if (!process.env.E2E_BASE_URL) {
         const targetLocale = isMobile ? 'en' : 'fr';
         check(`${mode}: Decision Companion opens in ${targetLocale}`, await demo.locator('html').getAttribute('lang') === targetLocale);
         await demo.goBack();
+        if (isMobile) {
+          await projects.tap();
+          const portfolio = demo.locator('.portfolio[data-portfolio-state="demo"]');
+          const handoff = portfolio.locator(`[data-portfolio-parent="${portfolioId(23)}"]`);
+          await handoff.locator('summary').tap();
+          const child = handoff.getByRole('button', { name: /Done.*Verify the Aster CRM event/ });
+          await child.tap();
+          const detail = portfolio.locator('[data-portfolio-detail]');
+          const decisionLink = detail.getByRole('link', { name: 'Open the simulated decision' });
+          const link = './companion/index.html?lang=en&demo_case=DEMO-104&demo_revision=1';
+          check('the fictional Portfolio shows completed delegated CRM evidence linked to the exact decision revision',
+            await portfolio.getByText('Fictional demo', { exact: true }).isVisible() &&
+            await detail.getByText('CRM event · opportunity won · OPP-104', { exact: true }).isVisible() &&
+            await detail.getByText(/DEMO-104 · Revision 1/).isVisible() && await decisionLink.getAttribute('href') === link);
+          await decisionLink.tap();
+          await demo.waitForURL(new URL(link, pagesRoot).href);
+          await demo.getByRole('heading', { name: 'Aster opportunity · prepare an order' }).waitFor();
+          check('the Pages mobile handoff opens DEMO-104 revision 1 with the same evidence in local simulation',
+            await demo.locator('#connection').getAttribute('data-mode') === 'static' &&
+            await demo.locator('#queue-view').getAttribute('data-screen') === 'detail' &&
+            await demo.locator('#case-label').textContent() === 'DEMO-104 · Business action' &&
+            (await demo.locator('#case-revision').textContent()).startsWith('Revision 1 ·') &&
+            await demo.locator('#action-fields').getByText('OPP-104', { exact: true }).isVisible() &&
+            await demo.locator('#evidence-items').getByText('CRM event · opportunity won · OPP-104', { exact: true }).isVisible() &&
+            requests.filter(url => url === `${pagesRoot}assets/factory-demo-decision.js`).length >= 2);
+          const rationale = 'The fictional CRM event matches the draft order.';
+          await demo.getByLabel('Reason for the decision').fill(rationale);
+          await demo.getByRole('button', { name: 'Approve', exact: true }).tap();
+          await demo.locator('#receipt-id').getByText('ERP-DRAFT-104', { exact: true }).waitFor();
+          await demo.getByRole('button', { name: 'Show history' }).tap();
+          check('the guided local decision shows its simulated ERP receipt and exact revision in decision history',
+            await demo.locator('#history-items').getByText(rationale, { exact: true }).isVisible() &&
+            await demo.locator('#history-items').getByText(/Approved · Revision 1|Approve · Revision 1/).isVisible());
+          await demo.goBack();
+        }
         await demo.locator('#demoFlows').click();
         await demo.waitForURL(url => url.pathname.endsWith('/docs/flow-lab.html'));
         await demo.locator('#outcome').waitFor();

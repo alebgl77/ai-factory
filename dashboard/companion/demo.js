@@ -2,14 +2,15 @@
 (() => {
   'use strict';
   const bilingual = (en, fr) => ({ en, fr });
+  const guided = window.FactoryDemoDecision;
   const samples = [
     {
-      id: 'DEMO-104', kind: 'action', priority: 85,
+      id: guided.id, revision: guided.revision, kind: 'action', priority: 85,
       title: bilingual('Aster opportunity · prepare an order', 'Opportunité Aster · préparer une commande'),
       reason: bilingual('The CRM opportunity is marked won. Review the exact draft before the simulated ERP records it.',
         'L’opportunité CRM est gagnée. Examinez le brouillon exact avant son enregistrement dans l’ERP simulé.'),
-      action: { type: 'erp.order.create_draft', fields: { customer: 'Aster', opportunity: 'OPP-104', amount: '2 450 EUR' } },
-      evidence: [bilingual('CRM event · opportunity won', 'Événement CRM · opportunité gagnée'),
+      action: { type: 'erp.order.create_draft', fields: { customer: 'Aster', opportunity: guided.opportunity, amount: '2 450 EUR' } },
+      evidence: [bilingual(`${guided.evidenceLabel.en} · ${guided.opportunity}`, `${guided.evidenceLabel.fr} · ${guided.opportunity}`),
         bilingual('ERP customer · ASTER-014', 'Client ERP · ASTER-014'),
         bilingual('Expected change · one new draft order', 'Modification prévue · une nouvelle commande brouillon')]
     },
@@ -31,9 +32,10 @@
   ];
 
   function createDemo() {
-    const cases = new Map(samples.map(item => [item.id, {
-      ...item, status: 'waiting_review', revision: 1, proposal_hash: `demo-${item.id}-1`
-    }]));
+    const cases = new Map(samples.map(item => {
+      const revision = item.revision ?? 1;
+      return [item.id, { ...item, status: 'waiting_review', revision, proposal_hash: `demo-${item.id}-${revision}` }];
+    }));
     let sequence = 106;
     const present = (item, lang) => ({
       ...item,

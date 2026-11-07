@@ -82,6 +82,8 @@
   const copy = (language, en, french) => fr(language) ? french : en;
   const dateOf = (now, days = 0) => new Date(now + days * 86400000).toISOString().slice(0, 10);
   const demoId = index => index.toString(16).padStart(32, '0');
+  const demoDecision = window.FactoryDemoDecision;
+  const demoDecisionTask = demoId(29);
   function demo(language, now = Date.now()) {
     const t = (en, french) => copy(language, en, french);
     const base = (index, title, description, offset) => ({ id: demoId(index), title, description, due_on: dateOf(now, offset), revision: 1 });
@@ -130,6 +132,11 @@
       task(28, 10, 'delivery', t('Inventory RAG sources', 'Inventorier les sources RAG'), '', 2, 'done',
         { execution: 'prepare', technical: true, assignee: { kind: 'agent', id: 'retrieval-agent' }, parent_task_id: demoId(21), delegation: 'manual',
           tokens: { input: 590, output: 130, total: 720, source: 'agent_reported' }, evidence: [{ kind: 'file', label: t('Source inventory', 'Inventaire des sources'), ref: 'DEMO-RAG-01' }] }),
+      task(29, 10, 'delivery', t('Verify the Aster CRM event', 'Vérifier l’événement CRM Aster'),
+        t('Confirm that Aster’s fictional opportunity was marked won before the draft order is reviewed.',
+          'Confirmer que l’opportunité fictive d’Aster est gagnée avant la revue de la commande brouillon.'), -1, 'done',
+        { execution: 'prepare', assignee: { kind: 'agent', id: 'retrieval-agent' }, parent_task_id: demoId(23), delegation: 'manual',
+          evidence: [{ kind: 'work', label: t(demoDecision.evidenceLabel.en, demoDecision.evidenceLabel.fr), ref: demoDecision.opportunity }] }),
     ];
     return { goals, projects, tasks, units, people, agents, truncated: false, view: '0'.repeat(64),
       capabilities: { global_admin: true, roles_by_unit: Object.fromEntries(units.map(unit => [unit.id, ROLES])), autonomy_by_unit, employee_id: null, agent_id: null } };
@@ -537,6 +544,7 @@
     const project = rowById(data.projects, task.project_id);
     const parent = rowById(data.tasks, task.parent_task_id);
     const children = childrenOf(data, task);
+    const guided = source === 'demo' && task.id === demoDecisionTask && task.status === 'done';
     const roles = ROLES.filter(name => role(data, task.unit, name)).map(name => l(ROLE, name));
     const next = !finished(task) && task.autonomy === 'blocked' ? t('The BU policy blocks this agent execution.', 'La politique de la BU bloque cette exécution par agent.')
       : task.status === 'ready' && !task.dependencies_ready ? t('Complete the blocking dependencies first.', 'Terminer d’abord les dépendances bloquantes.')
@@ -582,12 +590,16 @@
         return dependency ? `${dependency.title} · ${l(STATUS, dependency.status)}` : t('Dependency outside your current view', 'Dépendance hors de votre vue actuelle');
       }))}
       ${list(t('Evidence', 'Preuves'), task.evidence.map(row => row.ref ? `${row.label} · ${row.ref}` : row.label))}
+      ${guided ? `<p class="portfolio-note">${demoDecision.id} · ${t('Revision', 'Révision')} ${demoDecision.revision} ·
+        ${t('The outcome stays in this Companion session.', 'La décision reste dans cette session du Compagnon.')}</p>` : ''}
       ${task.history.length ? `<details><summary>${t('Task history', 'Historique de la tâche')}</summary>
         ${list(t('Recent changes', 'Dernières modifications'), task.history.map(row => `${l(ACTION, row.action)} · ${l(STATUS, row.status)} · ${row.actor || '—'} · r${row.revision}`))}</details>` : ''}
       <div class="portfolio-actions">${view.pending ? '' : commands(data, task, source === 'demo').map(action => button('data-portfolio-action', `command:${action}:${task.id}`,
         action === 'submit' && task.execution === 'sensitive' ? t('Prepare the handoff', 'Préparer le relais') : l(ACTION, action))).join('')}
         ${!view.pending && delegationOptions(data, task, source === 'demo').modes.length ? button('data-portfolio-action', `command:delegate:${task.id}`, l(ACTION, 'delegate')) : ''}
         ${!view.pending && role(data, task.unit, 'project_lead') && ['planned', 'ready'].includes(task.status) ? button('data-portfolio-action', `edit:tasks:${task.id}`, t('Replan', 'Replanifier')) : ''}
+        ${guided ? `<a class="mini" href="./companion/index.html?lang=${fr(language) ? 'fr' : 'en'}&amp;demo_case=${demoDecision.id}&amp;demo_revision=${demoDecision.revision}">
+          ${t('Open the simulated decision', 'Ouvrir la décision simulée')}</a>` : ''}
         ${task.status === 'workbench' ? `<a class="mini" href="./companion/index.html?lang=${language === 'fr' ? 'fr' : 'en'}" target="_blank" rel="noopener noreferrer">
           ${t('Open Companion', 'Ouvrir Companion')}</a>` : ''}</div></article>`;
   }
