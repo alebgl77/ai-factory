@@ -4,6 +4,11 @@
 # Base image pinned by digest (multi-arch index); the tag stays for Dependabot, which updates both.
 FROM python:3.12.16-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e
 
+# Apply Debian DSA-6613-1 to the pinned Trixie base.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade 'zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1' \
+ && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \

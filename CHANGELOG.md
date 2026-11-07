@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.1 (2026-11)
+
+- Updates Debian `zlib1g` in the five Python images to address CVE-2026-76844 and CVE-2026-85091.
+- Includes the [1.1.0 functionality](https://github.com/alebgl77/ai-factory/blob/main/CHANGELOG.md#110-2026-11)
+  for portfolio tasks, local sub-agent execution, and Workbench decision reconciliation. Follow
+  the [interactive operations guide](https://alebgl77.github.io/ai-factory/docs/#production)
+  to install by verified image digest and qualify the private environment.
+
+The `v1.1.0` source tag remains unchanged. Its image security gate stopped publication of
+the signed release. Use `v1.1.1` for the signed images.
+
 ## 1.1.0 (2026-11)
 
 - Portfolio and tasks connect company objectives to projects, team assignments, dependencies,
