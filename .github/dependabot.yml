@@ -102,6 +102,8 @@ updates:
 
   # Images of the separate services in docker-compose.yml (Grafana, Postgres, LiteLLM...).
   # A bump must also update licenses/third_party.yaml, which CI checks.
+  # Keep data-bearing services and tightly coupled Langfuse components out of generic groups.
+  # Major and ungrouped updates arrive separately for migration and rollback review.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
@@ -114,5 +116,24 @@ updates:
     commit-message:
       prefix: deps
     groups:
-      service-images:
+      langfuse-patches:
+        applies-to: version-updates
+        update-types: [patch]
+        patterns: ["*langfuse/langfuse", "*langfuse/langfuse-worker"]
+      stateless-service-images:
+        applies-to: version-updates
+        update-types: [patch, minor]
         patterns: ["*"]
+        exclude-patterns:
+          - "*postgres"
+          - "*langfuse/langfuse*"
+          - "*clickhouse/clickhouse-server"
+          - "*valkey/valkey"
+          - "*grafana/grafana"
+          - "*grafana/loki"
+          - "*prom/prometheus"
+          - "*chrislusf/seaweedfs"
+          - "*qdrant/qdrant"
+          - "*litellm/litellm*"
+          - "*ollama/ollama"
+          - "*oauth2-proxy/oauth2-proxy"

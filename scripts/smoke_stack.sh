@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: MIT
 # End-to-end smoke test of the deployable stack in key-less demo mode (profile "sim").
 #
-#   scripts/smoke_stack.sh [--no-up] [--no-build] [--down] [--timeout SECONDS]
+#   scripts/smoke_stack.sh [--no-up] [--no-build] [--down] [--timeout SECONDS] [--verify-persistence]
 #
 #   --no-up      only run the checks against a stack that is already running
 #   --no-build   start without rebuilding the local images
 #   --down       stop the stack at the end (docker compose down; images and volumes kept)
 #   --timeout    seconds to wait for the services to become healthy (default 900)
+#   --verify-persistence  recreate PostgreSQL and read a synthetic marker (disposable CI only)
 #
 # Checks: every service healthy; edge, dashboard (vendored Three.js, CSP) and API health;
 # snapshot fed by live sources with live GPU telemetry; Prometheus targets up and gateway
@@ -34,17 +35,26 @@ cd "$ROOT" || exit 2
 DO_UP=1
 BUILD="--build"
 DOWN=0
+VERIFY_PERSISTENCE=0
 TIMEOUT=900
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-up) DO_UP=0; shift ;;
     --no-build) BUILD=""; shift ;;
     --down) DOWN=1; shift ;;
+    --verify-persistence) VERIFY_PERSISTENCE=1; shift ;;
     --timeout) TIMEOUT="${2:?}"; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
+
+if [ "$VERIFY_PERSISTENCE" = 1 ] && {
+  [ "$DO_UP" != 1 ] || [ "$DOWN" != 1 ] || [[ "${COMPOSE_PROJECT_NAME:-}" != factory-ci-* ]];
+}; then
+  echo "--verify-persistence requires a disposable factory-ci-* project with --down and startup." >&2
+  exit 2
+fi
 
 for bin in docker curl python3; do
   command -v "$bin" >/dev/null 2>&1 || { echo "missing dependency: $bin" >&2; exit 2; }
@@ -611,6 +621,35 @@ if [ "$proxy" = "200 405 403" ]; then
   ok "Docker API proxy: Alloy can list containers, cannot create one or list images (200 405 403)"
 else
   ko "Docker API proxy allowlist" "${proxy:-no answer}"
+fi
+
+# The probe is opt-in for a disposable project. Recreate, rather than restart, so a
+# writable layer cannot masquerade as persistence. Verify the major and original mount path.
+if [ "$VERIFY_PERSISTENCE" = 1 ] && [ "$FAIL" = 0 ]; then
+  step "PostgreSQL persists after container recreation"
+  pg() { "${DC[@]}" exec -T postgres psql -v ON_ERROR_STOP=1 -Atq -U postgres -d postgres "$@"; }
+  persistence_marker="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+  original_id="$("${DC[@]}" ps -q postgres)"
+  if [ -n "$original_id" ] \
+    && pg -v "marker=$persistence_marker" <<'SQL'
+CREATE TABLE factory_ci_persistence_probe (marker text NOT NULL);
+INSERT INTO factory_ci_persistence_probe VALUES (:'marker');
+SQL
+  then
+    if "${DC[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 90 postgres \
+      && recreated_id="$("${DC[@]}" ps -q postgres)" \
+      && [ -n "$recreated_id" ] && [ "$recreated_id" != "$original_id" ] \
+      && [ "$(pg -c "SELECT current_setting('server_version_num')::int / 10000")" = 17 ] \
+      && [ "$(pg -c 'SHOW data_directory')" = /var/lib/postgresql/data ] \
+      && [ "$(pg -c 'SELECT marker FROM factory_ci_persistence_probe')" = "$persistence_marker" ] \
+      && pg -c 'DROP TABLE factory_ci_persistence_probe'; then
+      ok "PostgreSQL 17 reused its named volume after recreation"
+    else
+      ko "PostgreSQL persistence after recreation"
+    fi
+  else
+    ko "write PostgreSQL persistence marker"
+  fi
 fi
 
 # ------------------------------------------------------------------------ summary
