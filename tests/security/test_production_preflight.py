@@ -172,6 +172,19 @@ def test_portfolio_runner_requires_read_only_binding_and_single_internal_api(val
     assert any("internal LiteLLM origin" in error for error in production_errors(valid_config))
 
 
+def test_ai_assist_opt_in_requires_private_runner_mount_and_rate_limit(valid_config):
+    api = valid_config["services"]["api"]
+    target = "/run/secrets/factory_portfolio_runner"
+    api["environment"].update(FACTORY_ASSIST_ENABLED="on", LITELLM_URL="http://litellm:4000")
+    assert any("runner binding file" in error for error in production_errors(valid_config))
+    api["environment"]["FACTORY_PORTFOLIO_RUNNER_FILE"] = target
+    api["volumes"].append({"type": "bind", "source": "/operator/private-runner.json",
+                           "target": target, "read_only": True})
+    assert production_errors(valid_config) == []
+    api["environment"]["FACTORY_RATE_LIMIT_PER_MIN"] = "0"
+    assert any("rate limiting" in error for error in production_errors(valid_config))
+
+
 def test_rejects_unintended_bindings(valid_config):
     services = valid_config["services"]
     services["edge"]["ports"][0].pop("host_ip")

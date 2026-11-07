@@ -250,6 +250,9 @@ if (!process.env.E2E_BASE_URL) {
   const workbenchRequests = [];
   const activityRequests = [];
   const portfolioRequests = [];
+  const assistRequests = [];
+  const assistMarkup = '<em data-assist-injected>Suggestion du modèle local</em>';
+  let assistStatus = 200, assistGetStatus = 200, holdAssist = null;
   let portfolioStatus = 200, portfolioConflict = false, portfolioRole = 'manager';
   const ideaRequests = [];
   const ideaMarkup = '<em data-idea-injected>Retour terrain</em>';
@@ -344,6 +347,16 @@ if (!process.env.E2E_BASE_URL) {
       }
       return route.fulfill({ json: { items: ideaItems, view: ideasViewer, truncated: false, total: ideaItems.length,
         units: canPostIdeas ? [{ id: 'cc.platform:ops', label: 'Delivery' }] : [], permissions: { create: canPostIdeas } } });
+    }
+    if (url.pathname === '/api/v1/assist') {
+      const method = route.request().method();
+      assistRequests.push({ method, body: method === 'POST' ? route.request().postDataJSON() : null, lang: url.searchParams.get('lang') });
+      if (method === 'GET') return route.fulfill({ status: assistGetStatus,
+        json: assistGetStatus === 200 ? { units: [{ id: 'delivery', label: 'Delivery' }], view: portfolioFixture.view } : {} });
+      const reply = { status: assistStatus, json: assistStatus === 200
+        ? { text: assistMarkup, usage: { input: 16, output: 8, total: 24, source: 'provider_reported' }, view: portfolioFixture.view }
+        : { detail: 'assist_unavailable' } };
+      return holdAssist ? holdAssist.then(() => route.fulfill(reply)) : route.fulfill(reply);
     }
     if (url.pathname.startsWith('/api/v1/portfolio')) {
       const method = route.request().method();
@@ -650,6 +663,64 @@ if (!process.env.E2E_BASE_URL) {
   await scoped.clock.fastForward(20000);
   await protectedPortfolio.getByRole('button', { name: 'Nouvelle tâche', exact: true }).click();
   await protectedPortfolio.locator('[data-portfolio-field="title"]').fill('Tâche à identifiant serveur');
+  const protectedDescription = protectedPortfolio.locator('[data-portfolio-field="description"]');
+  await protectedDescription.fill('Ma description initiale.');
+  check('a regular BU user has no decision preparation entry', await protectedPortfolio.locator('[data-assist-open="decision_outline"]').count() === 0);
+  const protectedAssist = scoped.getByRole('region', { name: 'Rédiger une tâche' });
+  const portfolioWritesBeforeAssist = portfolioRequests.filter(request => request.method === 'POST').length;
+  check('opening the task form alone does not contact the local model', assistRequests.length === 0);
+  await protectedPortfolio.locator('[data-assist-open="draft_task"]').click();
+  const generate = protectedAssist.getByRole('button', { name: 'Générer une suggestion' });
+  assistStatus = 503;
+  await generate.click();
+  await protectedAssist.getByText('La suggestion locale n’a pas pu être vérifiée.').waitFor();
+  check('private assistance failure leaves the draft unchanged and gives no demo suggestion',
+    await protectedDescription.inputValue() === 'Ma description initiale.' &&
+    await protectedAssist.getByRole('button', { name: 'Utiliser', exact: true }).count() === 0);
+  assistStatus = 200;
+  let releaseAssist;
+  holdAssist = new Promise(resolve => { releaseAssist = resolve; });
+  const lateSuggestion = scoped.waitForRequest(request => request.url().includes('/api/v1/assist?') && request.method() === 'POST');
+  await generate.click();
+  await lateSuggestion;
+  assistGetStatus = 403;
+  releaseAssist(); holdAssist = null;
+  await protectedAssist.getByText('L’assistance locale n’est pas autorisée dans ce contexte.').waitFor();
+  check('a late local result is hidden if fresh access verification is revoked',
+    await protectedAssist.getByText(assistMarkup, { exact: true }).count() === 0 &&
+    await protectedAssist.getByRole('button', { name: 'Utiliser', exact: true }).count() === 0 &&
+    assistRequests.at(-1).method === 'GET');
+  await protectedAssist.getByRole('button', { name: 'Fermer l’assistance' }).click();
+  assistGetStatus = 200;
+  await protectedPortfolio.locator('[data-assist-open="draft_task"]').click();
+  await generate.click();
+  await protectedAssist.getByText(assistMarkup, { exact: true }).waitFor();
+  check('local draft uses explicit, bounded same-origin input and renders the result as text',
+    await protectedAssist.locator('[data-assist-injected]').count() === 0 &&
+    await protectedAssist.getByText('24 tokens mesurés', { exact: false }).isVisible() &&
+    JSON.stringify(assistRequests.filter(request => request.method === 'POST').at(-1)) === JSON.stringify({ method: 'POST',
+      body: { kind: 'draft_task', bu: 'delivery', title: 'Tâche à identifiant serveur', text: 'Ma description initiale.', source: 'internal' }, lang: 'fr' }));
+  await protectedDescription.fill('Mon brouillon modifié.');
+  await protectedAssist.getByText('La tâche a changé. Générez une nouvelle suggestion.').waitFor();
+  check('an edit invalidates the stale suggestion', await protectedAssist.getByRole('button', { name: 'Utiliser', exact: true }).count() === 0);
+  await generate.click();
+  await protectedAssist.getByText(assistMarkup, { exact: true }).waitFor();
+  assistGetStatus = 403;
+  await scoped.clock.fastForward(20000);
+  await protectedAssist.getByText('L’assistance locale n’est pas autorisée dans ce contexte.').waitFor();
+  check('an open editor does not stop private assistance from clearing revoked suggestions',
+    await protectedAssist.getByText(assistMarkup, { exact: true }).count() === 0);
+  await protectedAssist.getByRole('button', { name: 'Fermer l’assistance' }).click();
+  assistGetStatus = 200;
+  await protectedPortfolio.locator('[data-assist-open="draft_task"]').click();
+  await generate.click();
+  await protectedAssist.getByRole('button', { name: 'Utiliser', exact: true }).click();
+  await scoped.locator('#assistHost').waitFor({ state: 'hidden' });
+  check('explicit use appends to the draft without submitting or persisting prompts',
+    await protectedDescription.inputValue() === `Mon brouillon modifié.\n\n${assistMarkup}` &&
+    portfolioRequests.filter(request => request.method === 'POST').length === portfolioWritesBeforeAssist &&
+    await scoped.evaluate(() => !JSON.stringify(localStorage).includes('Mon brouillon modifié.')) &&
+    await scoped.locator('#assistHost').isHidden());
   await protectedPortfolio.locator('[data-portfolio-form] button[type="submit"]').click();
   await protectedPortfolio.getByText('Modification consignée.', { exact: true }).waitFor();
   const taskWrite = portfolioRequests.find(request => request.path === '/api/v1/portfolio/tasks');
@@ -730,6 +801,7 @@ if (!process.env.E2E_BASE_URL) {
   const workbenchCallsBeforeStatic = workbenchRequests.length;
   const activityCallsBeforeStatic = activityRequests.length;
   const portfolioCallsBeforeStatic = portfolioRequests.length;
+  const assistCallsBeforeStatic = assistRequests.length;
   const staticPage = await ctx.newPage();
   const portraitScriptReads = [];
   staticPage.on('request', request => {
@@ -902,6 +974,31 @@ if (!process.env.E2E_BASE_URL) {
   await demoConfirm();
   check('central planning creates a linked project and edits mutable fields only',
     /(?:Active|Actif)/.test(await demoProject.textContent()) && (await demoProject.textContent()).includes('Demo central objective'));
+  await demoPortfolio.locator('[data-assist-open="explain_process"]').click();
+  const processAssist = staticPage.locator('#assistHost');
+  check('contextual help shows the four workflow steps offline', await processAssist.locator('.assist-steps li').count() === 4 &&
+    await processAssist.getByText('Trame structurée hors ligne').isVisible());
+  await staticPage.keyboard.press('Escape');
+  await demoPortfolio.locator('[data-assist-open="decision_outline"]').click();
+  const decisionAssist = staticPage.locator('#assistHost');
+  await decisionAssist.getByRole('combobox', { name: 'BU', exact: true }).selectOption('delivery');
+  await decisionAssist.getByLabel('Décision à préparer').fill('Prioriser une intégration');
+  await decisionAssist.getByLabel('Contexte et éléments sourcés').fill('Comparatif déjà fourni par l’équipe, 2026.');
+  const decisionSubmit = decisionAssist.getByRole('button', { name: 'Préparer le brief' });
+  await decisionSubmit.click();
+  check('decision brief requires an explicit source before each analysis', await decisionAssist.locator('.assist-result').isHidden());
+  await decisionAssist.getByRole('radio', { name: 'Web public' }).check();
+  await decisionSubmit.click();
+  check('public mode prepares an offline research brief without claiming retrieval',
+    await decisionAssist.getByText('Sources à recueillir', { exact: false }).isVisible() &&
+    await decisionAssist.getByText('Cette interface ne consulte ni ne vérifie de sources en direct.', { exact: false }).isVisible() &&
+    await decisionAssist.locator('input[name="source"]:checked').count() === 0);
+  await decisionAssist.getByRole('radio', { name: 'Sources internes' }).check();
+  await decisionSubmit.click();
+  check('internal mode changes the collection plan and consumes the source selection',
+    await decisionAssist.getByText('procédures autorisées', { exact: false }).isVisible() &&
+    await decisionAssist.locator('input[name="source"]:checked').count() === 0);
+  await staticPage.keyboard.press('Escape');
   await staticPage.keyboard.press('Escape');
   await staticPage.locator('#pilotPanel [data-ideas-open]').click();
   const demoIdeas = staticPage.locator('.ideas[data-ideas-state="ready"]');
@@ -921,9 +1018,10 @@ if (!process.env.E2E_BASE_URL) {
   check('the posted demo idea survives reopening the wall', await demoIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible());
   await staticPage.keyboard.press('Escape');
   await staticPage.clock.fastForward(30000);
-  check('published static mode never requests snapshot, Observatory, Workbench, activity, portfolio or idea APIs',
+  check('published static mode never requests snapshot, Observatory, Workbench, activity, portfolio, idea or assistance APIs',
     snapshotCalls.length === callsBeforeStatic && shadowReads === shadowCallsBeforeStatic && workbenchRequests.length === workbenchCallsBeforeStatic &&
-    activityRequests.length === activityCallsBeforeStatic && portfolioRequests.length === portfolioCallsBeforeStatic && ideaRequests.length === ideaCallsBeforeStatic);
+    activityRequests.length === activityCallsBeforeStatic && portfolioRequests.length === portfolioCallsBeforeStatic && ideaRequests.length === ideaCallsBeforeStatic &&
+    assistRequests.length === assistCallsBeforeStatic);
   await staticPage.evaluate(() => { document.documentElement.removeAttribute('data-static-demo'); });
   const nextLanguage = await staticPage.locator('#languageSelect').inputValue() === 'fr' ? 'en' : 'fr';
   await staticPage.locator('#languageSelect').selectOption(nextLanguage);
@@ -994,6 +1092,12 @@ if (!process.env.E2E_BASE_URL) {
     await mobileIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible() &&
     await mobileIdeas.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
   if (visualDir) await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-coffee-mobile.png'), animations: 'disabled' });
+  await mobile.keyboard.press('Escape');
+  await mobile.locator('#tabFactory').click();
+  await mobile.locator('#factoryPanel [data-csec="skills"]').click();
+  await mobile.getByRole('link', { name: 'Ouvrir le laboratoire de flux' }).click();
+  await mobile.waitForURL(url => url.pathname.endsWith('/docs/flow-lab.html'));
+  check('the R&D Lab opens the Flow Lab from the mobile dashboard', /Laboratoire de flux IA/.test(await mobile.title()));
   await mobile.close();
 }
 

@@ -64,6 +64,7 @@ class Settings:
     state_dir: str = "/data"
     bu_policy_path: str | None = field(default=None, kw_only=True)
     portfolio_runner_file: str | None = field(default=None, kw_only=True, repr=False)
+    assist_enabled: bool = field(default=False, kw_only=True)
     shadow_ai_enabled: bool = field(default=False, kw_only=True)
     shadow_ai_groups: tuple[str, ...] = field(default=(), kw_only=True)
     shadow_ai_privacy_threshold: int = field(default=5, kw_only=True)
@@ -120,6 +121,9 @@ class Settings:
         if self.bu_policy_path and (self.auth_mode != "proxy" or self.workbench_chat_mode == "local"
                                     or self.workbench_mode == "demo"):
             raise ValueError("FACTORY_BU_POLICY requires proxy auth and a protected Workbench mode")
+        if self.assist_enabled and (self.auth_mode != "proxy" or self.demo_mode != "never" or not self.bu_policy_path
+                                    or not self.portfolio_runner_file or self.rate_limit_per_min <= 0):
+            raise ValueError("AI assistance requires live proxy auth, BU policy, local runner bindings and rate limiting")
         if self.workbench_chat_mode == "local" and (
             self.workbench_mode != "protected_demo" or self.auth_mode != "proxy"
             or not self.litellm_url or not self.litellm_master_key
@@ -153,6 +157,9 @@ class Settings:
         shadow_ai = (_env("FACTORY_SHADOW_AI_ENABLED", "off") or "off").lower()
         if shadow_ai not in {"on", "off"}:
             raise ValueError("invalid FACTORY_SHADOW_AI_ENABLED")
+        assist = (_env("FACTORY_ASSIST_ENABLED", "off") or "off").lower()
+        if assist not in {"on", "off"}:
+            raise ValueError("invalid FACTORY_ASSIST_ENABLED")
         try:
             shadow_threshold = int(_env("FACTORY_SHADOW_AI_PRIVACY_THRESHOLD", "5") or "5")
         except ValueError:
@@ -165,6 +172,7 @@ class Settings:
             state_dir=_env("FACTORY_STATE_DIR", "/data") or "/data",
             bu_policy_path=_env("FACTORY_BU_POLICY"),
             portfolio_runner_file=_env("FACTORY_PORTFOLIO_RUNNER_FILE"),
+            assist_enabled=assist == "on",
             shadow_ai_enabled=shadow_ai == "on",
             shadow_ai_groups=_env_list("FACTORY_SHADOW_AI_GROUPS"),
             shadow_ai_privacy_threshold=shadow_threshold,

@@ -25,6 +25,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import metrics as metrics_mod
 from . import seclog
+from .assist import ASSIST_CONCURRENCY, router as assist_router
 from .ideas import IdeasStore, router as ideas_router
 from .activity import ActivityJournal, router as activity_router
 from .i18n import DEFAULT_LANG, msg, normalize_lang
@@ -229,6 +230,9 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
             service, app.state.portfolio, app.state.portfolio_grant_generation,
             transport=portfolio_runner_transport,
         )
+    if settings.assist_enabled:
+        app.state.assist_slots = asyncio.Semaphore(ASSIST_CONCURRENCY)
+        app.include_router(assist_router)
     if settings.workbench_mode != "off":
         advisor = None
         if settings.workbench_chat_mode == "local":

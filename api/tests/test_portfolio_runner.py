@@ -372,22 +372,22 @@ def test_bad_gateway_response_blocks_once_without_logging_content(setup, respons
     assert KEY not in capsys.readouterr().err
 
 
+async def local_ollama_transport(request):
+    """Translate the fixed alias to a real local model only inside opt-in tests."""
+    port = int(os.environ["FACTORY_TEST_OLLAMA_PORT"])
+    payload = json.loads(request.content)
+    assert payload["model"] == "chat-sensitive"
+    payload["model"] = "gemma4:e2b"
+    payload["reasoning_effort"] = "none"
+    payload.pop("metadata")
+    async with httpx.AsyncClient(timeout=55, trust_env=False) as local:
+        return await local.post(f"http://127.0.0.1:{port}/v1/chat/completions", json=payload)
+
+
 @pytest.mark.skipif(not os.environ.get("FACTORY_TEST_OLLAMA_PORT"), reason="requires a running local Ollama")
 def test_local_ollama_model_qualification(setup):
-    """Qualify the runner against a real model; the alias is translated by this test adapter only."""
-    port = int(os.environ["FACTORY_TEST_OLLAMA_PORT"])
-
-    async def forward(request):
-        payload = json.loads(request.content)
-        assert payload["model"] == "chat-sensitive"
-        payload["model"] = "gemma4:e2b"
-        payload["reasoning_effort"] = "none"
-        payload.pop("metadata")
-        async with httpx.AsyncClient(timeout=55, trust_env=False) as local:
-            return await local.post(f"http://127.0.0.1:{port}/v1/chat/completions", json=payload)
-
     build, _, _ = setup
-    api = build(forward)
+    api = build(local_ollama_transport)
     _, child = queue(api)
     assert asyncio.run(api.app.state.portfolio_engine.run_once())
     result = row(api, child["id"])
