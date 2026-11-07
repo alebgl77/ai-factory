@@ -87,11 +87,16 @@ Un moteur externe peut utiliser un compte de service par agent et s’authentifi
 | Requête sous `/api/v1/portfolio` | Corps ou usage |
 |---|---|
 | `GET /` | Vue autorisée des objectifs, projets, tâches, rôles et politiques d’autonomie |
+| `GET /?limit=50` | Vue paginée des tâches, de la plus récemment créée à la plus ancienne. Reprenez `next_cursor` dans le paramètre `cursor` avec la même limite. |
 | `POST /tasks/{id}/commands` | `{revision, action: "authorize_start"}` par le manager si une autorisation est requise |
 | `POST /tasks/{id}/commands` | `{revision, action: "start"}` par l’agent affecté |
 | `POST /tasks/{id}/commands` | `{revision, action: "report_usage", tokens: {input, output}}` pendant l’exécution |
 | `POST /tasks/{id}/commands` | `{revision, action: "submit", evidence?, tokens?}` par la personne ou l’agent affecté |
 | `POST /tasks/{id}/subagents` | `{revision, mode, title, description?, agent_id?}`. Les modes sont `manual` avec `agent_id` et `automatic` avec sélection par le serveur. La réponse contient `parent` et `task`. |
+
+Les utilisateurs humains voient tous les titres et états stratégiques. Pour un projet extérieur à leurs BU, la réponse contient uniquement `title` et `state`. Pour un objectif sans projet dans leurs BU, elle contient uniquement `title` et `status` (`met`, `unmet` ou `unmeasured`). Les BU participantes et les administrateurs globaux accèdent aux fiches détaillées. Les agents voient les objectifs et projets liés à leurs affectations autorisées, quelle que soit la page.
+
+Sans `limit`, l’API conserve la vue des 200 tâches les plus récemment mises à jour. Avec `limit` (de 1 à 200), `next_cursor` vaut `null` à la dernière page. Le curseur est lié à l’identité vérifiée, à ses droits et à la limite. Une modification des droits peut invalider la suite avec une réponse HTTP 422. Chaque page réévalue les affectations et exclut les tâches créées après la première page. Un changement de droits ou d’affectation peut modifier l’ensemble visible.
 
 Utilisez le chemin `/api/v1/portfolio` sans barre finale pour le GET. L’API crée les identifiants des tâches et des sous-tâches. Envoyez les mutations en JSON avec la dernière révision reçue. En cas de conflit HTTP 409, rechargez la vue autorisée avant de renvoyer une intention toujours valable.
 
@@ -99,7 +104,7 @@ Les preuves peuvent référencer un fichier, un support ou un travail via `{kind
 
 ## Exploitation
 
-- Vérifiez les [signatures et attestations](../../SECURITY.md#vérifier-une-release). Renseignez `FACTORY_RELEASE_API_SHA256`, `FACTORY_RELEASE_DASHBOARD_SHA256` et `FACTORY_RELEASE_GRAFANA_BOOTSTRAP_SHA256` avec les valeurs vérifiées, chacune sur 64 caractères hexadécimaux, sans préfixe. Ajoutez [docker-compose.release.yml](../../docker-compose.release.yml) pour sélectionner ces trois images et désactiver leur construction locale.
+- Utilisez le [bundle de déploiement signé](../DEPLOYMENT.md#vérifier-et-installer-une-release) s'il accompagne la version. Pour les releases précédentes, vérifiez les [signatures et attestations](../../SECURITY.md#vérifier-une-release). Renseignez `FACTORY_RELEASE_API_SHA256`, `FACTORY_RELEASE_DASHBOARD_SHA256` et `FACTORY_RELEASE_GRAFANA_BOOTSTRAP_SHA256` avec les valeurs vérifiées, chacune sur 64 caractères hexadécimaux, sans préfixe. Ajoutez [docker-compose.release.yml](../../docker-compose.release.yml) pour sélectionner ces trois images et désactiver leur construction locale.
 - Exécutez le [précontrôle de sécurité](SECURITY.md#14-guide-de-durcissement-pour-la-production) avec les mêmes fichiers Compose et profils que la cible. Le JSON peut contenir des secrets. Transmettez-le directement au script.
 - Qualifiez la séparation des rôles, un refus inter-BU, un succès de sous-agent, une panne de modèle et un redémarrage entre la décision Workbench et son affichage dans le portefeuille. Utilisez des données synthétiques.
 - Sauvegardez le volume `api-state` pendant une fenêtre maîtrisée, avec l’API arrêtée ou un mécanisme d’instantané cohérent pour les deux bases. Conservez le point de restauration, les versions et les politiques ensemble. Testez la restauration sur un réseau isolé avant tout retour en service.

@@ -29,6 +29,7 @@ const seatDemoRoster = page => page.evaluate(() => {
   Store.load({ persist: false, raw: JSON.stringify({ v: 2, bookings, dayStatus: {}, meta: { autoDemo: false } }) });
   twin.refresh();
 });
+const sceneReady = page => page.locator('#loading[data-scene="ready"]').waitFor({ state: 'attached', timeout: 30000 });
 const mountedSeatPortraits = page => page.evaluate(() => Object.values(window.__twin.VIS)
   .flatMap(space => space.avatars).filter(avatar => avatar.portrait && !avatar.head.visible)
   .map(avatar => avatar.portrait.name).sort());
@@ -51,7 +52,7 @@ page.on('pageerror', e => errors.push(e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(base);
 await page.waitForFunction(() => window.__appReady === true, null, { timeout: 30000 });
-await page.waitForTimeout(1200);
+await sceneReady(page);
 
 const T = await page.evaluate(() => ({
   source: window.__twin?.source,
@@ -254,6 +255,8 @@ if (!process.env.E2E_BASE_URL) {
   const assistMarkup = '<em data-assist-injected>Suggestion du modèle local</em>';
   let assistStatus = 200, assistGetStatus = 200, holdAssist = null;
   let portfolioStatus = 200, portfolioConflict = false, portfolioRole = 'manager';
+  let portfolioPaging = true, holdIdeaSearch = null;
+  const pageCursor = 'next.' + 'a'.repeat(64);
   const ideaRequests = [];
   const traceRequests = [];
   const ideaMarkup = '<em data-idea-injected>Retour terrain</em>';
@@ -269,6 +272,7 @@ if (!process.env.E2E_BASE_URL) {
     ideaCard('6', 'cc-ops', 'Opérations', 'Automatiser les alertes', 'automation', ['workflow']),
     ideaCard('7', 'cc-finance', 'Finance', 'Automatiser les rapprochements', 'automation', ['workflow']),
     ideaCard('8', '@factory-administration', 'Administration Factory', 'Réunir les guides', 'adoption', ['documentation']),
+    ideaCard('9', 'cc-ops', 'Opérations', 'Piste historique sur les archives', 'adoption', ['documentation']),
   ];
   let workbenchOutcome = null;
   const portfolioId = n => n.toString(16).padStart(32, '0');
@@ -348,7 +352,8 @@ if (!process.env.E2E_BASE_URL) {
     if (url.pathname === '/api/v1/ideas') {
       const method = route.request().method();
       const body = method === 'POST' ? route.request().postDataJSON() : null;
-      ideaRequests.push({ method, body, language: url.searchParams.get('lang') });
+      const { q, category, bu, cursor } = Object.fromEntries(url.searchParams);
+      ideaRequests.push({ method, body, language: url.searchParams.get('lang'), q, category, bu, cursor });
       if (ideasStatus !== 200) return route.fulfill({ status: ideasStatus, json: {} });
       if (method === 'POST') {
         const created = { id: '3'.repeat(32), ...body, bu_label: 'Delivery', category: 'automation',
@@ -356,8 +361,15 @@ if (!process.env.E2E_BASE_URL) {
         ideaItems = [created, ...ideaItems];
         return route.fulfill({ status: 201, json: created });
       }
-      return route.fulfill({ json: { items: ideaItems, view: ideasViewer, truncated: false, total: ideaItems.length,
-        units: canPostIdeas ? [{ id: 'cc.platform:ops', label: 'Delivery' }] : [], permissions: { create: canPostIdeas, trace: canTraceIdeas } } });
+      const matching = ideaItems.filter(row => (!bu || row.bu === bu) && (!q || row.title.toLowerCase().includes(q.toLowerCase())));
+      const category_totals = {};
+      for (const row of matching) category_totals[row.category] = (category_totals[row.category] || 0) + 1;
+      const filtered = matching.filter(row => !category || row.category === category);
+      const next = !cursor && filtered.length > 5 ? pageCursor : null;
+      const reply = { json: { items: cursor ? filtered.slice(5) : filtered.slice(0, 5), view: ideasViewer,
+        truncated: !!next, next_cursor: next, category_totals, total: filtered.length,
+        units: canPostIdeas ? [{ id: 'cc.platform:ops', label: 'Delivery' }] : [], permissions: { create: canPostIdeas, trace: canTraceIdeas } } };
+      return q === 'alertes' && holdIdeaSearch ? holdIdeaSearch.then(() => route.fulfill(reply)) : route.fulfill(reply);
     }
     const traceId = url.pathname.match(/^\/api\/v1\/ideas\/([a-f0-9]{32})\/trace$/)?.[1];
     if (traceId) {
@@ -379,7 +391,8 @@ if (!process.env.E2E_BASE_URL) {
     }
     if (url.pathname.startsWith('/api/v1/portfolio')) {
       const method = route.request().method();
-      portfolioRequests.push({ method, path: url.pathname, body: method === 'POST' ? route.request().postDataJSON() : null });
+      const cursor = url.searchParams.get('cursor'), limit = url.searchParams.get('limit');
+      portfolioRequests.push({ method, path: url.pathname, body: method === 'POST' ? route.request().postDataJSON() : null, cursor, limit });
       if (portfolioStatus !== 200) return route.fulfill({ status: portfolioStatus, json: {} });
       if (method !== 'GET') return route.fulfill({ status: portfolioConflict ? 409 : 200, json: {} });
       const data = structuredClone(portfolioFixture);
@@ -394,6 +407,13 @@ if (!process.env.E2E_BASE_URL) {
       }
       data.projects = data.projects.filter(project => data.tasks.some(task => task.project_id === project.id));
       data.goals = data.goals.filter(goal => data.projects.some(project => project.goal_id === goal.id));
+      data.projects.push({ title: 'Projet d’une autre BU', state: 'active' });
+      data.goals.push({ title: 'Objectif stratégique partagé', status: 'met' });
+      if (portfolioPaging) {
+        data.tasks = data.tasks.filter(task => (task.id === portfolioId(23)) === !!cursor);
+        data.truncated = !cursor;
+        data.next_cursor = cursor ? null : pageCursor;
+      }
       data.capabilities = { ...data.capabilities, global_admin: false, roles_by_unit: { delivery: [portfolioRole] } };
       return route.fulfill({ json: data });
     }
@@ -425,6 +445,7 @@ if (!process.env.E2E_BASE_URL) {
   });
   await mock.goto('http://factory.test/');
   await mock.waitForFunction(() => window.__twin?.source === 'embedded');
+  await sceneReady(mock);
   check('initial API failure falls back to the selected offline locale', snapshotCalls.join(',') === 'fr');
   check('a failed first API request never restores a legacy local planning cache', await mock.evaluate(() =>
     localStorage.getItem('aiFactoryRef.v2').includes('legacy-private-note') && !window.__twin.Store.d.bookings.some(b => b.id === 'legacy-private')));
@@ -556,10 +577,13 @@ if (!process.env.E2E_BASE_URL) {
   });
   await scoped.goto('http://factory.test/?lang=fr', { waitUntil: 'commit' });
   await scoped.waitForFunction(() => window.__appReady && window.__twin?.source === 'api', null, { timeout: 30000 });
+  await sceneReady(scoped);
   await scoped.clock.fastForward(1500);
   check('scoped booking response revalidates the snapshot, purges browser caches and does not reseed', buWrites === 0 &&
     await scoped.evaluate(() => window.__twin.SNAP.meta.business_scope === true) &&
     await scoped.evaluate(() => localStorage.getItem('aiFactoryRef.v2') === null && localStorage.getItem('aiFactoryRef.v2.backup') === null));
+  check('protected boot stays live and hides the public shortcuts', await scoped.evaluate(() => window.__twin.S.live) &&
+    !(await scoped.locator('#demoEntry').isVisible()));
   await scoped.evaluate(() => { window.__twin.renderer.render = () => {}; });
   await scoped.locator('#encounterOpen').click();
   check('Workbench projection requires explicit activation and exposes no demo control',
@@ -654,6 +678,23 @@ if (!process.env.E2E_BASE_URL) {
   const protectedPortfolio = scoped.locator('.portfolio[data-portfolio-state="ready"]');
   await protectedPortfolio.waitFor();
   const planTask = (screen, number) => screen.locator(`[data-portfolio-choice="task:${portfolioId(number)}"]`);
+  const moreTasks = protectedPortfolio.getByRole('button', { name: 'Charger plus de tâches' });
+  check('strategic summaries render as plain cards with status and no links',
+    await protectedPortfolio.locator('article.portfolio-card').count() === 2 &&
+    await protectedPortfolio.getByText('Objectif stratégique partagé').isVisible() &&
+    await protectedPortfolio.getByText('Cible atteinte', { exact: true }).isVisible() &&
+    await planTask(protectedPortfolio, 23).count() === 0);
+  await moreTasks.click();
+  await planTask(protectedPortfolio, 23).waitFor();
+  check('portfolio load more appends authorized tasks with the server cursor',
+    await planTask(protectedPortfolio, 22).isVisible() && portfolioRequests.at(-1).cursor === pageCursor &&
+    portfolioRequests.at(-1).limit === '50' && await moreTasks.count() === 0);
+  const portfolioRevalidation = scoped.waitForResponse(res => res.url().includes('/api/v1/portfolio?') &&
+    new URL(res.url()).searchParams.get('cursor') === pageCursor);
+  await scoped.clock.fastForward(20000);
+  await (await portfolioRevalidation).finished();
+  check('portfolio revalidation retains the loaded page prefix', await planTask(protectedPortfolio, 23).isVisible());
+  portfolioPaging = false;
   await planTask(protectedPortfolio, 22).click();
   check('protected portfolio renders only scoped work and a BU manager sees assignment without planning or execution',
     await protectedPortfolio.getByRole('button', { name: 'Attribuer', exact: true }).isVisible() &&
@@ -772,6 +813,32 @@ if (!process.env.E2E_BASE_URL) {
     await protectedIdeas.locator('[data-idea-injected]').count() === 0 &&
     await protectedIdeas.locator('[data-idea-trace]').count() === 0 && traceRequests.length === 0);
   const ideaNote = id => protectedIdeas.locator(`[data-idea-id="${id.repeat(32)}"]`);
+  const ideaSearch = protectedIdeas.locator('#ideas-search');
+  const olderIdea = ideaNote('9');
+  check('older ideas start outside the first page', await olderIdea.count() === 0);
+  await protectedIdeas.getByRole('button', { name: 'Charger plus d’idées' }).click();
+  await olderIdea.waitFor();
+  check('the idea wall loads older entries with a cursor and preserves the first page',
+    ideaRequests.at(-1).cursor === pageCursor && await ideaNote('1').isVisible());
+  const ideaRevalidation = scoped.waitForResponse(res => res.url().includes('/api/v1/ideas?') &&
+    new URL(res.url()).searchParams.get('cursor') === pageCursor);
+  await scoped.clock.fastForward(20000);
+  await (await ideaRevalidation).finished();
+  check('idea wall revalidation retains the loaded page prefix', await olderIdea.isVisible());
+  let releaseIdeaSearch;
+  holdIdeaSearch = new Promise(resolve => { releaseIdeaSearch = resolve; });
+  const slowIdeaRequest = scoped.waitForRequest(req => new URL(req.url()).searchParams.get('q') === 'alertes');
+  const slowIdeaResponse = scoped.waitForResponse(res => new URL(res.url()).searchParams.get('q') === 'alertes');
+  await ideaSearch.fill('alertes');
+  await slowIdeaRequest;
+  await ideaSearch.fill('piste historique');
+  await olderIdea.waitFor();
+  releaseIdeaSearch(); holdIdeaSearch = null;
+  await (await slowIdeaResponse).finished();
+  check('protected idea search reaches old notes and ignores a stale response',
+    ideaRequests.at(-1).q === 'piste historique' && await olderIdea.isVisible() && await ideaNote('6').count() === 0);
+  await ideaSearch.fill('');
+  await ideaNote('1').waitFor();
   const paper = id => ideaNote(id).evaluate(el => getComputedStyle(el).backgroundColor);
   check('BU colors follow provenance, including transversal administration, independently of topic',
     await ideaNote('5').getByRole('button', { name: 'BU · Opérations' }).isVisible() &&
@@ -782,10 +849,13 @@ if (!process.env.E2E_BASE_URL) {
   const clearIdeaUnit = protectedIdeas.getByRole('button', { name: 'Effacer le filtre BU · Opérations' });
   const ideaTheme = protectedIdeas.locator('[data-idea-filter="finance"]');
   await ideaTheme.click();
-  await protectedIdeas.locator('#ideas-search').fill('budget des interventions');
+  await ideaSearch.fill('budget des interventions');
+  await ideaNote('5').waitFor();
   check('the BU pill composes with search and topic and can be cleared independently',
-    await clearIdeaUnit.isVisible() && await protectedIdeas.locator('.idea-note').count() === 1 && await ideaNote('5').isVisible());
+    await clearIdeaUnit.isVisible() && await protectedIdeas.locator('.idea-note').count() === 1 &&
+    ideaRequests.at(-1).bu === 'cc-ops' && ideaRequests.at(-1).category === 'finance');
   await clearIdeaUnit.click();
+  await ideaNote('5').waitFor();
   check('clearing BU preserves the other idea filters',
     await ideaTheme.getAttribute('aria-pressed') === 'true' && await protectedIdeas.locator('#ideas-search').inputValue() === 'budget des interventions');
   await protectedIdeas.getByRole('button', { name: '+ Ajouter une idée' }).click();
@@ -874,6 +944,7 @@ if (!process.env.E2E_BASE_URL) {
   await staticPage.evaluate(() => window.__twin.openConsole('shadow'));
   await staticPage.locator('[data-shadow-state="demo"]').waitFor();
   await staticPage.keyboard.press('Escape');
+  await sceneReady(staticPage);
   await staticPage.evaluate(() => { window.__twin.renderer.render = () => {}; });
   await seatDemoRoster(staticPage);
   await staticPage.waitForFunction(() => Object.values(window.__twin.VIS).flatMap(space => space.avatars)
@@ -1164,6 +1235,131 @@ if (!process.env.E2E_BASE_URL) {
     await mobileIdeas.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
   if (visualDir) await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-coffee-board-mobile.png'), animations: 'disabled' });
   await mobile.close();
+
+  if (vendor) {
+    const threeVersion = JSON.parse(fs.readFileSync(path.join(vendor, 'package.json'), 'utf8')).version;
+    const pagesRoot = 'http://factory.test/project-demo/';
+    const staticHtml = html.replace('<html ', '<html data-static-demo="1" ')
+      .replaceAll(`https://cdn.jsdelivr.net/npm/three@${threeVersion}/`, './vendor/three/');
+    for (const mode of ['import-failure', 'webgl-failure', 'same-origin']) {
+      const isMobile = mode === 'import-failure';
+      const demoContext = await browser.newContext({
+        viewport: isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+        isMobile, hasTouch: isMobile, locale: 'fr-FR', timezoneId: 'Europe/Paris', reducedMotion: 'reduce',
+      });
+      const demo = await demoContext.newPage();
+      const requests = [], failures = [];
+      demo.on('request', request => requests.push(request.url()));
+      demo.on('pageerror', error => failures.push(error.message));
+      await demo.clock.setFixedTime(new Date('2026-11-08T23:00:00+01:00'));
+      if (mode === 'webgl-failure') {
+        await demo.addInitScript(() => {
+          const getContext = HTMLCanvasElement.prototype.getContext;
+          HTMLCanvasElement.prototype.getContext = function (kind, ...args) {
+            return kind.includes('webgl') ? null : getContext.call(this, kind, ...args);
+          };
+        });
+      }
+      let releaseModule;
+      const holdModule = new Promise(resolve => { releaseModule = resolve; });
+      await demoContext.route(pagesRoot + '**', async route => {
+        const rel = new URL(route.request().url()).pathname.slice('/project-demo/'.length);
+        if (!rel || rel === 'index.html') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: staticHtml });
+        if (rel === 'companion/index.html') return route.fulfill({ contentType: 'text/html; charset=utf-8',
+          body: fs.readFileSync(path.join(root, 'dashboard', rel), 'utf8').replace('<html ', '<html data-static-demo="1" ') });
+        if (mode === 'import-failure' && rel === 'vendor/three/build/three.module.js') {
+          await holdModule;
+          return route.abort();
+        }
+        const file = rel.startsWith('vendor/three/') ? path.join(vendor, rel.slice('vendor/three/'.length)) : path.join(root, 'dashboard', rel);
+        return fs.existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404 });
+      });
+      try {
+        await demo.goto(pagesRoot + (isMobile ? '?lang=en' : '?lang=fr'), { waitUntil: 'commit' });
+        const entry = demo.locator('#demoEntry');
+        const projects = demo.locator('#demoProjects');
+        await projects.waitFor();
+        const sample = await demo.evaluate(() => ({
+          day: window.__twin.S.date, time: window.__twin.S.t, live: window.__twin.S.live,
+          busy: Object.values(window.__twin.snap.res).some(resource => resource.state === 'busy'),
+          overflow: document.documentElement.scrollWidth > innerWidth,
+        }));
+        const targetsInView = await entry.locator('.btn').evaluateAll(buttons => buttons.length === 3 && buttons.every(button => {
+          const rect = button.getBoundingClientRect();
+          return rect.height >= 44 && rect.top >= 0 && rect.bottom <= innerHeight;
+        }));
+        check(`${mode}: public landing has a populated Monday at 10:00 and three visible 44px shortcuts`,
+          sample.day === '2026-11-09' && sample.time === 600 && !sample.live && sample.busy && !sample.overflow && targetsInView,
+          JSON.stringify(sample));
+        if (isMobile) {
+          await projects.tap();
+          await demo.locator('.portfolio[data-portfolio-state="demo"]').waitFor();
+          check('mobile project shortcut opens the portfolio while the Three.js request is held',
+            await demo.locator('#loading').getAttribute('data-scene') === 'loading',
+            `${await demo.evaluate(() => Math.round(performance.now()))} ms from navigation to the portfolio on the test machine`);
+          releaseModule();
+        } else {
+          await projects.click();
+          await demo.locator('.portfolio[data-portfolio-state="demo"]').waitFor();
+        }
+        await demo.keyboard.press('Tab');
+        const consoleCloseFocused = await demo.locator('#cClose').evaluate(el => el === document.activeElement);
+        await demo.keyboard.press('Shift+Tab');
+        const consoleWrap = await demo.locator('#console').evaluate(el => el.contains(document.activeElement));
+        await demo.keyboard.press('?');
+        await demo.locator('#help').waitFor();
+        await demo.keyboard.press('Tab');
+        const helpTrap = await demo.locator('#helpClose').evaluate(el => el === document.activeElement);
+        await demo.keyboard.press('Escape');
+        const restoredPanel = await demo.locator('#console').evaluate(el => el.contains(document.activeElement));
+        await demo.keyboard.press('Escape');
+        check(`${mode}: focus wraps in the console and Help and restores to their launchers in order`,
+          consoleCloseFocused && consoleWrap && helpTrap && restoredPanel && await projects.evaluate(el => el === document.activeElement));
+
+        if (mode === 'same-origin') {
+          await sceneReady(demo);
+          check('Pages project subpath loads Three.js from the same origin', requests.some(url => url.endsWith('/project-demo/vendor/three/build/three.module.js')) &&
+            await demo.locator('#canvasHost canvas').isVisible() && requests.every(url => url.startsWith(pagesRoot)));
+        } else {
+          await demo.locator('#loading[data-scene="unavailable"]').waitFor();
+          await demo.locator('#fallbackSpaces').click();
+          await demo.locator('#spacePanel button[data-res="X1"]').click();
+          await demo.keyboard.press('Tab');
+          const drawerStarts = await demo.locator('#dClose').evaluate(el => el === document.activeElement);
+          await demo.keyboard.press('Shift+Tab');
+          const drawerWrap = await demo.locator('#drawer').evaluate(el => el.contains(document.activeElement));
+          await demo.keyboard.press('Escape');
+          const drawerReturns = await demo.locator('#spacePanel button[data-res="X1"]').evaluate(el => el === document.activeElement);
+          await demo.locator('#tabPilot').click();
+          const planning = await demo.locator('#pilotPanel [data-portfolio-open]').isVisible();
+          await demo.locator('#tabFactory').click();
+          await demo.locator('#factoryPanel [data-csec="registry"]').click();
+          const registry = await demo.locator('#cBody .ctable tbody tr').count();
+          await demo.keyboard.press('Escape');
+          await demo.locator('#tabTeam').click();
+          check(`${mode}: Spaces, drawer focus, Planning, Factory and Team survive the 3D failure`,
+            drawerStarts && drawerWrap && drawerReturns && planning && registry >= 6 && await demo.locator('#teamPanel .prow').count() > 0 &&
+            await demo.locator('#canvasHost canvas').count() === 0);
+        }
+        await demo.locator('#demoDecision').click();
+        await demo.waitForURL(url => url.pathname.endsWith('/companion/index.html'));
+        await demo.locator('#queue-count').waitFor();
+        const targetLocale = isMobile ? 'en' : 'fr';
+        check(`${mode}: Decision Companion opens in ${targetLocale}`, await demo.locator('html').getAttribute('lang') === targetLocale);
+        await demo.goBack();
+        await demo.locator('#demoFlows').click();
+        await demo.waitForURL(url => url.pathname.endsWith('/docs/flow-lab.html'));
+        await demo.locator('#outcome').waitFor();
+        check(`${mode}: Flow Lab opens in ${targetLocale} and renders the example`, await demo.locator('html').getAttribute('lang') === targetLocale &&
+          await demo.locator('#outcome').getAttribute('data-outcome') === 'delivered');
+        check(`${mode}: public shortcuts need no API and raise no JavaScript error`,
+          !requests.some(url => new URL(url).pathname.includes('/api/')) && failures.length === 0, failures.join(' | '));
+      } finally {
+        releaseModule();
+        await demoContext.close();
+      }
+    }
+  }
 }
 
 const guide = await ctx.newPage();

@@ -12,14 +12,15 @@ from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from .bu_access import PORTFOLIO_AGENT_MODES
 from .i18n import localize_tree
-from .portfolio_store import PortfolioActor, PortfolioError, PortfolioStore
+from .pagination import Cursor, decode_cursor, encode_cursor
+from .portfolio_store import TASK_PAGE_LIMIT, PortfolioActor, PortfolioError, PortfolioStore
 from .routers.shadow_ai import _check_origin
 from .security import READ, ROLE_PERMISSIONS, Access, require
 
@@ -211,6 +212,8 @@ class PortfolioContext:
     grant_generation: str
     actor: PortfolioActor
     view: str
+    participating_units: frozenset[str]
+    cursor_scope: str
     runner_agents: frozenset[str] = frozenset()
     runner_available: frozenset[str] = frozenset()
 
@@ -325,16 +328,20 @@ def _context(request: Request, access: Access) -> PortfolioContext:
                    agents[agent]["label"] if agent in agents else
                    "Direction" if global_admin else "Responsable habilité")
     grant_generation = request.app.state.portfolio_grant_generation
-    view_key = json.dumps([actor_ref, grant_generation, global_admin, sorted(own),
-                           sorted(group for group in principal.groups if group in policy.groups),
-                           sorted((unit, sorted(items)) for unit, items in roles.items())],
-                          separators=(",", ":"))
+    participating = ((scope.centers | roles.keys() | {unit for unit, _, _ in own}) & units.keys()
+                     if agent is None else {unit for unit, _, _ in own})
+    grants = [actor_ref, global_admin, sorted(own),
+              sorted(group for group in principal.groups if group in policy.groups),
+              sorted((unit, sorted(items)) for unit, items in roles.items()), sorted(participating)]
+    view_key = json.dumps([grant_generation, grants], separators=(",", ":"))
     view = hmac.digest(svc.booking_key, b"factory-portfolio-view-v1\0" + view_key.encode(), "sha256").hex()
+    cursor_scope = json.dumps([policy.fingerprint, grants, sorted(units)], separators=(",", ":"))
     engine = getattr(request.app.state, "portfolio_engine", None)
     runner_agents = engine.managed_agents() if engine is not None else frozenset()
     runner_available = engine.available_agents(cfg) if engine is not None else frozenset()
     return PortfolioContext(global_admin, roles, own, units, people, agents, agent_cases, case_units,
                             autonomy, agent is not None, grant_generation, PortfolioActor(actor_ref, actor_label), view,
+                            frozenset(participating), cursor_scope,
                             runner_agents=runner_agents, runner_available=runner_available)
 
 
@@ -345,7 +352,8 @@ class PortfolioRoute(APIRoute):
         async def handle(request: Request):
             _check_origin(request)
             pairs = request.query_params.multi_items()
-            if any(key != "lang" for key, _ in pairs) or len(pairs) > 1:
+            allowed = {"lang", "limit", "cursor"} if self.endpoint is snapshot else {"lang"}
+            if len(pairs) != len(request.query_params) or any(key not in allowed for key, _ in pairs):
                 raise HTTPException(422, detail="invalid_portfolio_request")
             if request.method in {"POST", "PUT"}:
                 types = request.headers.getlist("content-type")
@@ -371,19 +379,35 @@ def _store(request: Request) -> PortfolioStore:
 
 
 @router.get("")
-def snapshot(request: Request, access: Reader):
+def snapshot(request: Request, access: Reader, limit: Annotated[int, Query(ge=1, le=TASK_PAGE_LIMIT)] | None = None,
+             cursor: Cursor | None = None):
     ctx = _context(request, access)
+    key = request.app.state.service.booking_key
+    page_scope = ["portfolio", ctx.cursor_scope, limit]
+    before = None
+    if cursor is not None:
+        position = decode_cursor(key, page_scope, cursor)
+        if limit is None or not position or len(position) != 1:
+            raise HTTPException(422, detail="invalid_portfolio_cursor")
+        before = position[0]
     data = _store(request).snapshot(managed_units=ctx.managed_units, own_assignments=ctx.own,
-                                    policy_fingerprint=ctx.grant_generation)
+                                    policy_fingerprint=ctx.grant_generation, limit=limit, before=before,
+                                    agent_view=ctx.agent_subject)
+    if limit is not None:
+        position = data.pop("next_position")
+        data["next_cursor"] = encode_cursor(key, page_scope, [position]) if position else None
     scope = ctx.managed_units
     visible_units = scope | {unit for unit, _, _ in ctx.own}
     personal = {(unit, identifier) for unit, kind, identifier in ctx.own if kind == "employee"}
     own_agents = {identifier for _, kind, identifier in ctx.own if kind == "agent"}
-    if ctx.agent_subject:
-        project_ids = {task["project_id"] for task in data["tasks"]}
-        data["projects"] = [project for project in data["projects"] if project["id"] in project_ids]
-        goal_ids = {project["goal_id"] for project in data["projects"]}
-        data["goals"] = [goal for goal in data["goals"] if goal["id"] in goal_ids]
+    if not ctx.global_admin and not ctx.agent_subject:
+        detailed = {project["id"] for project in data["projects"]
+                    if ctx.participating_units.intersection(project["unit_ids"])}
+        detailed_goals = {project["goal_id"] for project in data["projects"] if project["id"] in detailed}
+        data["projects"] = [project if project["id"] in detailed else
+                            {"title": project["title"], "state": project["state"]} for project in data["projects"]]
+        data["goals"] = [goal if goal["id"] in detailed_goals else
+                         {"title": goal["title"], "status": _goal_status(goal)} for goal in data["goals"]]
     return {
         **data,
         "tasks": [ctx.project_task(task) for task in data["tasks"]],
@@ -395,7 +419,7 @@ def snapshot(request: Request, access: Reader):
                    for _, agent in sorted(ctx.agents.items())
                    if agent["unit"] in scope or agent["id"] in own_agents],
         "units": [{"id": unit, "label": label} for unit, label in sorted(ctx.units.items())
-                  if not ctx.agent_subject or unit in visible_units],
+                  if ctx.global_admin or unit in ctx.participating_units],
         "capabilities": {
             "global_admin": ctx.global_admin,
             "roles_by_unit": {unit: sorted(roles) for unit, roles in ctx.roles.items()},
@@ -405,6 +429,14 @@ def snapshot(request: Request, access: Reader):
         },
         "view": ctx.view,
     }
+
+
+def _goal_status(goal: dict[str, Any]) -> str:
+    current = goal["current"]
+    if current is None:
+        return "unmeasured"
+    met = current <= goal["target"] if goal["direction"] == "at_most" else current >= goal["target"]
+    return "met" if met else "unmet"
 
 
 @router.post("/goals", status_code=201)

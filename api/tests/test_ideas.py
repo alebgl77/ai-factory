@@ -1,5 +1,6 @@
 """Factory-wide idea visibility with server-verified author and BU attribution."""
 
+import datetime as dt
 import json
 import re
 import sqlite3
@@ -223,6 +224,63 @@ def test_board_cap_global_total_and_persistence(tmp_path, monkeypatch):
         db.execute("UPDATE ideas SET bu = 'cc-retired' WHERE bu = ?", (FINANCE_BU,))
     result = _get(api, FINANCE)
     assert len(result["items"]) == 1 and result["total"] == 1 and result["truncated"] is False
+
+
+def test_search_and_page_span_history_without_leaking_retired_rows_or_provenance(tmp_path):
+    api = make_client(tmp_path)
+    clock = lambda: dt.datetime(2026, 11, 7, 12, tzinfo=dt.UTC)
+    api.app.state.ideas.clock = clock
+    titles = ["Audit ancien", "Audit récent", "Audit finances", "Autre sujet"]
+    posts = [
+        api.post(API, headers=actor, json={**NOTE, "bu": bu, "title": title}).json()
+        for title, (actor, bu) in zip(titles, ((OPS_PERSON, OPS), (OPS_PERSON, OPS), (FINANCE, FINANCE_BU),
+                                               (OPS_PERSON, OPS)), strict=True)
+    ]
+    params = {"q": "AUDIT", "category": "security", "limit": 1}
+    first = api.get(API, headers=FINANCE, params=params).json()
+    assert first["total"] == 3 and first["truncated"]
+    assert first["category_totals"] == {"security": 3}
+    assert first["items"][0]["id"] == min(row["id"] for row in posts[:3])
+    cursor = first["next_cursor"]
+    # A same-clock arrival after the first page is excluded from this traversal.
+    api.post(API, headers=OPS_PERSON, json={**NOTE, "title": "Audit nouveau"})
+    api = make_client(tmp_path)
+    items = first["items"]
+    while cursor:
+        response = api.get(API, headers=FINANCE, params={**params, "cursor": cursor})
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        items.extend(payload["items"])
+        cursor = payload["next_cursor"]
+    assert [row["id"] for row in items] == sorted(row["id"] for row in posts[:3])
+    assert all({"subject", "kind"}.isdisjoint(row) for row in items)
+    with closing(sqlite3.connect(api.app.state.ideas.path)) as db, db:
+        db.execute("UPDATE ideas SET bu = 'cc-retired' WHERE bu = ?", (FINANCE_BU,))
+    scoped = api.get(API, headers=FINANCE, params={**params, "bu": OPS, "limit": 120}).json()
+    assert {row["title"] for row in scoped["items"]} == {"Audit ancien", "Audit récent", "Audit nouveau"}
+    assert api.get(API, headers=FINANCE, params={"q": "récent"}).json()["items"][0]["id"] == posts[1]["id"]
+    assert api.get(API, headers=FINANCE, params={"q": "FINANCES"}).json()["total"] == 0
+
+
+def test_search_rejects_cursor_reuse_and_treats_sql_operators_as_text(tmp_path):
+    api = make_client(tmp_path)
+    for _ in range(2):
+        assert api.post(API, headers=OPS_PERSON, json=NOTE).status_code == 201
+    params = {"limit": 1, "q": "sso", "lang": "fr"}
+    cursor = api.get(API, headers=FINANCE, params=params).json()["next_cursor"]
+    for actor, change in (
+        (FINANCE, {"q": "other"}), (FINANCE, {"lang": "en"}), (FINANCE, {"category": "security"}),
+        (FINANCE, {"bu": OPS}), (FINANCE, {"limit": 2}), (OPS_PERSON, {}),
+        (FINANCE, {"cursor": ("b" if cursor[0] == "a" else "a") + cursor[1:]}),
+    ):
+        result = api.get(API, headers=actor, params={**params, "cursor": cursor, **change})
+        assert result.status_code == 422 and result.json() == {"detail": "invalid_ideas_cursor"}
+    injection = api.get(API, headers=FINANCE, params={"q": "%' OR 1=1 --"})
+    assert injection.status_code == 200 and injection.json()["items"] == []
+    assert api.get(API + "?limit=1&limit=2", headers=FINANCE).status_code == 422
+    assert api.get(API, headers=FINANCE, params={"bu": "cc-retired"}).status_code == 422
+    assert api.get(API, headers=FINANCE, params={"category": "private"}).status_code == 422
+    assert api.post(API + "?q=sso", headers=OPS_PERSON, json=NOTE).status_code == 422
 
 
 def test_capacity_is_transactional_for_concurrent_writers(tmp_path, monkeypatch):

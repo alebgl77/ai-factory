@@ -3,6 +3,17 @@
 
   const sim = globalThis.FactoryFlowSim;
   const byId = id => document.getElementById(id);
+  const english = new URLSearchParams(location.search).get('lang') === 'en';
+  const ui = (fr, en) => english ? en : fr;
+  const locale = ui('fr-FR', 'en-GB');
+  if (english) {
+    document.documentElement.lang = 'en';
+    document.title = 'AI Flow Lab · AI Factory';
+    document.querySelector('meta[name="description"]').content = 'Build AI topologies and simulate synthetic traffic, token counts and routing locally.';
+    byId('dashboard-link').href = '../index.html?lang=en';
+    for (const node of document.querySelectorAll('[data-en]')) node.textContent = node.dataset.en;
+    for (const node of document.querySelectorAll('[data-en-label]')) node.setAttribute('aria-label', node.dataset.enLabel);
+  }
   const element = (tag, text) => {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -16,57 +27,58 @@
 
   const STORE = 'ai-factory.flow-lab.history.v1';
   const LABELS = {
-    source: ['IN', 'Source', 'Injecte un lot fictif et sa classification.'],
-    policy: ['SEC', 'Passerelle', 'Vérifie la classification et le budget de tokens en entrée.'],
-    router: ['RTE', 'Routeur', 'Choisit une liaison par défaut ou une liaison C3/C4, avec repli possible après une panne.'],
-    retrieval: ['CTX', 'Recherche', 'Ajoute des tokens de contexte synthétiques.'],
-    cpu: ['CPU', 'Modèle CPU', 'Calcule des tokens et un coût fictifs sur un profil local CPU.'],
-    gpu: ['GPU', 'Modèle GPU', 'Calcule des tokens et un coût fictifs sur un profil local GPU.'],
-    remote: ['EXT', 'Modèle distant', 'Simule un profil distant. C3 et C4 sont toujours bloqués ici.'],
-    sink: ['OUT', 'Destination', 'Compte les demandes parvenues en bout de trajet.'],
+    source: ['IN', 'Source', ui('Injecte un lot fictif et sa classification.', 'Injects a synthetic batch and its classification.')],
+    policy: ['SEC', ui('Passerelle', 'Gateway'), ui('Vérifie la classification et le budget de tokens en entrée.', 'Checks data classification and the input token budget.')],
+    router: ['RTE', ui('Routeur', 'Router'), ui('Choisit une liaison par défaut ou une liaison C3/C4, avec repli possible après une panne.', 'Chooses the default or C3/C4 route and can fall back after an outage.')],
+    retrieval: ['CTX', ui('Recherche', 'Retrieval'), ui('Ajoute des tokens de contexte synthétiques.', 'Adds synthetic context tokens.')],
+    cpu: ['CPU', ui('Modèle CPU', 'CPU model'), ui('Calcule des tokens et un coût fictifs sur un profil local CPU.', 'Estimates tokens and costs for a local CPU profile.')],
+    gpu: ['GPU', ui('Modèle GPU', 'GPU model'), ui('Calcule des tokens et un coût fictifs sur un profil local GPU.', 'Estimates tokens and costs for a local GPU profile.')],
+    remote: ['EXT', ui('Modèle distant', 'Remote model'), ui('Simule un profil distant. C3 et C4 sont toujours bloqués ici.', 'Simulates a remote profile. It always blocks C3 and C4 data.')],
+    sink: ['OUT', 'Destination', ui('Compte les demandes parvenues en bout de trajet.', 'Counts requests that reach the end of the path.')],
   };
-  const ROUTE_LABELS = { default: 'Défaut', restricted: 'C3/C4', fallback: 'Repli' };
-  const OUTCOMES = { delivered: 'Lot livré', blocked: 'Lot bloqué', failed: 'Échec simulé', unrouted: 'Trajet incomplet' };
+  const ROUTE_LABELS = { default: ui('Défaut', 'Default'), restricted: 'C3/C4', fallback: ui('Repli', 'Fallback') };
+  const OUTCOMES = { delivered: ui('Lot livré', 'Batch delivered'), blocked: ui('Lot bloqué', 'Batch blocked'),
+    failed: ui('Échec simulé', 'Simulated failure'), unrouted: ui('Trajet incomplet', 'Incomplete path') };
   const EVENTS = {
-    forward: 'Transfert', delivered: 'Lot reçu', policy_class: 'Classification refusée',
-    policy_tokens: 'Budget de tokens dépassé', policy_pass: 'Contrôles passés',
-    restricted_route: 'Liaison C3/C4', default_route: 'Liaison par défaut', retrieved: 'Contexte ajouté',
-    restricted_remote: 'Accès distant refusé', unavailable: 'Panne simulée',
-    model_remote: 'Inférence distante simulée', model_local: 'Inférence locale simulée',
+    forward: ui('Transfert', 'Forwarded'), delivered: ui('Lot reçu', 'Batch received'), policy_class: ui('Classification refusée', 'Classification denied'),
+    policy_tokens: ui('Budget de tokens dépassé', 'Token budget exceeded'), policy_pass: ui('Contrôles passés', 'Checks passed'),
+    restricted_route: ui('Liaison C3/C4', 'C3/C4 route'), default_route: ui('Liaison par défaut', 'Default route'), retrieved: ui('Contexte ajouté', 'Context added'),
+    restricted_remote: ui('Accès distant refusé', 'Remote access denied'), unavailable: ui('Panne simulée', 'Simulated outage'),
+    model_remote: ui('Inférence distante simulée', 'Simulated remote inference'), model_local: ui('Inférence locale simulée', 'Simulated local inference'),
   };
   const WARNINGS = {
-    policy_class: 'La passerelle bloque la classe injectée.',
-    policy_tokens: 'Le nombre de tokens dépasse la limite de la passerelle.',
-    restricted_remote: 'La règle C3/C4 bloque le modèle distant avant toute tentative.',
-    unavailable: 'Un modèle indisponible ajoute du délai, sans tokens consommés.',
-    fallback_used: 'Le dernier routeur a activé son repli.',
-    unrouted: 'Le trajet se termine sans atteindre une destination.',
-    execution_limit: 'La limite de parcours est atteinte.',
+    policy_class: ui('La passerelle bloque la classe injectée.', 'The gateway blocks this data class.'),
+    policy_tokens: ui('Le nombre de tokens dépasse la limite de la passerelle.', 'The token count exceeds the gateway limit.'),
+    restricted_remote: ui('La règle C3/C4 bloque le modèle distant avant toute tentative.', 'The C3/C4 policy blocks the remote model before any attempt.'),
+    unavailable: ui('Un modèle indisponible ajoute du délai, sans tokens consommés.', 'An unavailable model adds delay and consumes zero tokens.'),
+    fallback_used: ui('Le dernier routeur a activé son repli.', 'The last router used its fallback.'),
+    unrouted: ui('Le trajet se termine sans atteindre une destination.', 'The path ends before reaching a destination.'),
+    execution_limit: ui('La limite de parcours est atteinte.', 'The path reached its traversal limit.'),
   };
   const ERRORS = {
-    invalid_graph: 'La topologie dépasse les limites du laboratoire.',
-    invalid_node: 'La configuration du nœud est invalide.',
-    invalid_policy: 'Vérifiez la classe et le budget de la passerelle.',
-    invalid_retrieval: 'Vérifiez les tokens de contexte.',
-    occupied_position: 'Cette case est déjà occupée.',
-    single_source: 'Le scénario utilise une seule source.',
-    invalid_edge: 'Choisissez deux nœuds distincts.',
-    invalid_route: 'Cette liaison est incompatible avec les types de nœud.',
-    duplicate_route: 'Une liaison de ce type existe déjà pour ce départ.',
-    cycle: 'Une boucle n’est pas autorisée dans ce graphe.',
-    invalid_scenario: 'Vérifiez les bornes des paramètres du scénario.',
-    missing_source: 'Ajoutez une source pour injecter le lot.',
-    missing_sink: 'Ajoutez une destination pour observer la livraison.',
+    invalid_graph: ui('La topologie dépasse les limites du laboratoire.', 'The topology exceeds the lab limits.'),
+    invalid_node: ui('La configuration du nœud est invalide.', 'The node configuration is invalid.'),
+    invalid_policy: ui('Vérifiez la classe et le budget de la passerelle.', 'Check the gateway class and token budget.'),
+    invalid_retrieval: ui('Vérifiez les tokens de contexte.', 'Check the context token count.'),
+    occupied_position: ui('Cette case est déjà occupée.', 'This cell is already occupied.'),
+    single_source: ui('Le scénario utilise une seule source.', 'The scenario uses a single source.'),
+    invalid_edge: ui('Choisissez deux nœuds distincts.', 'Choose two distinct nodes.'),
+    invalid_route: ui('Cette liaison est incompatible avec les types de nœud.', 'This connection is incompatible with the node types.'),
+    duplicate_route: ui('Une liaison de ce type existe déjà pour ce départ.', 'This node already has a route of that type.'),
+    cycle: ui('Une boucle n’est pas autorisée dans ce graphe.', 'This graph cannot contain cycles.'),
+    invalid_scenario: ui('Vérifiez les bornes des paramètres du scénario.', 'Check the scenario parameter limits.'),
+    missing_source: ui('Ajoutez une source pour injecter le lot.', 'Add a source to inject the batch.'),
+    missing_sink: ui('Ajoutez une destination pour observer la livraison.', 'Add a destination to observe delivery.'),
   };
   const PRESETS = {
     nominal: { ...sim.DEFAULT_SCENARIO },
     restricted: { ...sim.DEFAULT_SCENARIO, classification: 4 },
     fault: { ...sim.DEFAULT_SCENARIO, fault: 'remote' },
   };
-  const number = new Intl.NumberFormat('fr-FR');
-  const money = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 6 });
-  const date = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
-  const directionLabels = [['Haut', 0, -1], ['Gauche', -1, 0], ['Droite', 1, 0], ['Bas', 0, 1]];
+  const number = new Intl.NumberFormat(locale);
+  const money = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR', maximumFractionDigits: 6 });
+  const date = new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' });
+  const directionLabels = [[ui('Haut', 'Up'), 0, -1], [ui('Gauche', 'Left'), -1, 0], [ui('Droite', 'Right'), 1, 0], [ui('Bas', 'Down'), 0, 1]];
   const scenarioFields = {
     classification: byId('classification'), requests: byId('requests'), input: byId('input-tokens'),
     output: byId('output-tokens'), fault: byId('fault'),
@@ -77,9 +89,9 @@
   let result = null;
   let comparisonIndex = null;
   let history = [];
-  try { history = sim.readHistory(localStorage.getItem(STORE)); } catch {
-    status('storage-status', 'Le stockage du navigateur est indisponible. L’historique reste en mémoire pour cette session.', true);
-  }
+  const memoryOnly = ui('Le stockage du navigateur est indisponible. L’historique reste en mémoire pour cette session.',
+    'Browser storage is unavailable. History stays in memory for this session.');
+  try { history = sim.readHistory(localStorage.getItem(STORE)); } catch { status('storage-status', memoryOnly, true); }
 
   function status(id, message, error = false) {
     const box = byId(id);
@@ -87,7 +99,7 @@
     box.dataset.error = String(error);
   }
   function showError(error, id) {
-    status(id, ERRORS[error?.code] || 'L’opération est indisponible pour cette configuration.', true);
+    status(id, ERRORS[error?.code] || ui('L’opération est indisponible pour cette configuration.', 'This operation is unavailable for the current configuration.'), true);
   }
   function nodeLabel(node) { return LABELS[node.type][1] + ' · ' + node.id; }
   function selectedNode() { return graph.nodes.find(node => node.id === selected); }
@@ -130,12 +142,12 @@
     for (let y = 0; y <= 3 && !cell; y++) {
       for (let x = 0; x <= 4 && !cell; x++) if (free(x, y)) cell = { x, y };
     }
-    if (!cell) return status('editor-status', 'Le canevas est plein.', true);
+    if (!cell) return status('editor-status', ui('Le canevas est plein.', 'The canvas is full.'), true);
     const id = Array.from({ length: sim.MAX_NODES }, (_, index) => index + 1)
       .find(candidate => !graph.nodes.some(node => node.id === candidate));
     const node = sim.makeNode(type, id, cell.x, cell.y);
     selected = id;
-    setGraph({ ...graph, nodes: [...graph.nodes, node] }, nodeLabel(node) + ' ajouté.');
+    setGraph({ ...graph, nodes: [...graph.nodes, node] }, ui(nodeLabel(node) + ' ajouté.', 'Added ' + nodeLabel(node) + '.'));
   }
 
   const palette = new Map();
@@ -145,7 +157,7 @@
     glyph.className = 'glyph';
     glyph.setAttribute('aria-hidden', 'true');
     control.append(glyph, element('span', LABELS[type][1]));
-    control.setAttribute('aria-label', 'Ajouter ' + LABELS[type][1]);
+    control.setAttribute('aria-label', ui('Ajouter ', 'Add ') + LABELS[type][1]);
     palette.set(type, control);
     byId('palette').append(control);
   }
@@ -159,9 +171,9 @@
 
   function moveNode(node, dx, dy, moveId) {
     const next = { ...node, x: node.x + dx, y: node.y + dy };
-    if (!free(next.x, next.y, node.id)) return status('editor-status', 'Cette case est indisponible.', true);
+    if (!free(next.x, next.y, node.id)) return status('editor-status', ui('Cette case est indisponible.', 'This cell is unavailable.'), true);
     setGraph({ ...graph, nodes: graph.nodes.map(entry => entry.id === node.id ? next : entry) },
-      nodeLabel(node) + ' déplacé.', '#inspector [data-move="' + moveId + '"]:not(:disabled), #inspector-title');
+      ui(nodeLabel(node) + ' déplacé.', 'Moved ' + nodeLabel(node) + '.'), '#inspector [data-move="' + moveId + '"]:not(:disabled), #inspector-title');
   }
 
   function renderInspector() {
@@ -169,7 +181,7 @@
     const node = selectedNode();
     panel.replaceChildren();
     if (!node) {
-      panel.append(element('p', 'Sélectionnez un nœud dans le canevas.'));
+      panel.append(element('p', ui('Sélectionnez un nœud dans le canevas.', 'Select a node on the canvas.')));
       return;
     }
     const name = element('strong', nodeLabel(node));
@@ -181,12 +193,12 @@
       const control = button(label, () => moveNode(node, dx, dy, index));
       control.dataset.move = index;
       control.disabled = !free(node.x + dx, node.y + dy, node.id);
-      control.setAttribute('aria-label', 'Déplacer vers ' + label.toLocaleLowerCase('fr'));
+      control.setAttribute('aria-label', ui('Déplacer vers ', 'Move ') + label.toLocaleLowerCase(locale));
       arrows.append(control);
     });
     panel.append(arrows);
-    const fields = node.type === 'policy' ? [['classMax', 'Classe maximale', 1, 4], ['promptMax', 'Tokens maximum', 1, 16384]] :
-      node.type === 'retrieval' ? [['contextTokens', 'Tokens de contexte', 0, 4096]] : [];
+    const fields = node.type === 'policy' ? [['classMax', ui('Classe maximale', 'Maximum classification'), 1, 4], ['promptMax', ui('Tokens maximum', 'Maximum tokens'), 1, 16384]] :
+      node.type === 'retrieval' ? [['contextTokens', ui('Tokens de contexte', 'Context tokens'), 0, 4096]] : [];
     if (fields.length) {
       const form = element('form');
       form.className = 'config-form';
@@ -203,7 +215,7 @@
         label.append(input);
         form.append(label);
       }
-      const submit = element('button', 'Appliquer');
+      const submit = element('button', ui('Appliquer', 'Apply'));
       submit.type = 'submit';
       form.append(submit);
       form.addEventListener('submit', event => {
@@ -211,15 +223,15 @@
         const next = { ...node };
         for (const [key, input] of inputs) next[key] = input.valueAsNumber;
         setGraph({ ...graph, nodes: graph.nodes.map(entry => entry.id === node.id ? next : entry) },
-          'Paramètres appliqués.', '#inspector .config-form button');
+          ui('Paramètres appliqués.', 'Settings applied.'), '#inspector .config-form button');
       });
       panel.append(form);
     }
-    panel.append(button('Retirer le nœud', () => {
+    panel.append(button(ui('Retirer le nœud', 'Remove node'), () => {
       const next = { nodes: graph.nodes.filter(entry => entry.id !== node.id),
         edges: graph.edges.filter(edge => edge.from !== node.id && edge.to !== node.id) };
       selected = next.nodes[0]?.id ?? null;
-      setGraph(next, nodeLabel(node) + ' retiré avec ses liaisons.', '#inspector-title');
+      setGraph(next, ui(nodeLabel(node) + ' retiré avec ses liaisons.', 'Removed ' + nodeLabel(node) + ' and its connections.'), '#inspector-title');
     }, 'remove'));
   }
 
@@ -303,16 +315,16 @@
     renderEdgeOptions();
     const full = graph.nodes.length >= sim.MAX_NODES;
     for (const [type, control] of palette) control.disabled = full || type === 'source' && graph.nodes.some(node => node.type === 'source');
-    byId('topology-count').textContent = graph.nodes.length + ' nœud(s) · ' + graph.edges.length + ' liaison(s)';
+    byId('topology-count').textContent = graph.nodes.length + ui(' nœud(s) · ', ' nodes · ') + graph.edges.length + ui(' liaison(s)', ' connections');
     const list = byId('edge-list');
     list.replaceChildren();
-    byId('edge-summary').textContent = 'Liaisons configurées · ' + graph.edges.length;
+    byId('edge-summary').textContent = ui('Liaisons configurées · ', 'Configured connections · ') + graph.edges.length;
     for (const edge of graph.edges) {
       const row = element('li');
       row.append(element('span', '#' + edge.from + ' → #' + edge.to + ' · ' + ROUTE_LABELS[edge.route]));
-      const remove = button('Retirer', () => setGraph({ ...graph, edges: graph.edges.filter(entry => entry !== edge) },
-        'Liaison retirée.', '#edge-summary'));
-      remove.setAttribute('aria-label', 'Retirer liaison #' + edge.from + ' vers #' + edge.to + ', ' + ROUTE_LABELS[edge.route]);
+      const remove = button(ui('Retirer', 'Remove'), () => setGraph({ ...graph, edges: graph.edges.filter(entry => entry !== edge) },
+        ui('Liaison retirée.', 'Connection removed.'), '#edge-summary'));
+      remove.setAttribute('aria-label', ui('Retirer liaison #', 'Remove connection #') + edge.from + ui(' vers #', ' to #') + edge.to + ', ' + ROUTE_LABELS[edge.route]);
       row.append(remove);
       list.append(row);
     }
@@ -323,7 +335,7 @@
   byId('edge-form').addEventListener('submit', event => {
     event.preventDefault();
     const edge = { from: Number(edgeFrom.value), to: Number(edgeTo.value), route: edgeRoute.value };
-    setGraph({ ...graph, edges: [...graph.edges, edge] }, 'Liaison ajoutée.', '#edge-from');
+    setGraph({ ...graph, edges: [...graph.edges, edge] }, ui('Liaison ajoutée.', 'Connection added.'), '#edge-from');
   });
 
   function clearResult() {
@@ -331,7 +343,7 @@
     byId('results').hidden = true;
     drawDiagram();
     renderComparison();
-    status('run-status', 'Relancez la simulation pour actualiser les mesures.');
+    status('run-status', ui('Relancez la simulation pour actualiser les mesures.', 'Run the simulation again to update the metrics.'));
   }
 
   function setScenario(scenario) {
@@ -348,12 +360,12 @@
   byId('reset-topology').addEventListener('click', () => {
     selected = 3;
     setScenario(sim.DEFAULT_SCENARIO);
-    setGraph(sim.template(), 'Topologie d’exemple chargée.');
+    setGraph(sim.template(), ui('Topologie d’exemple chargée.', 'Example topology loaded.'));
   });
   document.querySelectorAll('[data-preset]').forEach(control => control.addEventListener('click', () => {
     setScenario(PRESETS[control.dataset.preset]);
     clearResult();
-    status('run-status', 'Scénario prêt. Lancez le lot sur la topologie courante.');
+    status('run-status', ui('Scénario prêt. Lancez le lot sur la topologie courante.', 'Scenario ready. Run the batch on the current topology.'));
   }));
   byId('scenario-form').addEventListener('input', clearResult);
 
@@ -364,9 +376,9 @@
     outcome.textContent = OUTCOMES[result.outcome];
     outcome.dataset.outcome = result.outcome;
     const values = [
-      ['Tokens totaux', number.format(result.tokens)], ['Demandes livrées', number.format(result.delivered)],
-      ['Demandes bloquées', number.format(result.blocked)], ['Tentatives modèle', number.format(result.attempts)],
-      ['Latence / demande', number.format(result.latencyMs) + ' ms'], ['Coût du lot', money.format(result.eur)],
+      [ui('Tokens totaux', 'Total tokens'), number.format(result.tokens)], [ui('Demandes livrées', 'Delivered requests'), number.format(result.delivered)],
+      [ui('Demandes bloquées', 'Blocked requests'), number.format(result.blocked)], [ui('Tentatives modèle', 'Model attempts'), number.format(result.attempts)],
+      [ui('Latence / demande', 'Latency / request'), number.format(result.latencyMs) + ' ms'], [ui('Coût du lot', 'Batch cost'), money.format(result.eur)],
     ];
     byId('metric-list').replaceChildren(...values.map(([label, value]) => {
       const cell = element('div');
@@ -374,9 +386,9 @@
       return cell;
     }));
     byId('model-split').textContent = [
-      number.format(result.input) + ' entrée', number.format(result.output) + ' sortie',
-      number.format(result.local) + ' inférence(s) locale(s)', number.format(result.remote) + ' distante(s)',
-      number.format(result.failed) + ' demande(s) en échec',
+      number.format(result.input) + ui(' entrée', ' input'), number.format(result.output) + ui(' sortie', ' output'),
+      number.format(result.local) + ui(' inférence(s) locale(s)', ' local inferences'), number.format(result.remote) + ui(' distante(s)', ' remote'),
+      number.format(result.failed) + ui(' demande(s) en échec', ' failed requests'),
     ].join(' · ');
     byId('steps').replaceChildren(...result.steps.map(step => {
       const row = element('li');
@@ -390,15 +402,15 @@
   }
 
   function scenarioLabel(scenario) {
-    const fault = scenario.fault === 'none' ? '' : ' · panne ' + LABELS[scenario.fault][1];
-    return 'C' + scenario.classification + ' · ' + number.format(scenario.requests) + ' demande(s)' + fault;
+    const fault = scenario.fault === 'none' ? '' : ui(' · panne ', ' · outage at ') + LABELS[scenario.fault][1];
+    return 'C' + scenario.classification + ' · ' + number.format(scenario.requests) + ui(' demande(s)', ' requests') + fault;
   }
 
   function persist() {
     try {
       localStorage.setItem(STORE, JSON.stringify({ version: sim.VERSION, entries: history }));
     } catch {
-      status('storage-status', 'Le stockage du navigateur est indisponible. L’historique reste en mémoire pour cette session.', true);
+      status('storage-status', memoryOnly, true);
     }
   }
 
@@ -406,7 +418,7 @@
   const replay = byId('replay');
 
   function renderHistory() {
-    historyPick.replaceChildren(option('', history.length ? 'Choisir un point de comparaison' : 'Aucune simulation enregistrée'));
+    historyPick.replaceChildren(option('', history.length ? ui('Choisir un point de comparaison', 'Choose a baseline') : ui('Aucune simulation enregistrée', 'No saved simulations')));
     const list = byId('history-list');
     list.replaceChildren();
     history.forEach((entry, index) => {
@@ -430,16 +442,16 @@
     }
     const before = sim.run(baseline.graph, baseline.scenario);
     if (!result) {
-      target.textContent = 'Référence sélectionnée. Simulez le lot courant pour comparer.';
+      target.textContent = ui('Référence sélectionnée. Simulez le lot courant pour comparer.', 'Baseline selected. Simulate the current batch to compare.');
       return;
     }
     const delta = (after, prior, format) => (after > prior ? '+' : '') + format(after - prior);
     target.textContent = [
-      'Lot courant comparé à la référence',
+      ui('Lot courant comparé à la référence', 'Current batch compared with the baseline'),
       delta(result.tokens, before.tokens, value => number.format(value)) + ' tokens',
-      delta(result.latencyMs, before.latencyMs, value => number.format(value)) + ' ms / demande',
-      delta(result.eur, before.eur, value => money.format(value)) + ' de coût',
-      delta(result.blocked, before.blocked, value => number.format(value)) + ' demandes bloquées',
+      delta(result.latencyMs, before.latencyMs, value => number.format(value)) + ui(' ms / demande', ' ms / request'),
+      delta(result.eur, before.eur, value => money.format(value)) + ui(' de coût', ' in cost'),
+      delta(result.blocked, before.blocked, value => number.format(value)) + ui(' demandes bloquées', ' blocked requests'),
     ].join(' · ');
   }
 
@@ -457,7 +469,7 @@
     setScenario(entry.scenario);
     renderEditor();
     renderResult(sim.run(graph, entry.scenario));
-    status('run-status', 'Simulation rejouée. L’historique reste inchangé.');
+    status('run-status', ui('Simulation rejouée. L’historique reste inchangé.', 'Simulation replayed. History was kept.'));
     byId('injection').scrollIntoView({ block: 'start' });
   });
 
@@ -471,12 +483,12 @@
       persist();
       renderResult(next);
       renderHistory();
-      status('run-status', 'Simulation terminée · ' + OUTCOMES[next.outcome] + '.');
+      status('run-status', ui('Simulation terminée · ', 'Simulation complete · ') + OUTCOMES[next.outcome] + '.');
     } catch (error) { showError(error, 'run-status'); }
   });
 
   renderEditor();
   renderResult(sim.run(graph, sim.DEFAULT_SCENARIO));
   renderHistory();
-  status('run-status', 'Résultats du scénario d’exemple. Lancez un lot pour l’ajouter à l’historique.');
+  status('run-status', ui('Résultats du scénario d’exemple. Lancez un lot pour l’ajouter à l’historique.', 'Example results. Run a batch to add it to your history.'));
 })();

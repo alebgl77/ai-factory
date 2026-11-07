@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 # Live demo on GitHub Pages: the 3D dashboard in offline mode (embedded fictional snapshot,
-# Three.js from jsDelivr) and the public operations guide. No API or secrets are published.
+# same-origin Three.js) and the public operations guide. No API or secrets are published.
 # Least privilege: the build job only reads the repository; only the deploy job can write to
 # Pages and mint the OIDC token that the Pages deployment requires.
 name: pages
@@ -8,7 +8,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ["dashboard/**", ".github/workflows/pages.yml"]
+    paths: ["dashboard/**", ".github/workflows/pages.yml", ".github/tools/e2e/package*.json"]
   workflow_dispatch:
 
 permissions: {}
@@ -28,6 +28,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install the locked Three.js dependency
+        run: npm ci --prefix .github/tools/e2e --ignore-scripts --no-audit --no-fund
       - name: Assemble the static demo
         run: |
           mkdir -p _site/assets
@@ -41,6 +46,23 @@ jobs:
           cp -R dashboard/exercise _site/exercise
           cp -R dashboard/companion _site/companion
           cp -R dashboard/docs _site/docs
+          # Match the Docker distribution and keep all imports relative to the Pages project path.
+          three=.github/tools/e2e/node_modules/three
+          version=$(node -p 'require("./.github/tools/e2e/node_modules/three/package.json").version')
+          vendor=_site/vendor/three
+          mkdir -p "$vendor/build"
+          cp "$three/LICENSE" "$vendor/"
+          cp "$three/build/three.module.js" "$three/build/three.core.js" "$vendor/build/"
+          for file in controls/OrbitControls.js renderers/CSS2DRenderer.js environments/RoomEnvironment.js \
+                      geometries/RoundedBoxGeometry.js utils/BufferGeometryUtils.js \
+                      postprocessing/GTAOPass.js postprocessing/Pass.js shaders/GTAOShader.js \
+                      shaders/PoissonDenoiseShader.js shaders/CopyShader.js math/SimplexNoise.js; do
+            mkdir -p "$vendor/examples/jsm/$(dirname "$file")"
+            cp "$three/examples/jsm/$file" "$vendor/examples/jsm/$file"
+          done
+          sed -i "s#https://cdn.jsdelivr.net/npm/three@${version}/#./vendor/three/#g" _site/index.html
+          grep -Fq '"three": "./vendor/three/build/three.module.js"' _site/index.html
+          grep -Fq '"three/addons/": "./vendor/three/examples/jsm/"' _site/index.html
           # Static hosting: tell the page not to look for the aggregation API
           sed -i 's/<html /<html data-static-demo="1" /' _site/index.html
           sed -i 's/<html /<html data-static-demo="1" /' _site/companion/index.html

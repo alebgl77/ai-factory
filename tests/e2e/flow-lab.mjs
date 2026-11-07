@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -9,22 +8,23 @@ const files = new Map([
   ['/flow-lab.html', 'text/html'], ['/flow-lab.css', 'text/css'],
   ['/flow-lab.js', 'application/javascript'], ['/flow-sim.js', 'application/javascript'],
 ]);
-const server = createServer(async (request, response) => {
-  const contentType = files.get(request.url);
-  if (!contentType) return response.writeHead(404).end();
-  try {
-    const content = await readFile(new URL('../../dashboard/docs' + request.url, import.meta.url));
-    response.writeHead(200, { 'Content-Type': contentType + '; charset=utf-8' }).end(content);
-  } catch { response.writeHead(500).end(); }
-});
-await new Promise((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve));
-
 let browser;
 try {
   browser = await chromium.launch({ executablePath: process.env.FLOW_LAB_CHROME || undefined });
-  const origin = 'http://127.0.0.1:' + server.address().port;
+  const origin = 'http://flow-lab.test';
   const url = origin + '/flow-lab.html';
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  async function labPage(options) {
+    const page = await browser.newPage(options);
+    await page.route(origin + '/**', async route => {
+      const pathname = new URL(route.request().url()).pathname;
+      const type = files.get(pathname);
+      if (!type) return route.fulfill({ status: 404 });
+      const body = await readFile(new URL('../../dashboard/docs' + pathname, import.meta.url));
+      return route.fulfill({ contentType: type + '; charset=utf-8', body });
+    });
+    return page;
+  }
+  const page = await labPage({ viewport: { width: 1440, height: 1000 } });
   const requests = [];
   const errors = [];
   page.on('request', request => requests.push(request.url()));
@@ -72,7 +72,7 @@ try {
   assert.ok(requests.length >= 4);
   assert.ok(requests.every(request => new URL(request).origin === origin && files.has(new URL(request).pathname)));
 
-  const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const mobile = await labPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await mobile.goto(url);
   assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   const canvas = mobile.getByRole('region', { name: 'Canevas de topologie défilable' });
@@ -84,8 +84,22 @@ try {
   if (process.env.FLOW_LAB_SCREENSHOT_DIR) {
     await mobile.screenshot({ path: join(process.env.FLOW_LAB_SCREENSHOT_DIR, 'ai-factory-flow-lab-mobile.png'), fullPage: true });
   }
-  console.log('OK : topologie, clavier, blocage, repli, historique, affichage mobile et absence de requêtes de simulation.');
+  await page.goto(url + '?lang=en');
+  assert.equal(await page.locator('html').getAttribute('lang'), 'en');
+  assert.match(await page.title(), /^AI Flow Lab/);
+  assert.equal(await page.getByRole('heading', { name: 'AI Flow Lab' }).count(), 1);
+  assert.equal(await page.locator('#dashboard-link').getAttribute('href'), '../index.html?lang=en');
+  assert.equal(await page.locator('#history-list li').count(), 3);
+  await page.getByRole('button', { name: 'Remote model outage' }).click();
+  await page.getByRole('button', { name: 'Simulate the batch' }).click();
+  assert.equal(await page.locator('#outcome').textContent(), 'Batch delivered');
+  assert.match(await page.locator('#warnings').textContent(), /used its fallback/);
+  assert.equal(await page.evaluate(async () => {
+    try { await fetch('./flow-lab.js'); return true; } catch { return false; }
+  }), false);
+  assert.deepEqual(errors, []);
+  assert.ok(requests.every(request => new URL(request).origin === origin && files.has(new URL(request).pathname)));
+  console.log('OK : topologie, clavier, blocage, repli, historique, FR/EN, affichage mobile et CSP hors réseau.');
 } finally {
   await browser?.close();
-  await new Promise(resolve => server.close(resolve));
 }

@@ -2,6 +2,7 @@
 
 import datetime as dt
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from threading import Barrier
 
 import pytest
@@ -269,6 +270,26 @@ def test_task_and_history_limits_apply_after_scope_filtering(store, monkeypatch)
     assert [row["action"] for row in current["history"]] == ["update", "assign"]
     full = store.snapshot(managed_units=frozenset({"ops", "sales"}), own_assignments=())
     assert full["truncated"] is True and len(full["tasks"]) == 2
+
+
+def test_snapshot_batches_history_reads(store, monkeypatch):
+    rows = [create_task(store, number) for number in range(3, 9)]
+    assigned = assign(store, rows[-1])
+    transaction = store._transaction
+    history_reads = []
+
+    @contextmanager
+    def trace_transaction(*, write):
+        with transaction(write=write) as db:
+            db.set_trace_callback(lambda sql: history_reads.append(sql) if "FROM task_history" in sql or
+                                  "JOIN task_history" in sql else None)
+            yield db
+
+    monkeypatch.setattr(store, "_transaction", trace_transaction)
+    snapshot = store.snapshot(managed_units=frozenset({"ops"}), own_assignments=(), limit=4)
+    assert len(history_reads) == 1
+    assert snapshot["tasks"][0]["history"] == assigned["history"]
+    assert all(len(row["history"]) == 1 for row in snapshot["tasks"][1:])
 
 
 @pytest.mark.parametrize("execution,child_execution", [("read_only", "read_only"), ("sensitive", "prepare")])

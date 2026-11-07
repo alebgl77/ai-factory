@@ -16,7 +16,8 @@ from typing import Any
 _DB_NAME = "portfolio.sqlite3"
 _GOAL_LIMIT = 100
 _PROJECT_LIMIT = 200
-_TASK_LIMIT = 200
+TASK_PAGE_LIMIT = 200
+_TASK_LIMIT = TASK_PAGE_LIMIT
 _HISTORY_LIMIT = 20
 _CHILD_LIMIT = 4
 _CLOSED_PROJECTS = frozenset({"done", "archived"})
@@ -75,6 +76,13 @@ _BLOCKERS = """NOT EXISTS (
     JOIN tasks AS predecessor ON predecessor.id = dependency.depends_on
     WHERE dependency.task_id = task.id AND predecessor.status != 'done'
 )"""
+_OWN_TASKS = """
+    SELECT task.id, task.rowid AS position, task.updated_at, task.unit, task.project_id
+    FROM json_each(?) AS assignment
+    JOIN tasks AS task ON task.unit = json_extract(assignment.value, '$[0]')
+        AND task.assignee_kind = json_extract(assignment.value, '$[1]')
+        AND task.assignee_id = json_extract(assignment.value, '$[2]')
+"""
 
 
 class PortfolioError(Exception):
@@ -164,33 +172,51 @@ class PortfolioStore:
 
     def snapshot(self, *, managed_units: frozenset[str],
                  own_assignments: tuple[tuple[str, str, str], ...],
-                 policy_fingerprint: str | None = None) -> dict[str, Any]:
-        """Read global project summaries and only the authorized task partitions."""
+                 policy_fingerprint: str | None = None, limit: int | None = None,
+                 before: str | None = None, agent_view: bool = False) -> dict[str, Any]:
+        """Read authorized tasks and the context needed to project the strategy."""
+        page_size = _TASK_LIMIT if limit is None else limit
+        # Task rows keep their creation order across ordinary updates. Preserve
+        # the original recent-update order for callers that do not opt into pages.
+        order = "page.updated_at DESC, page.id" if limit is None else "page.position DESC"
+        own = _encode(own_assignments)
         with self._transaction(write=False) as db:
             if db is None:
-                return {"goals": [], "projects": [], "tasks": [], "truncated": False}
+                empty = {"goals": [], "projects": [], "tasks": [], "truncated": False}
+                return empty if limit is None else {**empty, "next_position": None}
             goals = [json.loads(row[0]) for row in db.execute("SELECT payload FROM goals ORDER BY id")]
             projects = [json.loads(row[0]) for row in db.execute("SELECT payload FROM projects ORDER BY id")]
+            if agent_view:
+                # A supervised child always shares the parent's project. Only
+                # the complete set of own assignments determines context.
+                project_ids = {row[0] for row in db.execute(
+                    f"SELECT DISTINCT project_id FROM ({_OWN_TASKS})", (own,))}
+                projects = [project for project in projects if project["id"] in project_ids]
+                goal_ids = {project["goal_id"] for project in projects}
+                goals = [goal for goal in goals if goal["id"] in goal_ids]
             rows = db.execute(f"""
-                WITH own AS (
-                    SELECT task.id, task.updated_at, task.unit, task.project_id FROM json_each(?) AS assignment
-                    JOIN tasks AS task ON task.unit = json_extract(assignment.value, '$[0]')
-                      AND task.assignee_kind = json_extract(assignment.value, '$[1]')
-                      AND task.assignee_id = json_extract(assignment.value, '$[2]')
-                ), visible AS (
-                    SELECT id, updated_at FROM tasks WHERE unit IN (SELECT value FROM json_each(?))
-                    UNION SELECT id, updated_at FROM own
-                    UNION SELECT child.id, child.updated_at FROM own
+                WITH own AS ({_OWN_TASKS}), visible AS (
+                    SELECT id, rowid AS position, updated_at FROM tasks
+                    WHERE unit IN (SELECT value FROM json_each(?))
+                    UNION SELECT id, position, updated_at FROM own
+                    UNION SELECT child.id, child.rowid, child.updated_at FROM own
                           JOIN tasks AS child ON child.parent_task_id = own.id
                             AND child.unit = own.unit AND child.project_id = own.project_id
-                    ORDER BY updated_at DESC, id LIMIT ?
-                ) SELECT task.id, payload, start_policy, {_BLOCKERS} AS dependencies_ready
-                  FROM visible JOIN tasks AS task ON task.id = visible.id
-                  ORDER BY visible.updated_at DESC, visible.id
-            """, (_encode(own_assignments), _encode(sorted(managed_units)), _TASK_LIMIT + 1)).fetchall()
+                ), page AS (
+                    SELECT * FROM visible AS page
+                    WHERE (? IS NULL OR position < (SELECT rowid FROM tasks WHERE id = ?))
+                    ORDER BY {order} LIMIT ?
+                ) SELECT page.*, payload, start_policy, {_BLOCKERS} AS dependencies_ready
+                  FROM page JOIN tasks AS task ON task.id = page.id
+                  ORDER BY {order}
+            """, (own, _encode(sorted(managed_units)), before, before, page_size + 1)).fetchall()
+            truncated = len(rows) > page_size
+            page = rows[:page_size]
+            histories = self._page_history(db, [row["id"] for row in page])
             tasks = [dict(_task_payload(row, policy_fingerprint), dependencies_ready=bool(row["dependencies_ready"]),
-                          history=self._history(db, row["id"])) for row in rows[:_TASK_LIMIT]]
-            return {"goals": goals, "projects": projects, "tasks": tasks, "truncated": len(rows) > _TASK_LIMIT}
+                          history=histories.get(row["id"], [])) for row in page]
+            data = {"goals": goals, "projects": projects, "tasks": tasks, "truncated": truncated}
+            return data if limit is None else {**data, "next_position": page[-1]["id"] if truncated else None}
 
     def _created(self, object_id: str, data: dict[str, Any]) -> dict[str, Any]:
         now = self._now()
@@ -329,6 +355,23 @@ class PortfolioStore:
             SELECT action, status, actor, revision, at FROM task_history
             WHERE task_id = ? ORDER BY revision DESC LIMIT ?
         """, (task_id, _HISTORY_LIMIT))]
+
+    @staticmethod
+    def _page_history(db: sqlite3.Connection, task_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        if not task_ids:
+            return {}
+        # One SQL statement, with a bounded composite-index scan for each
+        # page entry even when a task has a large usage history.
+        return {row["task_id"]: json.loads(row["events"]) for row in db.execute("""
+            SELECT page.value AS task_id, (
+                SELECT json_group_array(json_object(
+                    'action', action, 'status', status, 'actor', actor, 'revision', revision, 'at', at
+                )) FROM (
+                    SELECT action, status, actor, revision, at FROM task_history
+                    WHERE task_id = page.value ORDER BY revision DESC LIMIT ?
+                )
+            ) AS events FROM json_each(?) AS page
+        """, (_HISTORY_LIMIT, _encode(task_ids)))}
 
     def _project_task(self, db: sqlite3.Connection, task: dict[str, Any]) -> dict[str, Any]:
         return {**task, "dependencies_ready": self._dependencies_ready(db, task["id"]),

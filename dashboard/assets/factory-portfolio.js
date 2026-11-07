@@ -7,6 +7,8 @@
   const EXECUTIONS = ['human', 'read_only', 'prepare', 'sensitive'];
   const AUTONOMIES = ['autonomous', 'human_review', 'blocked'];
   const STATES = ['planned', 'active', 'done', 'archived'];
+  const GOAL_STATUS = { met: ['Target met', 'Cible atteinte'], unmet: ['Target unmet', 'Cible non atteinte'],
+    unmeasured: ['Awaiting measurement', 'En attente de mesure'] };
   const DIRECTIONS = ['at_least', 'at_most'];
   const ROLES = ['project_lead', 'manager', 'architect'];
   const KINDS = ['employee', 'agent'];
@@ -38,14 +40,21 @@
   const history = value => Array.isArray(value) && value.length <= 20 &&
     value.every(row => row && ref(row.action) && STATUSES.includes(row.status) && optionalRef(row.actor) && revision(row.revision) && ref(row.at));
   const item = row => row && id(row.id) && text(row.title, 512) && text(row.description) && date(row.due_on) && revision(row.revision);
+  const summary = (row, key, values) => row && Object.keys(row).length === 2 && text(row.title, 512) && values.includes(row[key]);
   const array = (value, test) => Array.isArray(value) && value.length <= 1000 && value.every(test);
-  const distinct = rows => new Set(rows.map(row => row.id)).size === rows.length;
+  const distinct = rows => {
+    const ids = rows.filter(row => row.id).map(row => row.id);
+    return new Set(ids).size === ids.length;
+  };
 
   function parse(data) {
     const c = data?.capabilities;
     if (!data || typeof data.truncated !== 'boolean' || typeof data.view !== 'string' || !/^[0-9a-f]{64}$/.test(data.view) ||
-      !array(data.goals, row => item(row) && text(row.metric, 256) && metric(row.target) && (row.current === null || metric(row.current)) && DIRECTIONS.includes(row.direction)) ||
-      !array(data.projects, row => item(row) && id(row.goal_id) && array(row.unit_ids, ref) && ref(row.owner_unit) && optionalRef(row.usecase_id) && STATES.includes(row.state)) ||
+      (data.next_cursor != null && !/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/.test(data.next_cursor)) ||
+      !array(data.goals, row => summary(row, 'status', Object.keys(GOAL_STATUS)) ||
+        item(row) && text(row.metric, 256) && metric(row.target) && (row.current === null || metric(row.current)) && DIRECTIONS.includes(row.direction)) ||
+      !array(data.projects, row => summary(row, 'state', STATES) ||
+        item(row) && id(row.goal_id) && array(row.unit_ids, ref) && ref(row.owner_unit) && optionalRef(row.usecase_id) && STATES.includes(row.state)) ||
       !array(data.tasks, row => item(row) && id(row.project_id) && ref(row.unit) && PRIORITIES.includes(row.priority) && EXECUTIONS.includes(row.execution) &&
         typeof row.technical === 'boolean' && array(row.dependency_ids, id) && typeof row.dependencies_ready === 'boolean' &&
         assigned(row.assignee) && STATUSES.includes(row.status) && evidence(row.evidence) && history(row.history) && workbenchDecision(row.workbench_decision) &&
@@ -126,7 +135,7 @@
       capabilities: { global_admin: true, roles_by_unit: Object.fromEntries(units.map(unit => [unit.id, ROLES])), autonomy_by_unit, employee_id: null, agent_id: null } };
   }
 
-  const rowById = (rows, key) => rows.find(row => row.id === key);
+  const rowById = (rows, key) => key ? rows.find(row => row.id === key) : undefined;
   const role = (data, unit, name) => Object.hasOwn(data.capabilities.roles_by_unit, unit) && data.capabilities.roles_by_unit[unit].includes(name);
   const leadUnits = data => data.units.filter(unit => role(data, unit.id, 'project_lead'));
   function assignees(data, task) {
@@ -347,7 +356,7 @@
         ${pick('usecase_id', t('Linked use case', 'Cas d’usage lié'), [['', t('None', 'Aucun')], ...view.usecases.filter(uc => uc.unit === owner).map(uc => [uc.id, uc.name])])}`}`;
     } else if (collection === 'tasks') {
       name = row ? t('Replan the task', 'Replanifier la tâche') : t('Create a task', 'Créer une tâche');
-      const projects = data.projects.filter(project => project.unit_ids.some(unit => editableUnits.some(([id]) => id === unit)));
+      const projects = data.projects.filter(project => project.unit_ids?.some(unit => editableUnits.some(([id]) => id === unit)));
       const projectId = value('project_id', projects.some(project => project.id === view.filters.project) ? view.filters.project : projects[0]?.id || '');
       const project = rowById(data.projects, projectId);
       const allowed = editableUnits.filter(([unit]) => project?.unit_ids.includes(unit));
@@ -432,6 +441,7 @@
     const ownerText = task => task.assignee ? `${owner(task)} · ${task.assignee.kind === 'agent' ? t('Agent', 'Agent IA') : t('Employee', 'Employé')}` : owner(task);
     const section = (number, label, body, extra = '') => `<section class="portfolio-section"><div class="portfolio-caption"><h4><span class="portfolio-index">${number}</span>${label}</h4>${extra}</div>${body}</section>`;
     const card = (kind, row, active, html) => `<button class="portfolio-card" type="button" data-portfolio-choice="${kind}:${row.id}" aria-pressed="${active}">${html}</button>`;
+    const summaryCard = (row, status) => `<article class="portfolio-card"><b>${esc(row.title)}</b><small>${status}</small></article>`;
     const empty = label => `<p class="portfolio-note">${label}</p>`;
     const visibleProjects = data.projects.filter(project => !filters.goal || project.goal_id === filters.goal);
     const visibleTasks = data.tasks.filter(task => visibleProjects.some(project => project.id === task.project_id) && (!filters.project || task.project_id === filters.project));
@@ -443,6 +453,7 @@
     const summary = `<div class="portfolio-strip" aria-label="${t('Portfolio overview', 'Vue d’ensemble du portefeuille')}">${strip.map(([count, label]) =>
       `<span><b>${num.format(count)}</b>${label}</span>`).join('')}</div>`;
     const goals = data.goals.length ? `<div class="portfolio-cards">${data.goals.map(goal => {
+      if (!goal.id) return summaryCard(goal, l(GOAL_STATUS, goal.status));
       const result = goal.current === null ? null : goal.direction === 'at_most' ? (goal.current <= goal.target ? 100 : 100 * goal.target / goal.current)
         : goal.target === 0 ? 100 : Math.min(100, 100 * goal.current / goal.target);
       return card('goal', goal, filters.goal === goal.id, `<b>${esc(goal.title)}</b><small>${esc(goal.metric)} · <strong>${goal.current === null ? '—' : num.format(goal.current)}</strong>
@@ -450,7 +461,7 @@
         ${result === null ? '' : `<progress aria-label="${t('Indicator progress', 'Progression de l’indicateur')}" max="100" value="${Math.round(result)}"></progress>`}`);
     }).join('')}</div>` : empty(t('No objective in your current scope.', 'Aucun objectif dans votre périmètre.'));
     const selectedGoal = rowById(data.goals, filters.goal), selectedProject = rowById(data.projects, filters.project);
-    const projects = visibleProjects.length ? `<div class="portfolio-cards">${visibleProjects.map(project => card('project', project, filters.project === project.id,
+    const projects = visibleProjects.length ? `<div class="portfolio-cards">${visibleProjects.map(project => !project.id ? summaryCard(project, l(PROJECT, project.state)) : card('project', project, filters.project === project.id,
       `<b>${esc(project.title)}</b><small>${esc(unit(project.owner_unit))} · ${l(PROJECT, project.state)} · ${due(project.due_on)}</small>
       <small>${esc(rowById(data.goals, project.goal_id)?.title || '')}</small>`)).join('')}</div>` : empty(t('No project in this selection.', 'Aucun projet dans cette sélection.'));
     const ownerOptions = [...new Map(visibleTasks.filter(task => task.assignee).map(task => [`${task.assignee.kind}:${task.assignee.id}`, ownerText(task)])).entries()];
@@ -508,13 +519,15 @@
     return `${top}${summary}<div class="portfolio-actions">
       ${button('data-assist-open', 'explain_process', t('Understand this workflow', 'Comprendre ce parcours'))}
       ${data.capabilities.global_admin ? button('data-assist-open', 'decision_outline', t('Prepare a decision', 'Préparer une décision')) : ''}</div>
-      ${data.truncated ? `<p class="portfolio-alert" role="status">${t('Partial portfolio. Some authorized records were omitted.', 'Portefeuille partiel. Certains éléments autorisés ne sont pas affichés.')}</p>` : ''}
+      ${data.truncated && !data.next_cursor ? `<p class="portfolio-alert" role="status">${t('Partial portfolio. Some authorized records were omitted.', 'Portefeuille partiel. Certains éléments autorisés ne sont pas affichés.')}</p>` : ''}
       ${view.message ? `<p class="portfolio-alert" role="status">${t(...view.message)}</p>` : ''}
       ${renderEditor(view, h, esc)}
       ${section('01', t('Objectives and indicators', 'Objectifs et indicateurs'), goals + (selectedGoal?.description ? empty(esc(selectedGoal.description)) : ''), central('goals', t('New objective', 'Nouvel objectif'), selectedGoal))}
       ${section('02', t('Projects', 'Projets'), projects + (selectedProject?.description ? empty(esc(selectedProject.description)) : ''),
         data.goals.length && data.units.length ? central('projects', t('New project', 'Nouveau projet'), selectedProject) : '')}
-      ${section('03', t('BU tasks', 'Tâches par BU'), controls + detail + board + usageView, leadUnits(data).some(unit => visibleProjects.some(project => project.unit_ids.includes(unit.id)))
+      ${section('03', t('BU tasks', 'Tâches par BU'), controls + detail + board
+        + (data.next_cursor ? button('data-portfolio-action', 'more', t('Load more tasks', 'Charger plus de tâches')) : '') + usageView,
+        leadUnits(data).some(unit => visibleProjects.some(project => project.unit_ids?.includes(unit.id)))
         ? button('data-portfolio-action', 'edit:tasks', t('New task', 'Nouvelle tâche')) : '')}</section>`;
   }
 
