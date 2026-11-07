@@ -50,6 +50,7 @@ Metric label values are validated and capped to keep Prometheus cardinality boun
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import math
 import os
@@ -64,6 +65,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from litellm.integrations.custom_logger import CustomLogger
 from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_server
@@ -124,9 +126,12 @@ _EMBED_ROUTES = frozenset({"/embeddings", "/v1/embeddings"})
 _STRICT_SENSITIVE = frozenset({"C3", "C4"})
 _STRICT_CLASSES = frozenset({"C1", "C2"}) | _STRICT_SENSITIVE
 _STRICT_CHAT_ALIASES = frozenset({"chat-default", "chat-small", "chat-sensitive"})
-_OPENAI_LOCAL_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
+_OPENAI_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
 _KEY_DIGEST = re.compile(r"[0-9a-f]{64}")
 _AUTH_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
+_VPS_HTTP_BASE = "http://ollama-vps:11434/v1"
+_SIM_PROVIDER_BASES = {"CLOUD_API_BASE": "http://mock-llm:8080/cloud/v1",
+                       "VPS_API_BASE": "http://mock-llm:8080/vps/v1"}
 _OVERRIDES = frozenset({
     "api_base", "api_key", "api_type", "api_version", "aws_access_key_id", "aws_secret_access_key",
     "azure_ad_token", "base_url", "context_window_fallbacks", "content_policy_fallbacks",
@@ -135,13 +140,15 @@ _OVERRIDES = frozenset({
     "router_settings", "router_settings_override", "specific_deployment", "user_config",
     "vertex_ai_project", "vertex_credentials", "_router_weights",
 })
-_STRICT_PAYLOAD_FIELDS = frozenset({
-    # Standard chat and embedding options, without provider-specific options.
-    "messages", "input", "stream", "stream_options", "temperature", "top_p", "n", "stop", "seed",
+_STRICT_CHAT_FIELDS = frozenset({
+    "messages", "stream", "stream_options", "temperature", "top_p", "n", "stop", "seed",
     "max_tokens", "max_completion_tokens", "frequency_penalty", "presence_penalty", "logprobs", "top_logprobs",
-    "logit_bias", "response_format", "tools", "tool_choice", "parallel_tool_calls", "dimensions", "encoding_format",
+    "logit_bias", "response_format", "tools", "tool_choice", "parallel_tool_calls",
+})
+_STRICT_EMBED_FIELDS = frozenset({"input", "dimensions", "encoding_format"})
+_PROXY_CONTEXT_FIELDS = frozenset({
     # LiteLLM-owned request context. Both metadata channels are rebuilt below.
-    "litellm_call_id", "litellm_logging_obj", "proxy_server_request", "metadata", "litellm_metadata",
+    "litellm_call_id", "litellm_logging_obj", "metadata", "litellm_metadata",
 })
 
 
@@ -219,22 +226,55 @@ def _load_gateway_policy(path: str, registry: str) -> dict:
 
 def _gateway_policy() -> dict | None:
     path = os.environ.get("FACTORY_GATEWAY_POLICY", "").strip()
+    production = os.environ.get("FACTORY_DEMO_MODE", "auto").strip().lower() == "never"
+    if production and not path:
+        raise ValueError("Factory gateway policy is required with demo mode disabled.")
+    for name, mock_base in _SIM_PROVIDER_BASES.items():
+        base = os.environ.get(name, "" if path else mock_base)
+        if (_https_provider_base(base) or (name == "VPS_API_BASE" and base == _VPS_HTTP_BASE)
+                or (not path and base == mock_base)):
+            continue
+        raise ValueError(f"Invalid {name} for Factory gateway transport.")
     if path:
         if (not _ENFORCE or not _STRICT_SENSITIVE <= _SENSITIVE or _SENSITIVE_ALIAS != "chat-sensitive"
                 or _SENSITIVE_OK != {"chat-sensitive", "embed-default"}
                 or LOCAL_ALIASES != {"chat-sensitive", "embed-default"}):
             raise ValueError("Strict gateway routing requires the Factory sensitive aliases.")
         local_models = (os.environ.get(name, "") for name in ("LOCAL_CHAT_MODEL", "LOCAL_EMBED_MODEL"))
-        if not all(len(model) <= 256 and _OPENAI_LOCAL_MODEL.fullmatch(model) for model in local_models):
+        if not all(len(model) <= 256 and _OPENAI_MODEL.fullmatch(model) for model in local_models):
             raise ValueError("Strict gateway routing requires explicit OpenAI-compatible local models.")
-        if os.environ.get("FACTORY_DEMO_MODE", "auto").strip().lower() == "never" and (
-            GUARDRAIL_MODE != "block" or not PII_REDACTION
-        ):
-            raise ValueError("Production gateway requires blocking guardrails and PII redaction.")
+        external_models = (os.environ.get(name, "") for name in ("CLOUD_CHAT_MODEL", "CLOUD_SMALL_MODEL", "VPS_CHAT_MODEL"))
+        if not all(len(model) <= 256 and _OPENAI_MODEL.fullmatch(model) for model in external_models):
+            raise ValueError("Strict gateway routing requires explicit OpenAI-compatible cloud and VPS models.")
+        if GUARDRAIL_MODE != "block" or not PII_REDACTION:
+            raise ValueError("Strict gateway requires blocking guardrails and PII redaction.")
+        if os.environ.get("LITELLM_LOG", "WARNING").upper() not in {"WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("Strict gateway requires LITELLM_LOG at WARNING or above.")
         return _load_gateway_policy(path, os.environ.get("FACTORY_GATEWAY_REGISTRY", "/factory-usecases"))
-    if os.environ.get("FACTORY_DEMO_MODE", "auto").strip().lower() == "never":
-        raise ValueError("Factory gateway policy is required with demo mode disabled.")
     return None
+
+
+def _https_provider_base(value: str) -> bool:
+    if any(char.isspace() or ord(char) < 32 or char in "\\?#" for char in value):
+        return False
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except ValueError:
+        return False
+    host = url.hostname
+    if url.scheme != "https" or not host or port == 0:
+        return False
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if len(host) > 253 or not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                                      for label in host.split(".")):
+            return False
+        authority = host
+    else:
+        authority = f"[{host}]" if address.version == 6 else host
+    return url.netloc.lower() == (authority if port is None else f"{authority}:{port}")
 
 
 def _install_strict_http_client():
@@ -258,27 +298,6 @@ def _install_strict_http_client():
 def _gateway_denied() -> HTTPException:
     return HTTPException(status_code=403, detail={"error": {
         "message": "Request outside the Factory gateway policy.", "code": "factory_gateway_denied"}})
-
-
-def _text_chat(data: dict) -> bool:
-    messages = data.get("messages")
-    if not isinstance(messages, list) or not messages:
-        return False
-    for message in messages:
-        if not isinstance(message, dict):
-            return False
-        content = message.get("content")
-        if isinstance(content, list):
-            if any(not isinstance(part, dict) or set(part) != {"type", "text"}
-                   or part["type"] != "text" or not isinstance(part["text"], str) for part in content):
-                return False
-        elif content is not None and not isinstance(content, str):
-            return False
-    tools = data.get("tools", [])
-    return isinstance(tools, list) and all(
-        isinstance(tool, dict) and set(tool) == {"type", "function"} and tool["type"] == "function"
-        for tool in tools
-    )
 
 
 def _bound_gateway_request(policy: dict, auth, data: dict, call_type) -> None:
@@ -308,8 +327,7 @@ def _bound_gateway_request(policy: dict, auth, data: dict, call_type) -> None:
             or set(models) != approved_models
             or not ((call == "acompletion" and route in _CHAT_ROUTES)
                     or (call == "aembedding" and embeddings and route in _EMBED_ROUTES))
-            or any(data.get(field) is not None for field in _OVERRIDES)
-            or (call == "acompletion" and not _text_chat(data))):
+            or any(data.get(field) is not None for field in _OVERRIDES)):
         raise _gateway_denied()
     if call == "aembedding":
         alias = "embed-default"
@@ -334,17 +352,19 @@ def _bound_gateway_request(policy: dict, auth, data: dict, call_type) -> None:
         for name in ("user_api_key", "user_api_key_hash"):
             if current.get(name) == digest:
                 metadata[name] = current[name]
-        for attribute in ("key_alias", "user_id", "org_id", "project_id", "request_route"):
+        for attribute in ("key_alias", "user_id", "org_id", "project_id"):
             value = getattr(auth, attribute, None)
-            if isinstance(value, str):
+            if isinstance(value, str) and _AUTH_IDENTIFIER.fullmatch(value) and not redact_pii(value)[1]:
                 field_name = "alias" if attribute == "key_alias" else attribute
                 metadata[f"user_api_key_{field_name}"] = value
         metadata.update(usecase=case_id, sensitivity=sensitivity, factory_alias=alias,
-                        factory_business_unit=center, user_api_key_team_id=team)
+                        factory_business_unit=center, user_api_key_team_id=team, user_api_key_request_route=route)
         if sensitivity in _STRICT_SENSITIVE or alias == "chat-sensitive":
             metadata.update(mask_input=True, mask_output=True, turn_off_message_logging=True)
         data[field] = metadata
-    for field in data.keys() - _STRICT_PAYLOAD_FIELDS:
+    fields = _STRICT_CHAT_FIELDS if call == "acompletion" else _STRICT_EMBED_FIELDS
+    # Discard the proxy's pre-guardrail body and header snapshot with the other raw client fields.
+    for field in data.keys() - fields - _PROXY_CONTEXT_FIELDS:
         data.pop(field)
     data["model"] = alias
     data["disable_fallbacks"] = True
@@ -708,6 +728,238 @@ def redact_pii(text: str) -> tuple[str, Tally]:
 
 
 # ------------------------------------------------------------- request payload walking
+_MESSAGE_FIELDS = {
+    "system": {"name"}, "developer": {"name"}, "user": {"name"},
+    "assistant": {"name", "tool_calls", "function_call", "refusal"},
+    "tool": {"tool_call_id"}, "function": {"name"},
+}
+_SCHEMA_REFERENCES = {"$id", "$ref", "$dynamicRef", "$recursiveRef"}
+_SCHEMA_TEXT_IDENTIFIERS = _SCHEMA_REFERENCES | {"$schema", "$anchor", "$dynamicAnchor", "required",
+                                                "dependentRequired", "pattern", "format", "const", "enum"}
+_SCHEMA_DIALECTS = {"http://json-schema.org/draft-07/schema#", "https://json-schema.org/draft/2020-12/schema",
+                    "https://json-schema.org/draft/2019-09/schema"}
+
+
+def _only_fields(node: Any, fields: set[str]) -> None:
+    if not isinstance(node, dict) or node.keys() - fields:
+        raise ValueError
+
+
+def _identifier(value: Any, *, max_length: int = 64) -> None:
+    if not isinstance(value, str) or len(value) > max_length or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValueError
+
+
+def _parse_tool_call(function: dict) -> dict:
+    _only_fields(function, {"name", "arguments"})
+    _identifier(function.get("name"))
+    if not isinstance(function.get("arguments"), str):
+        raise ValueError
+    arguments = json.loads(function["arguments"], object_pairs_hook=_strict_mapping)
+    if not isinstance(arguments, dict):
+        raise ValueError
+    function["arguments"] = arguments
+    return function
+
+
+def _validate_message(message: dict, argument_fields: list[dict]) -> None:
+    if not isinstance(message, dict) or message.get("role") not in _MESSAGE_FIELDS:
+        raise ValueError
+    role = message["role"]
+    _only_fields(message, {"role", "content"} | _MESSAGE_FIELDS[role])
+    if "name" in message or role == "function":
+        _identifier(message.get("name"))
+    if role == "tool":
+        _identifier(message.get("tool_call_id"), max_length=128)
+    content = message.get("content")
+    if isinstance(content, list):
+        for part in content:
+            _only_fields(part, {"type", "text"})
+            if part.get("type") != "text" or not isinstance(part.get("text"), str):
+                raise ValueError
+    elif not isinstance(content, str) and (content is not None or role not in {"assistant", "function"}):
+        raise ValueError
+    if message.get("refusal") is not None and not isinstance(message["refusal"], str):
+        raise ValueError
+    if message.get("function_call") is not None:
+        argument_fields.append(_parse_tool_call(message["function_call"]))
+    if message.get("tool_calls") is not None:
+        calls = message["tool_calls"]
+        if not isinstance(calls, list):
+            raise ValueError
+        for call in calls:
+            _only_fields(call, {"id", "type", "function"})
+            _identifier(call.get("id"), max_length=128)
+            if call.get("type") != "function":
+                raise ValueError
+            argument_fields.append(_parse_tool_call(call.get("function")))
+    if (role == "assistant" and content is None and not any(message.get(field)
+            for field in ("refusal", "tool_calls", "function_call"))):
+        raise ValueError
+
+
+def _validate_schema_container(container: dict, schema_field: str, *, required: bool) -> None:
+    _only_fields(container, {"name", "description", "strict", schema_field})
+    _identifier(container.get("name"))
+    if container.get("description") is not None and not isinstance(container["description"], str):
+        raise ValueError
+    if container.get("strict") is not None and type(container["strict"]) is not bool:
+        raise ValueError
+    if (required or schema_field in container) and not isinstance(container.get(schema_field), dict):
+        raise ValueError
+
+
+def _validate_chat_options(data: dict) -> None:
+    for field in ("stream", "logprobs", "parallel_tool_calls"):
+        if data.get(field) is not None and type(data[field]) is not bool:
+            raise ValueError
+    for field in ("n", "seed", "max_tokens", "max_completion_tokens", "top_logprobs"):
+        if data.get(field) is not None and type(data[field]) is not int:
+            raise ValueError
+    for field in ("temperature", "top_p", "frequency_penalty", "presence_penalty"):
+        if data.get(field) is not None and type(data[field]) not in {int, float}:
+            raise ValueError
+    if (options := data.get("stream_options")) is not None:
+        _only_fields(options, {"include_usage", "include_obfuscation"})
+        if any(type(value) is not bool for value in options.values()):
+            raise ValueError
+    if (bias := data.get("logit_bias")) is not None and (
+            not isinstance(bias, dict) or any(not re.fullmatch(r"[0-9]{1,10}", key) or type(value) is not int
+                                             for key, value in bias.items())):
+        raise ValueError
+    if (stop := data.get("stop")) is not None and not isinstance(stop, str) and (
+            not isinstance(stop, list) or any(not isinstance(item, str) for item in stop)):
+        raise ValueError
+    if (tools := data.get("tools")) is not None:
+        if not isinstance(tools, list):
+            raise ValueError
+        for tool in tools:
+            _only_fields(tool, {"type", "function"})
+            if tool.get("type") != "function":
+                raise ValueError
+            _validate_schema_container(tool.get("function"), "parameters", required=False)
+    if (choice := data.get("tool_choice")) is not None and choice not in ("none", "auto", "required"):
+        _only_fields(choice, {"type", "function"})
+        if choice.get("type") != "function":
+            raise ValueError
+        function = choice.get("function")
+        _only_fields(function, {"name"})
+        _identifier(function.get("name"))
+    if (response_format := data.get("response_format")) is not None:
+        _only_fields(response_format, {"type", "json_schema"})
+        if response_format.get("type") == "json_schema":
+            _validate_schema_container(response_format.get("json_schema"), "schema", required=True)
+        elif response_format.get("type") not in ("text", "json_object") or "json_schema" in response_format:
+            raise ValueError
+
+
+def _strict_chat_guardrails(data: dict, *, redact: bool) -> tuple[list[str], Tally]:
+    """Validate the admitted chat payload and sanitize strings before LiteLLM dispatch."""
+    texts: list[str] = []
+    counts: Tally = Tally()
+    argument_fields: list[dict] = []
+    multipart: list[list[dict]] = []
+    multipart_chars = 0
+    joined_texts: dict[str, list[str]] = {separator: [] for separator in ("", " ", "\n")}
+
+    def text(value: str, *, fixed: bool = False) -> str:
+        # Reject lone surrogate escapes, which JSON accepts but the provider client cannot encode.
+        value.encode("utf-8")
+        texts.append(value)
+        if not redact:
+            return value
+        safe, found = redact_pii(value)
+        if fixed and found:
+            raise ValueError  # Never change keys, references or identifiers used for matching.
+        counts.update(found)
+        return safe
+
+    def walk(node: Any, depth: int = 0, *, schema: bool = False, fixed: bool = False) -> Any:
+        if depth > 64:
+            raise ValueError
+        if isinstance(node, str):
+            return text(node, fixed=fixed)
+        if isinstance(node, list):
+            for i, item in enumerate(node):
+                node[i] = walk(item, depth + 1, schema=schema, fixed=fixed)
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                text(key, fixed=True)
+                if schema and isinstance(value, str) and (
+                        (key in _SCHEMA_REFERENCES and not value.startswith("#"))
+                        or (key == "$schema" and value not in _SCHEMA_DIALECTS)):
+                    raise ValueError
+                node[key] = walk(value, depth + 1, schema=schema,
+                                 fixed=(fixed or (schema and key in _SCHEMA_TEXT_IDENTIFIERS)))
+        elif type(node) is int or (type(node) is float and math.isfinite(node)):
+            if redact and abs(node) >= 1_000_000_000:
+                text(str(int(node)) if type(node) is int or node.is_integer() else str(node), fixed=True)
+        elif node is not None and type(node) is not bool:
+            raise ValueError
+        return node
+
+    try:
+        messages = data.get("messages")
+        if not isinstance(messages, list) or not messages:
+            raise ValueError
+        for message in messages:
+            _validate_message(message, argument_fields)
+            content = message.get("content")
+            if isinstance(content, list) and len(content) > 1:
+                parts = [part["text"] for part in content]
+                multipart_chars += sum(map(len, parts)) + len(parts) - 1
+                if multipart_chars > MAX_SCAN_CHARS:
+                    return ["oversized_input"], counts
+                multipart.append(content)
+                # OpenAI-compatible templates can flatten text parts with different separators.
+                for separator, joined in joined_texts.items():
+                    joined.append(separator.join(parts))
+            for field in ("name", "tool_call_id"):
+                if field in message:
+                    text(message[field], fixed=True)
+            for call in message.get("tool_calls") or []:
+                text(call["id"], fixed=True)
+        for function in argument_fields:
+            text(function["name"], fixed=True)
+        _validate_chat_options(data)
+        for tool in data.get("tools") or []:
+            text(tool["function"]["name"], fixed=True)
+        if isinstance(choice := data.get("tool_choice"), dict):
+            text(choice["function"]["name"], fixed=True)
+        if (data.get("response_format") or {}).get("type") == "json_schema":
+            text(data["response_format"]["json_schema"]["name"], fixed=True)
+        for field in _STRICT_CHAT_FIELDS & data.keys():
+            # Schema fields get reference checks as well as JSON validation and redaction.
+            data[field] = walk(data[field], schema=field in {"tools", "response_format"})
+        if redact:
+            # Per-part redaction cannot remove PII that only exists across a part boundary.
+            for content in multipart:
+                parts = [part["text"] for part in content]
+                if (sum(map(len, parts)) + len(parts) - 1 > MAX_SCAN_CHARS * 4
+                        or any(redact_pii(separator.join(parts))[1] for separator in joined_texts)):
+                    raise ValueError
+        for function in argument_fields:
+            function["arguments"] = json.dumps(function["arguments"], ensure_ascii=False, allow_nan=False,
+                                               separators=(",", ":"))
+    except (ValueError, TypeError, AttributeError, RecursionError):
+        raise _gateway_denied() from None
+    rules = set(detect_injection_in(texts))
+    for joined in joined_texts.values():
+        rules.update(detect_injection_in(joined))
+    return sorted(rules), counts
+
+
+def _validate_embedding(data: dict) -> None:
+    value = data.get("input")
+    if not (isinstance(value, str) or (isinstance(value, list) and value and (
+            all(isinstance(item, str) for item in value) or all(type(item) is int for item in value)
+            or all(isinstance(item, list) and all(type(token) is int for token in item) for item in value)))):
+        raise _gateway_denied()
+    if (data.get("dimensions") is not None and type(data["dimensions"]) is not int
+            or data.get("encoding_format") not in (None, "float", "base64")):
+        raise _gateway_denied()
+
+
 _TRUSTED_ROLES = frozenset({"system", "developer", "assistant"})
 _TEXT_FIELDS = ("content", "text", "parts", "input", "output")
 _PAYLOAD_FIELDS = ("messages", "prompt", "input", "contents", "system")
@@ -855,36 +1107,44 @@ class FactoryMetrics(CustomLogger):
                     headers.pop(name, None)
         md.setdefault("factory_alias", model)
 
-        report: dict[str, Any] = {}
-        # 2. Prompt injection / jailbreak detection on untrusted content (user, tool, retrieved).
-        if GUARDRAIL_MODE != "off" and generative:
+        rules: list[str] = []
+        counts: Tally = Tally()
+        redact = PII_REDACTION and model not in LOCAL_ALIASES
+        if self.gateway_policy is not None:
+            if generative:
+                # All strict requests originate with clients, including system and developer turns.
+                rules, counts = await asyncio.to_thread(_strict_chat_guardrails, data, redact=redact)
+            else:
+                _validate_embedding(data)
+        elif GUARDRAIL_MODE != "off" and generative:
             texts = _untrusted_texts(data)
             if sum(len(t) for t in texts) > _THREAD_THRESHOLD_CHARS:
                 rules = await asyncio.to_thread(detect_injection_in, texts)
             else:
                 rules = detect_injection_in(texts)
-            if rules:
-                action = "blocked" if GUARDRAIL_MODE == "block" else "flagged"
-                rt.guardrail.labels("prompt_injection", action, usecase).inc()
-                if action == "blocked":
-                    # Generic message: the matched rules are not disclosed to the caller.
-                    raise HTTPException(status_code=400, detail={"error": {
-                        "message": "Request blocked by the factory guardrail (prompt injection policy).",
-                        "type": "guardrail_violation", "code": "factory_prompt_injection"}})
-                report["prompt_injection"] = {"rules": rules, "action": action}
-                _add_tag(md, "guardrail:prompt_injection")
+        report: dict[str, Any] = {}
+        if rules:
+            action = "blocked" if self.gateway_policy is not None or GUARDRAIL_MODE == "block" else "flagged"
+            rt.guardrail.labels("prompt_injection", action, usecase).inc()
+            if action == "blocked":
+                # Generic message: the matched rules are not disclosed to the caller.
+                raise HTTPException(status_code=400, detail={"error": {
+                    "message": "Request blocked by the factory guardrail (prompt injection policy).",
+                    "type": "guardrail_violation", "code": "factory_prompt_injection"}})
+            report["prompt_injection"] = {"rules": rules, "action": action}
+            _add_tag(md, "guardrail:prompt_injection")
 
         # 3. PII redaction before the prompt may leave the local GPU (cloud or VPS alias).
-        if PII_REDACTION and model not in LOCAL_ALIASES:
+        if redact and self.gateway_policy is None:
             if _payload_chars(data) > _THREAD_THRESHOLD_CHARS:
                 counts = await asyncio.to_thread(redact_payload, data)
             else:
                 counts = redact_payload(data)
-            for kind in sorted(counts):
-                rt.guardrail.labels(f"pii_{kind}", "redacted", usecase).inc()
-            if counts:
-                report["pii_redacted"] = dict(sorted(counts.items()))
-                _add_tag(md, "guardrail:pii_redacted")
+        for kind in sorted(counts):
+            rt.guardrail.labels(f"pii_{kind}", "redacted", usecase).inc()
+        if counts:
+            report["pii_redacted"] = dict(sorted(counts.items()))
+            _add_tag(md, "guardrail:pii_redacted")
         if report:
             report["mode"] = GUARDRAIL_MODE
             md["factory_guardrail"] = report  # rule ids and counts only, never prompt text

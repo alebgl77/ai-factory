@@ -11,8 +11,8 @@
 # default values of .env.example and `--profile sim`, the three targets are served by
 # sim/mock-llm, so the whole chain runs without any real API key.
 # Deployments use the OpenAI-compatible protocol ("openai/<model>" + api_base): this covers
-# most cloud providers, Ollama (VPS) and vLLM (local GPU). For a provider with its own
-# protocol, replace the `model` value with the LiteLLM provider prefix (e.g. "mistral/...").
+# most cloud providers, Ollama (VPS) and vLLM (local GPU). Strict gateway policy requires
+# the OpenAI-compatible adapters so all requests use the verified async HTTP client.
 #
 # Prices are FICTIONAL EUR per token, aligned with config/catalog/models.yaml
 # (price_in_per_1k / 1000). The VPS and the local GPU have no marginal token price: their

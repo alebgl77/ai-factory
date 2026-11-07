@@ -54,6 +54,8 @@ def valid_config():
         FACTORY_PII_REDACTION="true", FACTORY_SENSITIVE_CLASSES="C3,C4",
         FACTORY_DEMO_MODE="never", FACTORY_GATEWAY_POLICY="/run/factory-gateway/policy.json",
         FACTORY_GATEWAY_REGISTRY="/factory-usecases",
+        CLOUD_API_BASE="https://cloud.provider.example/v1", VPS_API_BASE="https://vps.provider.example/v1",
+        CLOUD_CHAT_MODEL="openai/cloud-chat", CLOUD_SMALL_MODEL="openai/cloud-small", VPS_CHAT_MODEL="openai/vps-chat",
         LOCAL_API_BASE="http://10.40.20.15:8000/v1", LOCAL_EMBED_API_BASE="http://[fd00::20]:8000/v1",
         LOCAL_CHAT_MODEL="openai/local-chat", LOCAL_EMBED_MODEL="openai/local-embed",
     )
@@ -75,6 +77,80 @@ def valid_config():
 
 def test_valid_private_hostname_and_explicit_public_edge_bind(valid_config):
     assert production_errors(valid_config) == []
+
+
+@pytest.mark.parametrize("name,value", [
+    ("CLOUD_API_BASE", "http://example.com/v1"), ("VPS_API_BASE", "http://example.org/v1"),
+    ("CLOUD_API_BASE", "http://mock-llm:8080/cloud/v1"), ("VPS_API_BASE", "http://mock-llm:8080/vps/v1"),
+    ("CLOUD_API_BASE", "http://ollama-vps:11434/v1"), ("VPS_API_BASE", "http://10.0.0.8:11434/v1"),
+    ("VPS_API_BASE", "http://ollama-vps:11434/v1?credential=canary"),
+    ("VPS_API_BASE", "https://canary@vps.provider.example/v1"),
+    ("VPS_API_BASE", "http://ollama-vps:11434/v1"),
+    ("CLOUD_CHAT_MODEL", "anthropic/chat"), ("CLOUD_SMALL_MODEL", "anthropic/small"),
+    ("VPS_CHAT_MODEL", "ollama/chat"),
+])
+def test_production_rejects_insecure_provider_configuration(valid_config, name, value):
+    valid_config["services"]["litellm"]["environment"][name] = value
+    errors = production_errors(valid_config)
+    assert any(name in error for error in errors)
+    assert all(value not in error for error in errors)
+
+
+def test_ollama_http_exception_requires_internal_unpublished_compose_service(valid_config):
+    services = valid_config["services"]
+    valid_config["name"] = "factory-production"
+    valid_config["networks"].update(
+        factory={"name": "factory-production_factory", "internal": True}, egress={"name": "factory-production_egress"},
+    )
+    services["litellm"]["environment"]["VPS_API_BASE"] = "http://ollama-vps:11434/v1"
+    services["litellm"]["networks"] = {"factory": None, "egress": None}
+    services["ollama-vps"] = {"networks": {"factory": None, "egress": None}}
+    assert production_errors(valid_config) == []
+
+    valid_config["networks"]["factory"]["internal"] = False
+    assert any("VPS_API_BASE" in error for error in production_errors(valid_config))
+    valid_config["networks"]["factory"]["internal"] = True
+    services["api"]["networks"]["factory"] = {"aliases": ["ollama-vps"]}
+    assert any("VPS_API_BASE" in error for error in production_errors(valid_config))
+    del services["api"]["networks"]["factory"]
+    services["litellm"]["extra_hosts"] = {"ollama-vps": "203.0.113.10"}
+    assert any("VPS_API_BASE" in error for error in production_errors(valid_config))
+    del services["litellm"]["extra_hosts"]
+    services["ollama-vps"]["ports"] = [{"target": 11434}]
+    assert any("VPS_API_BASE" in error for error in production_errors(valid_config))
+
+
+@pytest.mark.parametrize("network", [
+    {"name": "factory-production_egress", "external": True},
+    {"name": "shared-egress"},
+    {"name": "factory-production_egress", "driver": "macvlan"},
+    {"name": "factory-production_egress", "attachable": True},
+])
+def test_ollama_http_exception_rejects_shared_egress_but_https_is_allowed(valid_config, network):
+    services = valid_config["services"]
+    valid_config["name"] = "factory-production"
+    valid_config["networks"].update(factory={"name": "factory-production_factory", "internal": True}, egress=network)
+    services["litellm"]["networks"] = {"factory": None, "egress": None}
+    services["ollama-vps"] = {"networks": {"factory": None}}
+    assert production_errors(valid_config) == []
+
+    services["litellm"]["environment"]["VPS_API_BASE"] = "http://ollama-vps:11434/v1"
+    assert any("VPS_API_BASE" in error for error in production_errors(valid_config))
+
+
+def test_ollama_http_exception_rejects_another_network_key_sharing_the_gateway_network(valid_config):
+    services = valid_config["services"]
+    valid_config["name"] = "factory-production"
+    valid_config["networks"].update(
+        factory={"name": "factory-production_factory", "internal": True},
+        egress={"name": "factory-production_egress"},
+        external_egress={"name": "factory-production_egress", "external": True},
+    )
+    services["litellm"]["networks"] = {"factory": None, "egress": None}
+    services["ollama-vps"] = {"networks": {"factory": None}}
+    services["api"]["networks"]["external_egress"] = {"aliases": ["ollama-vps"]}
+    services["litellm"]["environment"]["VPS_API_BASE"] = "http://ollama-vps:11434/v1"
+    assert any("VPS_API_BASE" in error for error in production_errors(valid_config))
 
 
 def test_production_allows_only_protected_portfolio_reviews(valid_config):
@@ -259,15 +335,16 @@ def test_cli_rejects_missing_or_malformed_input(input_text):
     assert "secret canary" not in result.stderr
 
 
-def _render_compose(overrides):
+def _render_compose(overrides, *profiles):
     if not shutil.which("docker"):
         pytest.skip("Docker Compose CLI is not installed")
     example = ROOT / ".env.example"
     example_names = set(re.findall(r"(?m)^([A-Z0-9_]+)=", example.read_text(encoding="utf-8")))
     env = {name: value for name, value in os.environ.items()
            if name not in example_names and not name.startswith(("COMPOSE_", "FACTORY_", "SSO_", "EDGE_"))}
+    profile_args = [argument for profile in ("sso", *profiles) for argument in ("--profile", profile)]
     result = subprocess.run(
-        ["docker", "compose", "--env-file", str(example), "--profile", "sso", "config", "--format", "json"],
+        ["docker", "compose", "--env-file", str(example), *profile_args, "config", "--format", "json"],
         cwd=ROOT, env=env | overrides, text=True, capture_output=True,
     )
     assert result.returncode == 0, "Compose configuration could not be rendered"
@@ -286,7 +363,10 @@ def test_rendered_sample_is_loopback_only_and_not_production():
     assert "ENCRYPTION_KEY" in result.stderr and "FACTORY_AUTH_MODE" in result.stderr
 
 
-def test_rendered_production_fixture_passes():
+@pytest.mark.parametrize("profiles,vps_base", [
+    ((), "https://vps.provider.example/v1"), (("vps",), "http://ollama-vps:11434/v1"),
+])
+def test_rendered_production_fixture_passes(profiles, vps_base):
     fixture_vars = (
         "SSO_CLIENT_ID", "SSO_CLIENT_SECRET", "SSO_COOKIE_SECRET", "LITELLM_MASTER_KEY", "LITELLM_SALT_KEY",
         "LANGFUSE_SALT", "LANGFUSE_NEXTAUTH_SECRET", "LANGFUSE_INIT_PROJECT_PUBLIC_KEY",
@@ -302,9 +382,10 @@ def test_rendered_production_fixture_passes():
         "LANGFUSE_ENCRYPTION_KEY": bytes(range(32)).hex(),
         "GRAFANA_PUBLIC_URL": f"https://grafana.{PRODUCTION_HOST}",
         "LANGFUSE_PUBLIC_URL": f"https://langfuse.{PRODUCTION_HOST}",
+        "CLOUD_API_BASE": "https://cloud.provider.example/v1", "VPS_API_BASE": vps_base,
         "LOCAL_API_BASE": "http://10.40.20.15:8000/v1", "LOCAL_EMBED_API_BASE": "http://[fd00::20]:8000/v1",
         "SSO_OIDC_ISSUER_URL": "https://idp.company.internal", "SSO_EMAIL_DOMAINS": "company.internal",
-    })
+    }, *profiles)
     ports = json.loads(rendered)["services"]["edge"]["ports"]
     assert all(port["host_ip"] == ("0.0.0.0" if port["target"] in {80, 443} else "127.0.0.1") for port in ports)
     result = _preflight(rendered)
