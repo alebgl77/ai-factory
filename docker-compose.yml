@@ -777,7 +777,7 @@ services:
     logging: *logging
 
   valkey:
-    image: valkey/valkey:8.1.11-alpine
+    image: valkey/valkey:9.1.3-alpine
     <<: *hardening
     restart: unless-stopped
     # uid 999 / gid 1000 = valkey user of the image: no root step, no setpriv.
