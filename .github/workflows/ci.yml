@@ -115,6 +115,8 @@ jobs:
         run: python -m pytest -q tests/assets
       - name: Production configuration preflight
         run: python -m pytest -q tests/security/test_production_preflight.py
+      - name: Immutable release inventory and Compose overlay
+        run: python -m pytest -q tests/deployment
 
   licenses:
     name: Licenses (MIT compatibility)
@@ -323,7 +325,8 @@ jobs:
 
   sso-e2e:
     name: Single sign-on (end-to-end, sso profile)
-    if: github.event_name == 'workflow_dispatch' && inputs.sso_e2e
+    if: (github.event_name == 'workflow_dispatch' && inputs.sso_e2e) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true')
+    needs: [compose, stack-changes]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

@@ -33,7 +33,6 @@ if [ "${#images[@]}" -eq 0 ]; then
   exit 1
 fi
 first="${images[0]}"
-first_tagged="${first%@*}:$version"
 
 cat <<EOF
 $changes
@@ -55,18 +54,25 @@ done
 
 cat <<EOF
 
+## Private deployment bundle
+
+Download the deployment bundle with the other release assets and verify it against the signed
+checksum manifest before extracting it. The archive includes the Compose files and configuration
+from this tag, the service inventory with its source commit, and a Compose overlay pinned to all
+service image digests. Follow [the private deployment guide](https://github.com/$repo/blob/$tag/docs/DEPLOYMENT.md).
+
 ## Verify before you run
 
 \`\`\`sh
 # 1. Signature: made by the release workflow of $repo, on a v* tag (cosign v3)
-cosign verify $first_tagged \\
+cosign verify $first \\
   --certificate-identity-regexp '^https://github\\.com/${repo//./\\.}/\\.github/workflows/release\\.yml@refs/tags/v' \\
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 # 2. SLSA build provenance, then the SBOM attestations (GitHub CLI)
-gh attestation verify oci://$first_tagged --repo $repo
-gh attestation verify oci://$first_tagged --repo $repo --predicate-type https://spdx.dev/Document/v2.3
-gh attestation verify oci://$first_tagged --repo $repo --predicate-type https://cyclonedx.org/bom
+gh attestation verify oci://$first --repo $repo
+gh attestation verify oci://$first --repo $repo --predicate-type https://spdx.dev/Document/v2.3
+gh attestation verify oci://$first --repo $repo --predicate-type https://cyclonedx.org/bom
 
 # 3. Release assets (SBOM files, attestation bundles): checksums signed keyless
 cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \\

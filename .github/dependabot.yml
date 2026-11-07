@@ -136,4 +136,5 @@ updates:
           - "*qdrant/qdrant"
           - "*litellm/litellm*"
           - "*ollama/ollama"
+          - "*vllm/vllm-openai"
           - "*oauth2-proxy/oauth2-proxy"

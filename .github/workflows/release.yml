@@ -10,7 +10,7 @@
 #      and pushed to the registry), keyless cosign signature, then verification of all of it
 #      with .github/scripts/verify_image.sh, the script users run;
 #   3. GitHub release: notes from CHANGELOG.md, images pinned by digest, SBOMs and attestation
-#      bundles as assets, SHA256SUMS signed keyless.
+#      bundles as assets, a version-matched deployment bundle, SHA256SUMS signed keyless.
 # Verify a release: see the release notes, or .github/scripts/verify_image.sh IMAGE@DIGEST.
 # Images are built for linux/amd64 (the platform the SBOMs and the scan describe).
 name: release
@@ -291,6 +291,20 @@ jobs:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Build the deployment bundle for this tag
+        env:
+          REGISTRY: ${{ needs.preflight.outputs.registry }}
+        run: |
+          set -euo pipefail
+          release_sha="$(git rev-parse HEAD)"
+          bundle="$(mktemp -d)"
+          trap 'rm -rf "$bundle"' EXIT
+          git archive "$release_sha" -- \
+            .env.example docker-compose.yml docker-compose.release.yml docker-compose.portfolio.yml \
+            compose config scripts/check_production.py .github/scripts/verify_image.sh \
+            docs/DEPLOYMENT.md docs/GATEWAY_SECURITY.md docs/SECURITY.md docs/fr/PORTFOLIO.md LICENSE SECURITY.md licenses | tar -x -C "$bundle"
+          python3 .github/scripts/create_release_bundle.py "$bundle" "$RUNNER_TEMP/release" "$TAG" "$release_sha" "$REGISTRY"
+          tar -C "$bundle" -czf "$RUNNER_TEMP/release/ai-factory-deploy-$TAG.tar.gz" .
       - name: Image list and signed checksums
         working-directory: ${{ runner.temp }}/release
         env:
