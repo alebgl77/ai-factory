@@ -79,8 +79,9 @@ def deny(fc, callback, identity, data, call="acompletion"):
 def test_authenticated_case_overrides_downgrades_in_both_metadata_buckets(strict, supplied_sensitivity):
     result = invoke(strict, auth(), body(metadata={"sensitivity": supplied_sensitivity},
         litellm_metadata={"sensitivity": "C2", "user_api_key_team_id": "other", "langfuse_host": "unsafe"},
-        unrelated_provider_option="discarded", disable_fallbacks=False))
+        unrelated_provider_option="discarded", disable_fallbacks=False, num_retries=7))
     assert result["model"] == "chat-sensitive" and result["disable_fallbacks"] is True
+    assert result["num_retries"] == 0
     assert "unrelated_provider_option" not in result
     for channel in ("metadata", "litellm_metadata"):
         metadata = result[channel]

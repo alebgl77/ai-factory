@@ -1,0 +1,195 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Guide de déploiement et d’exploitation du portefeuille, des sous-agents et du Workbench AI Factory.">
+  <title>Guide d’exploitation · AI Factory</title>
+  <link rel="stylesheet" href="./guide.css">
+  <script defer src="./guide.js"></script>
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au guide</a>
+  <header class="masthead">
+    <a class="brand" href="../index.html?lang=fr"><span class="mark" aria-hidden="true">AF</span> AI Factory</a>
+    <a class="back" href="../index.html?lang=fr">Retour à la Factory <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Sommaire">
+      <p class="eyebrow">Documentation</p>
+      <ol>
+        <li><a href="#apercu">Vue d’ensemble</a></li>
+        <li><a href="#demarrage">Premiers pas</a></li>
+        <li><a href="#acces">Identités et périmètres</a></li>
+        <li><a href="#sous-agents">Moteur des sous-agents</a></li>
+        <li><a href="#workbench">Décisions Workbench</a></li>
+        <li><a href="#supervision">Supervision et incidents</a></li>
+        <li><a href="#production">Passage en production</a></li>
+        <li><a href="#reprise">Sauvegarde et retour arrière</a></li>
+      </ol>
+    </nav>
+
+    <main id="contenu" tabindex="-1">
+      <div class="hero">
+        <p class="eyebrow">Portefeuille · Manuel d’exploitation</p>
+        <h1>Du portefeuille<br>à l’exploitation.</h1>
+        <p class="lead">Préparez une installation privée, lancez une sous-tâche avec un modèle local et retrouvez la décision du Workbench dans le projet concerné.</p>
+        <div class="hero-links">
+          <a class="primary" href="#production">Préparer la mise en service</a>
+          <a class="secondary" href="#demarrage">Tester le parcours</a>
+        </div>
+      </div>
+      <form id="guide-search" class="search" role="search" hidden>
+        <label for="guide-query">Rechercher dans le guide</label>
+        <div class="search-field">
+          <input id="guide-query" type="search" maxlength="100" placeholder="Ex. revue technique, tokens, restauration" autocomplete="off" aria-controls="guide-results">
+          <button type="reset">Effacer</button>
+        </div>
+        <p id="guide-status" class="search-status" role="status" aria-live="polite"></p>
+        <ul id="guide-results" class="search-results" hidden></ul>
+      </form>
+
+      <section id="apercu" aria-labelledby="titre-apercu">
+        <h2 id="titre-apercu">Vue d’ensemble</h2>
+        <p>Dans <strong>Pilotage → Portefeuille et tâches</strong>, reliez un objectif de la Factory à ses projets, puis aux tâches de chaque BU. Le portefeuille suit l’échéance, la responsabilité, les dépendances et les preuves de travail.</p>
+        <ol class="flow" aria-label="Parcours du travail">
+          <li><b>Planifier</b><span>Le chef de projet crée les tâches.</span></li>
+          <li><b>Affecter</b><span>Le manager attribue ou délègue.</span></li>
+          <li><b>Vérifier</b><span>L’architecte valide le travail technique.</span></li>
+          <li><b>Décider</b><span>Le Workbench enregistre la décision sensible.</span></li>
+        </ol>
+        <p class="note"><strong>Deux environnements.</strong> GitHub Pages présente des cas fictifs. L’installation privée raccorde le proxy SSO, l’API et la passerelle locale, avec ses propres données et identités.</p>
+      </section>
+
+      <section id="demarrage" aria-labelledby="titre-demarrage">
+        <h2 id="titre-demarrage">Premiers pas</h2>
+        <details open>
+          <summary>Essayer la démonstration publique</summary>
+          <ol>
+            <li>Ouvrez <a href="../index.html?lang=fr">la Factory</a> puis <strong>Pilotage → Portefeuille et tâches</strong>.</li>
+            <li>Dans le tableau des tâches, dépliez le résumé des tâches déléguées sous une tâche en cours.</li>
+            <li>Comparez un relevé de tokens déclaré et une valeur inconnue. Les exemples illustrent l’interface.</li>
+          </ol>
+        </details>
+        <details>
+          <summary>Qualifier une installation privée en préproduction</summary>
+          <ol>
+            <li>Préparez deux comptes de test distincts et des données synthétiques. Connectez-vous par le proxy SSO.</li>
+            <li>Créez un objectif, un projet et une tâche parente en cours. Déléguez une sous-tâche courte à un agent activé, par exemple synthétiser trois faits fictifs.</li>
+            <li>Vérifiez les états successifs, le résultat et les compteurs remontés. Pour une tâche technique, vérifiez le passage en revue.</li>
+            <li>Soumettez une tâche sensible, rendez une décision dans le Compagnon avec le compte habilité, puis vérifiez le nouvel état dans le portefeuille.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section id="acces" aria-labelledby="titre-acces">
+        <h2 id="titre-acces">Identités et périmètres</h2>
+        <p>Renseignez <code>FACTORY_AUTH=sso</code>, <code>FACTORY_AUTH_MODE=proxy</code>, <code>FACTORY_TRUSTED_PROXIES</code>, <code>FACTORY_ROLE_MAP</code> et <code>FACTORY_BU_POLICY</code>. Gardez le proxy SSO et le tableau de bord sur la même origine. Chaque groupe de rôle doit porter lui-même le périmètre concerné.</p>
+        <dl class="rules">
+          <div><dt>Direction</dt><dd>Un groupe administrateur global <code>["*"]</code> pilote objectifs et projets.</dd></div>
+          <div><dt>Responsables de BU</dt><dd><code>project_lead</code> planifie, <code>manager</code> affecte, <code>architect</code> réalise la revue technique.</dd></div>
+          <div><dt>Employés et agents</dt><dd>La politique relie l’identité vérifiée à sa fiche ou au catalogue des agents. L’évaluation de l’agent doit être valide.</dd></div>
+        </dl>
+        <p>Pour l’autonomie, une BU peut autoriser le démarrage, le soumettre à un feu vert humain ou le bloquer. Renouvelez les autorisations de démarrage en attente après un redémarrage de l’API.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/BU_SECURITY.md">Configuration des groupes et sécurité par BU</a></p>
+      </section>
+
+      <section id="sous-agents" aria-labelledby="titre-sous-agents">
+        <h2 id="titre-sous-agents">Moteur des sous-agents</h2>
+        <p>Le moteur prend en charge les sous-tâches de lecture et de préparation dont la BU et l’agent sont configurés. Une tâche parente active peut déléguer sur un seul niveau, dans la limite de quatre sous-tâches, annulations comprises.</p>
+        <ol>
+          <li>Configurez un cas d’usage local <code>chat-sensitive</code> de niveau C3/C4, et un agent évalué associé à ce cas dans la BU.</li>
+          <li>Dans LiteLLM, provisionnez une clé virtuelle limitée à ce cas, à l’alias et aux routes de chat. Associez son empreinte au dossier dans la politique stricte. Conservez la clé brute dans le gestionnaire de secrets.</li>
+          <li>Montez le fichier privé du moteur avec <code>docker-compose.portfolio.yml</code>. Renseignez <code>FACTORY_PORTFOLIO_RUNNER_SOURCE</code> avec son chemin absolu sur l’hôte. Gardez le montage en lecture seule et rendez le fichier lisible par l’UID <code>10001</code> de l’API.</li>
+          <li>Testez un refus pour une clé ou une BU différente, puis une exécution valide avec une entrée synthétique.</li>
+        </ol>
+        <details>
+          <summary>Voir la structure du fichier privé</summary>
+          <p>Les identifiants ci-dessous sont fictifs. La clé du fichier doit correspondre à celle provisionnée pour ce cas d’usage.</p>
+          <pre><code>{
+  "version": 1,
+  "bindings": [{
+    "agent_id": "ag-support-research",
+    "unit": "cc-relation",
+    "usecase_id": "uc-41",
+    "virtual_key": "&lt;clé virtuelle de ce cas&gt;"
+  }]
+}</code></pre>
+        </details>
+        <p class="note">Chaque tentative produit une réponse texte, avec un appel limité à 60 secondes et 512 tokens de sortie. Examinez le résultat avant de le réutiliser dans un processus métier.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/GATEWAY_SECURITY.md">Provisionner la clé et le routage LiteLLM</a></p>
+      </section>
+
+      <section id="workbench" aria-labelledby="titre-workbench">
+        <h2 id="titre-workbench">Décisions Workbench</h2>
+        <p>Activez <code>FACTORY_WORKBENCH_MODE=portfolio</code> et <code>FACTORY_WORKBENCH_CYBER_AUDIT=on</code> sur l’installation protégée. Une tâche sensible soumise, et revue techniquement si nécessaire, passe en <strong>Relais Workbench</strong>. L’API rattache le dossier à la révision exacte de la tâche. Le journal de sécurité reste actif pendant le parcours.</p>
+        <p>Un approbateur global habilité et distinct des personnes impliquées ouvre le <strong>Compagnon de décision</strong>. La décision porte sur la tâche et ses preuves. Les opérations CRM et ERP suivent leurs propres circuits d’exécution.</p>
+        <dl class="rules">
+          <div><dt>Approuver</dt><dd>La tâche passe à <strong>Terminée</strong> et peut débloquer ses dépendances.</dd></div>
+          <div><dt>Refuser</dt><dd>La tâche passe à <strong>Annulée</strong>. Une dépendance qui exige son achèvement reste en attente.</dd></div>
+          <div><dt>Demander des modifications</dt><dd>La tâche repasse à <strong>Prête</strong>. La nouvelle soumission ouvre une décision distincte.</dd></div>
+        </dl>
+        <p>Le portefeuille expose l’issue et la date. Le dossier Workbench conserve l’approbateur et le motif dans son périmètre d’accès.</p>
+      </section>
+
+      <section id="supervision" aria-labelledby="titre-supervision">
+        <h2 id="titre-supervision">Supervision et incidents</h2>
+        <p>Consultez l’état des tâches, les preuves et le total de tokens dans le portefeuille. Distinguez les relevés du fournisseur, les valeurs déclarées et les compteurs encore inconnus. Un total marqué partiel ne couvre que les relevés disponibles.</p>
+        <details>
+          <summary>Une sous-tâche reste prête</summary>
+          <p>Contrôlez l’achèvement des dépendances, l’évaluation de l’agent, sa liaison au cas d’usage et la politique d’autonomie. En mode validation humaine, demandez au manager de fournir l’autorisation de démarrage.</p>
+        </details>
+        <details>
+          <summary>Une exécution se bloque ou expire</summary>
+          <p>Vérifiez l’état de LiteLLM et du modèle local, la liaison de la clé et les règles réseau. Après interruption, le moteur peut mettre deux minutes à libérer la tentative. Le manager vérifie la cause, puis réaffecte la tâche pour reprendre.</p>
+          <p>Les événements techniques <code>portfolio.runner_attempt_finished</code> et <code>portfolio.runner_tick_failed</code> facilitent le triage. Le résultat détaillé reste consultable depuis la tâche par les personnes habilitées.</p>
+        </details>
+        <details>
+          <summary>Une décision tarde à apparaître</summary>
+          <p>Vérifiez que la décision a été enregistrée sur le dossier correspondant et que l’API accède aux deux bases. Laissez la réconciliation s’exécuter et rechargez la vue. Conservez les identifiants et les horodatages pour l’incident, puis vérifiez le périmètre autorisé avant de partager une trace.</p>
+        </details>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/OPERATING_EVIDENCE.md">Mesures, traces et preuves d’exploitation</a></p>
+      </section>
+
+      <section id="production" aria-labelledby="titre-production">
+        <h2 id="titre-production">Passage en production</h2>
+        <ol class="steps">
+          <li><strong>Vérifier les images.</strong> Contrôlez signatures et attestations. Renseignez les trois empreintes SHA-256 vérifiées, chacune sur 64 caractères hexadécimaux, dans <code>FACTORY_RELEASE_API_SHA256</code>, <code>FACTORY_RELEASE_DASHBOARD_SHA256</code> et <code>FACTORY_RELEASE_GRAFANA_BOOTSTRAP_SHA256</code>.</li>
+          <li><strong>Préparer le tenant.</strong> Configurez TLS, le SSO, la politique BU, les secrets de la passerelle et le modèle local. Définissez <code>FACTORY_DEMO_MODE=never</code> et <code>FACTORY_GUARDRAIL_MODE=block</code>. Gardez les services internes sur leurs réseaux privés.</li>
+          <li><strong>Valider le rendu Compose.</strong> Utilisez exactement les profils et fichiers de la cible. Le JSON peut contenir des secrets. Passez-le directement au précontrôle.</li>
+        </ol>
+        <pre><code>docker compose -f docker-compose.yml -f docker-compose.release.yml \
+  -f docker-compose.portfolio.yml \
+  --env-file /secure/ai-factory/production.env --profile sso \
+  config --format json | python scripts/check_production.py</code></pre>
+        <p>Retirez <code>-f docker-compose.portfolio.yml</code> si vous gardez le moteur intégré désactivé. Ajoutez <code>--profile local-gpu</code> si vous utilisez le service GPU fourni, ou <code>--private-gpu-host NOM</code> au précontrôle pour chaque nom DNS privé externe approuvé.</p>
+        <ol class="steps" start="4">
+          <li><strong>Démarrer et vérifier la santé.</strong> Appliquez <code>up -d --no-build</code> avec les mêmes fichiers, variables et profils. Contrôlez les services avec <code>docker compose ps</code> dans la même configuration.</li>
+          <li><strong>Recetter avant d’ouvrir les accès.</strong> Rejouez la recette privée. Vérifiez le refus inter-BU et la séparation de l’approbateur, puis simulez une panne du modèle et un redémarrage après décision.</li>
+          <li><strong>Définir l’exploitation.</strong> Affectez les responsabilités d’astreinte, fixez les budgets et la rétention, chiffrez les sauvegardes et vérifiez une restauration sur un environnement isolé.</li>
+        </ol>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/fr/SECURITY.md#14-guide-de-durcissement-pour-la-production">Durcissement de la pile</a> · <a href="https://github.com/alebgl77/ai-factory/blob/main/SECURITY.md#vérifier-une-release">Vérifier une release</a></p>
+      </section>
+
+      <section id="reprise" aria-labelledby="titre-reprise">
+        <h2 id="titre-reprise">Sauvegarde et retour arrière</h2>
+        <p>Conservez les bases du portefeuille et du Workbench dans le volume privé de l’API. Planifiez une fenêtre, suspendez les traitements, sauvegardez le volume complet et associez la version et la politique correspondantes. Une copie de fichiers SQLite actifs peut manquer des écritures du journal.</p>
+        <details>
+          <summary>Restaurer sans rejouer les opérations</summary>
+          <ol>
+            <li>Restaurez sur une cible isolée avec la version et les politiques qualifiées. Gardez le moteur désactivé pendant la vérification.</li>
+            <li>Contrôlez l’intégrité des bases, les décisions en attente et le cloisonnement BU. Renouvelez les autorisations de démarrage qui doivent encore servir.</li>
+            <li>Vérifiez les tâches en cours et comparez le point de reprise avec les événements confirmés après la sauvegarde. Le manager arbitre les reprises nécessaires.</li>
+            <li>Réactivez le moteur après qualification d’une tâche de test et d’une décision Workbench.</li>
+          </ol>
+        </details>
+        <p>Pour un retour arrière, privilégiez d’abord la désactivation du moteur et conservez un instantané de l’état récent. Utilisez la restauration testée si le schéma de données de la version précédente l’exige.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/fr/PORTFOLIO.md">Référence du portefeuille et de l’API</a></p>
+      </section>
+    </main>
+  </div>
+  <footer><a href="#contenu">Haut du guide</a><span>AI Factory · Guide d’exploitation</span></footer>
+</body>
+</html>

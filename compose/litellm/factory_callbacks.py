@@ -348,6 +348,10 @@ def _bound_gateway_request(policy: dict, auth, data: dict, call_type) -> None:
         data.pop(field)
     data["model"] = alias
     data["disable_fallbacks"] = True
+    if alias == "chat-sensitive":
+        # An interrupted protected execution can have consumed tokens upstream.
+        # The pinned router honors zero before any deployment or retry policy.
+        data["num_retries"] = 0
 
 TTFT_BUCKETS = (0.05, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0)
 LATENCY_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0, 30.0, 60.0, 120.0)

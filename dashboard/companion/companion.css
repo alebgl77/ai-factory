@@ -101,7 +101,7 @@ h1 { font-size: clamp(2.25rem, 4.6vw, 3.65rem); margin: .27rem 0 .46rem; }
   background: currentColor;
   border-radius: 50%;
 }
-.mode[data-mode="protected_demo"] { color: var(--accent-strong); background: var(--accent-soft); }
+.mode[data-mode="protected_demo"], .mode[data-mode="portfolio"] { color: var(--accent-strong); background: var(--accent-soft); }
 .mode[data-mode="unavailable"] { color: var(--error); background: var(--error-soft); }
 .switcher { display: flex; gap: .25rem; border-bottom: 1px solid var(--line); margin-bottom: .9rem; }
 .switcher button {

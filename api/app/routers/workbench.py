@@ -1,4 +1,4 @@
-"""Mobile workbench API, available only in explicitly enabled sandbox modes."""
+"""Mobile Workbench API for sandbox modes and protected Portfolio decisions."""
 
 from __future__ import annotations
 
@@ -153,7 +153,7 @@ def _workbench(request: Request) -> Workbench:
 
 
 def _tracks_activity(workbench: Workbench, access: Access) -> bool:
-    return (workbench.mode == "protected_demo" and access.principal.authenticated
+    return (workbench.mode in {"protected_demo", "portfolio"} and access.principal.authenticated
             and access.principal.auth_mode == "proxy")
 
 
@@ -213,7 +213,7 @@ def cases(request: Request, access: Reader):
 def encounters(request: Request, access: Reader,
                case_id: Annotated[str | None, Query(pattern=CASE_ID_PATTERN)] = None):
     workbench = _workbench(request)
-    if workbench.mode != "protected_demo":
+    if workbench.mode not in {"protected_demo", "portfolio"}:
         raise HTTPException(404, detail="workbench_encounters_disabled")
     if case_id is None:
         queue = workbench.cases(access.principal, limit=100, existing_only=True)
@@ -245,6 +245,8 @@ def submit(request: Request, event: dict[str, Any], access: Writer):
 @router.get("/profiles")
 def profiles(request: Request, access: Reader):
     engine = _workbench(request)
+    if engine.mode == "portfolio":
+        raise HTTPException(404, detail="workbench_surface_disabled")
     engine.check_access(access.principal)
     return {"workspace": engine.workspace, "active": _profile(request).describe(),
             "available": [profile.describe() for profile in list_profiles()]}
@@ -252,7 +254,10 @@ def profiles(request: Request, access: Reader):
 
 @router.post("/reviews", status_code=201)
 def prepare_review(request: Request, proposal: ReviewInput, access: Writer):
-    return _profile(request).prepare(_workbench(request), access.principal, **proposal.model_dump())
+    engine = _workbench(request)
+    if engine.mode == "portfolio":
+        raise HTTPException(404, detail="workbench_surface_disabled")
+    return _profile(request).prepare(engine, access.principal, **proposal.model_dump())
 
 
 @router.get("/cases/{case_id}")

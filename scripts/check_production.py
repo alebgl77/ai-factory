@@ -175,13 +175,27 @@ def production_errors(config, *, private_gpu_hosts=()):
         errors.append("Set FACTORY_AUTH to sso and FACTORY_AUTH_MODE to proxy.")
     if not _roles_valid(_value(api, "FACTORY_ROLE_MAP")) or api.get("FACTORY_DEFAULT_ROLE") != "":
         errors.append("Set an explicit FACTORY_ROLE_MAP and leave FACTORY_DEFAULT_ROLE empty.")
-    if (_value(api, "FACTORY_DEMO_MODE") != "never" or _value(api, "FACTORY_WORKBENCH_MODE") != "off"
+    if (_value(api, "FACTORY_DEMO_MODE") != "never"
+            or _value(api, "FACTORY_WORKBENCH_MODE") not in {"off", "portfolio"}
             or DEMO_SERVICES.intersection(services)):
-        errors.append("Disable demo mode, the Workbench and the sim profile for production.")
+        errors.append("Disable demo mode and the sim profile; use only off or portfolio for the Workbench.")
+    if _value(api, "FACTORY_WORKBENCH_MODE") == "portfolio":
+        if _value(api, "FACTORY_WORKBENCH_CHAT_MODE") not in {"", "simulation"}:
+            errors.append("Keep generic Workbench chat disabled in portfolio mode.")
+        if _value(api, "FACTORY_WORKBENCH_CYBER_AUDIT") != "on":
+            errors.append("Enable FACTORY_WORKBENCH_CYBER_AUDIT for portfolio decisions.")
     bu_policy = _value(api, "FACTORY_BU_POLICY")
     if (not re.fullmatch(r"/config/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.ya?ml", bu_policy)
             or re.search(r"\.example\.ya?ml$", bu_policy) or not _readonly_bind(services["api"], "/config")):
         errors.append("Set FACTORY_BU_POLICY to an operator-owned policy in the read-only /config bind mount.")
+    runner_path = _value(api, "FACTORY_PORTFOLIO_RUNNER_FILE")
+    if runner_path:
+        expected = "/run/secrets/factory_portfolio_runner"
+        if runner_path != expected or not _readonly_bind(services["api"], expected):
+            errors.append("Mount the private portfolio runner binding file read-only using its Compose overlay.")
+        if (_value(api, "LITELLM_URL") != "http://litellm:4000"
+                or _object(services["api"].get("deploy")).get("replicas", 1) != 1):
+            errors.append("Keep the portfolio runner on one API replica and use the internal LiteLLM origin.")
     if _value(edge, "FACTORY_PRIVATE_TELEMETRY") != "disabled":
         errors.append("Disable direct Grafana and Langfuse edge routes for production BU scopes.")
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -13,7 +13,11 @@ import yaml
 from .security import AUTHENTICATED, ROLE_PERMISSIONS, Access, SecurityConfig, SecurityDenied
 
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:@-]{0,127}\Z")
-_POLICY_FIELDS = {"version", "groups", "resources", "people", "identities", "shadow_teams", "secure_resources"}
+_POLICY_FIELDS = {"version", "groups", "resources", "people", "identities", "shadow_teams", "secure_resources",
+                  "portfolio_roles", "portfolio_agents", "portfolio_autonomy"}
+PORTFOLIO_ROLES = frozenset({"project_lead", "manager", "architect"})
+PORTFOLIO_AGENT_MODES = ("read_only", "prepare", "sensitive")
+PORTFOLIO_AUTONOMY_LEVELS = frozenset({"autonomous", "human_review", "blocked"})
 
 
 class _UniqueLoader(yaml.SafeLoader):
@@ -50,6 +54,26 @@ def _mapping(value: Any, *, wildcard: bool = False) -> dict[str, frozenset[str]]
     return {_identifier(key): _list(items, wildcard=wildcard) for key, items in value.items()}
 
 
+def _bindings(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict) or len(value) > 512:
+        raise ValueError("invalid business policy bindings")
+    result = {_identifier(subject): _identifier(item) for subject, item in value.items()}
+    if len(set(result.values())) != len(result):
+        raise ValueError("multiple subjects for an identity")
+    return result
+
+
+def _autonomy(value: Any, known: set[str]) -> dict[str, dict[str, str]]:
+    if not isinstance(value, dict) or not value.keys() <= known:
+        raise ValueError("invalid portfolio autonomy units")
+    for modes in value.values():
+        if (not isinstance(modes, dict) or not modes.keys() <= set(PORTFOLIO_AGENT_MODES)
+                or any(not isinstance(level, str) or level not in PORTFOLIO_AUTONOMY_LEVELS
+                       for level in modes.values())):
+            raise ValueError("invalid portfolio autonomy mode")
+    return value
+
+
 @dataclass(frozen=True)
 class BUScope:
     centers: frozenset[str]
@@ -70,6 +94,9 @@ class BusinessPolicy:
     shadow_teams: Mapping[str, frozenset[str]]
     secure_resources: frozenset[str]
     fingerprint: str
+    portfolio_roles: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    portfolio_agents: Mapping[str, str] = field(default_factory=dict)
+    portfolio_autonomy: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str, cfg: dict[str, Any], security: SecurityConfig) -> BusinessPolicy:
@@ -89,14 +116,13 @@ class BusinessPolicy:
             people = _mapping(doc.get("people", {}))
             teams = _mapping(doc.get("shadow_teams", {}))
             secure = _list(doc["secure_resources"]) if "secure_resources" in doc else frozenset()
-            identities = doc.get("identities", {})
-            if not isinstance(identities, dict) or len(identities) > 512:
-                raise ValueError("invalid business policy identities")
-            identities = {_identifier(user): _identifier(person) for user, person in identities.items()}
-            if len(set(identities.values())) != len(identities):
-                raise ValueError("multiple subjects for a booking identity")
+            identities = _bindings(doc.get("identities", {}))
+            portfolio_roles = _mapping(doc.get("portfolio_roles", {}))
+            portfolio_agents = _bindings(doc.get("portfolio_agents", {}))
             known = {row.get("id") for row in (cfg.get("factory") or {}).get("cost_centers") or []}
+            portfolio_autonomy = _autonomy(doc.get("portfolio_autonomy", {}), known)
             roster = {row.get("id") for row in (cfg.get("profiles") or {}).get("people") or []}
+            agents = {row.get("id") for row in (cfg.get("catalog") or {}).get("agents") or []}
             mapped = {group for group, _ in security.role_map}
             if (not groups or not set(groups) <= mapped or not security.trusted_networks or not security.enforced
                     or not (set(people) | set(teams)) <= known or not secure <= resources.keys()):
@@ -105,9 +131,15 @@ class BusinessPolicy:
                 raise ValueError("unknown center assignment")
             if not set(identities.values()) <= roster or any(not values <= roster for values in people.values()):
                 raise ValueError("unknown booking profile")
+            if (not portfolio_roles.keys() <= groups.keys()
+                    or any(not roles <= PORTFOLIO_ROLES for roles in portfolio_roles.values())
+                    or identities.keys() & portfolio_agents.keys()
+                    or not set(portfolio_agents.values()) <= agents):
+                raise ValueError("unknown or ambiguous portfolio grant")
             if len(set().union(*teams.values())) != sum(map(len, teams.values())):
                 raise ValueError("ambiguous Shadow team scope")
-            return cls(groups, resources, people, identities, teams, secure, hashlib.sha256(raw).hexdigest())
+            return cls(groups, resources, people, identities, teams, secure, hashlib.sha256(raw).hexdigest(),
+                       portfolio_roles, portfolio_agents, portfolio_autonomy)
         except (OSError, yaml.YAMLError, ValueError, TypeError, RecursionError):
             raise ValueError("invalid FACTORY_BU_POLICY configuration") from None
 

@@ -19,6 +19,7 @@
       language: 'Language', static: 'Local simulation · fictitious cases · this tab only',
       demo: 'Connected simulation · shared cases · simulated ERP',
       protected_demo: 'Authenticated workspace · simulated ERP',
+      portfolio: 'Protected portfolio reviews',
       loading: 'Connecting to the workspace…', unavailable: 'Workspace unavailable',
       noCases: 'No cases available.', noCase: 'No linked case', linkedCase: 'Linked case',
       action: 'Business action', strategic: 'Strategic choice', undocumented: 'Undocumented choice',
@@ -56,6 +57,7 @@
       language: 'Langue', static: 'Simulation locale · dossiers fictifs · cet onglet uniquement',
       demo: 'Simulation connectée · dossiers partagés · ERP simulé',
       protected_demo: 'Espace authentifié · ERP simulé',
+      portfolio: 'Revues du portefeuille · espace protégé',
       loading: 'Connexion à l’espace de travail…', unavailable: 'Espace de travail indisponible',
       noCases: 'Aucun dossier disponible.', noCase: 'Aucun dossier lié', linkedCase: 'Dossier lié',
       action: 'Action métier', strategic: 'Choix stratégique', undocumented: 'Choix non documenté',
@@ -161,9 +163,10 @@
   function displayConnection() {
     byId('connection').dataset.mode = mode;
     setText('connection', t(mode));
-    const online = ['static', 'demo', 'protected_demo'].includes(mode);
-    byId('chat-tab').disabled = !online;
-    if (!online && !byId('chat-view').hidden) tab(false);
+    const chatAvailable = ['static', 'demo', 'protected_demo'].includes(mode);
+    byId('chat-tab').disabled = !chatAvailable;
+    byId('chat-tab').hidden = mode === 'portfolio';
+    if (!chatAvailable && !byId('chat-view').hidden) tab(false);
   }
 
   function renderList() {
@@ -206,6 +209,7 @@
   function displayCase() {
     const item = current();
     show('case-detail', Boolean(item));
+    show('feedback-form', mode !== 'portfolio');
     if (!item) showInbox();
     setText('chat-context', item ? `${t('linkedCase')} · ${item.id}` : t('noCase'));
     if (!item) return;
@@ -352,7 +356,7 @@
     try {
       const result = demo ? demo.cases(lang) : await request(`/cases?lang=${lang}`);
       if (version !== listRevision) return;
-      if (!Array.isArray(result.cases) || !['demo', 'protected_demo'].includes(result.mode)) throw new Error('bad response');
+      if (!Array.isArray(result.cases) || !['demo', 'protected_demo', 'portfolio'].includes(result.mode)) throw new Error('bad response');
       mode = staticMode ? 'static' : result.mode;
       const previous = current();
       const previousById = new Map(cases.map(item => [item.id, item]));

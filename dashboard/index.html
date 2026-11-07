@@ -13,6 +13,7 @@
 <script defer src="assets/factory-encounters.js"></script>
 <script defer src="assets/factory-workbench-follow.js"></script>
 <script defer src="assets/factory-activity.js"></script>
+<script defer src="assets/factory-portfolio.js"></script>
 <script>
   try { var p = JSON.parse(localStorage.getItem('aiFactoryRef.prefs') || '{}'); if (p.theme === 'light' || p.theme === 'dark') document.documentElement.setAttribute('data-theme', p.theme); } catch (e) {}
 </script>
@@ -316,6 +317,8 @@ button svg{pointer-events:none}
 .legend .sq{width:10px;height:10px;border-radius:3px;background:var(--u);flex:none}
 .legend .grad{width:120px;height:8px;border-radius:5px;background:linear-gradient(90deg,var(--g0),var(--g1))}
 .pilot-sec{margin-top:10px}
+.pilot-guide{margin:6px 0 0;font-size:12px;color:var(--muted)}
+.pilot-guide a{color:inherit;text-underline-offset:2px}
 .week{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;align-items:end;height:104px;padding:2px}
 .wday{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%;border:0;background:transparent;padding:4px 0;border-radius:9px}
 .wday:hover{background:var(--panel-2)}
@@ -381,6 +384,47 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .ctab[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
 .c-body{overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:16px}
 .console.is-activity .c-tabs{flex:none}
+.console.is-portfolio .c-tabs{flex:none}
+.portfolio{--portfolio-ink:#176d5c;--portfolio-warn:#a05a1e;display:grid;gap:14px;min-width:0}
+[data-theme="dark"] .portfolio{--portfolio-ink:#67c5ad;--portfolio-warn:#e9a357}
+.portfolio-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px 18px;padding:5px 0 12px;border-bottom:1px solid var(--border-strong)}
+.portfolio-kicker,.portfolio-index{color:var(--portfolio-ink);font:700 10.5px/1.25 ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase}
+.portfolio-hero h3{margin:3px 0 4px;font-size:clamp(24px,3vw,32px);line-height:1.02;letter-spacing:-.045em}
+.portfolio-hero p,.portfolio-note{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+.portfolio-badge{align-self:start;padding:4px 7px;border:1px solid var(--border);border-radius:5px;background:var(--panel-2);color:var(--muted);font-size:11px;font-weight:650;text-align:center}
+.portfolio-strip,.portfolio-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 9px;min-width:0}
+.portfolio-strip span{display:inline-flex;gap:5px;align-items:baseline;padding:4px 8px;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:11px}
+.portfolio-strip b{font-size:14px;color:var(--text);font-variant-numeric:tabular-nums}
+.portfolio-section{display:grid;gap:8px;min-width:0}
+.portfolio-caption{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px}
+.portfolio-caption h4,.portfolio-detail h4{margin:0;font-size:16px;letter-spacing:-.02em}.portfolio-caption h4 span{margin-inline-end:5px}
+.portfolio-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.portfolio-card,.portfolio-task{appearance:none;min-width:0;display:grid;gap:5px;padding:8px 9px;color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:7px;text-align:left;overflow-wrap:anywhere}
+.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-ink)}
+.portfolio-card[aria-pressed="true"],.portfolio-task[aria-pressed="true"]{border-color:var(--portfolio-ink);box-shadow:inset 2px 0 var(--portfolio-ink)}
+.portfolio-card b,.portfolio-task b{font-size:12.5px;line-height:1.3}.portfolio-card small,.portfolio-task small,.portfolio-task span{color:var(--muted);font-size:10.5px;line-height:1.35}
+.portfolio-card progress{appearance:none;height:5px;width:100%;border:0;border-radius:3px;background:var(--border)}
+.portfolio-card progress::-webkit-progress-bar{background:var(--border);border-radius:3px}.portfolio-card progress::-webkit-progress-value{background:var(--portfolio-ink);border-radius:3px}.portfolio-card progress::-moz-progress-bar{background:var(--portfolio-ink);border-radius:3px}
+.portfolio-controls,.portfolio-form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.portfolio label{display:grid;gap:4px;min-width:0;color:var(--muted);font-size:11px;font-weight:650}
+.portfolio :is(select,input,textarea){min-width:0;width:100%;min-height:34px;padding:5px 7px;border:1px solid var(--border-strong);border-radius:6px;color:var(--text);background:var(--panel);font:inherit;font-size:12px}
+.portfolio textarea{resize:vertical}.portfolio select[multiple]{min-height:66px}.portfolio .portfolio-wide{grid-column:1/-1}
+.portfolio-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;align-items:start;min-width:0}
+.portfolio-lane{display:grid;gap:6px;padding:7px;min-width:0;background:var(--panel-2);border:1px solid var(--border);border-top:2px solid var(--border-strong);border-radius:7px}
+.portfolio-lane[data-lane="doing"]{border-top-color:var(--portfolio-ink)}.portfolio-lane[data-lane="gate"]{border-top-color:var(--portfolio-warn)}
+.portfolio-lane h5{display:flex;justify-content:space-between;gap:5px;margin:0;padding:0 2px;font-size:11px}.portfolio-task{background:var(--panel);padding:7px}
+.portfolio-task-group,.portfolio-children>div{display:grid;min-width:0;gap:4px}.portfolio-children{min-width:0;padding:4px 0 3px 5px;border-inline-start:2px solid var(--portfolio-ink)}
+.portfolio-children summary{cursor:pointer;overflow-wrap:anywhere;font-size:10.5px;font-weight:700;color:var(--portfolio-ink)}.portfolio-children summary small{display:block;margin:1px 0 4px 9px;color:var(--muted);font-size:10px;font-weight:500}
+.portfolio-agent-usage{padding:6px 8px;border:1px solid var(--border);border-radius:6px}.portfolio-agent-usage summary{cursor:pointer;font-size:12px;font-weight:700}
+.portfolio-agent-usage ul{display:grid;gap:4px;padding:0;list-style:none;margin:5px 0 0}.portfolio-agent-usage li{display:flex;gap:4px 9px;flex-wrap:wrap;justify-content:space-between;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.portfolio-task .portfolio-status{color:var(--portfolio-ink)}.portfolio-status[data-status="blocked"],.portfolio-status[data-status="workbench"],.portfolio .portfolio-overdue{color:var(--portfolio-warn)}
+.portfolio-detail,.portfolio-form{display:grid;gap:8px;min-width:0;padding:10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--panel-2);overflow-wrap:anywhere}
+.portfolio-detail p,.portfolio-detail ul,.portfolio-form h4{margin:0}.portfolio-detail ul{padding-inline-start:17px}.portfolio-detail .portfolio-actions{padding-top:4px}
+.portfolio-result{max-height:18rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0;padding:8px;border:1px solid var(--border-strong);border-radius:6px;font:inherit}
+.portfolio-alert{margin:0;padding:8px 9px;border-inline-start:2px solid var(--portfolio-warn);background:var(--panel-2);color:var(--muted);font-size:12px}
+.portfolio button:focus-visible,.portfolio a:focus-visible,.portfolio select:focus-visible,.portfolio input:focus-visible,.portfolio textarea:focus-visible{outline:2px solid var(--portfolio-ink);outline-offset:2px}
+@media(max-width:660px){.console.is-portfolio .c-tabs{flex-wrap:nowrap}.portfolio-board{grid-template-columns:repeat(2,minmax(0,1fr))}.portfolio-controls,.portfolio-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:390px){.portfolio-cards{grid-template-columns:1fr}.portfolio-hero{gap:8px}.portfolio-hero p{font-size:11px}}
 .activity{--activity-time:#188173;--activity-tokens:#ad651a;display:grid;gap:15px;min-width:0}
 [data-theme="dark"] .activity{--activity-time:#57c4b2;--activity-tokens:#e9a357}
 .activity-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:3px 0 13px;border-bottom:1px solid var(--border-strong)}
@@ -3628,7 +3672,10 @@ function recommendations(sn) {
 function renderPilot(sn) {
   const days = weekDays(sn.date), N = Store.employees.length;
   const pres = days.map(d => new Set(Store.day(d).map(b => b.employeeId)).size), maxP = Math.max(...pres);
-  let html = `<div class="grp"><div class="grp-h">${ui('Work history', 'Historique du travail')}</div><button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Time, tokens and records', 'Temps, tokens et supports')}</button></div>`;
+  let html = `<div class="grp"><div class="grp-h">${ui('Delivery operations', 'Pilotage des opérations')}</div>
+    <button type="button" class="mini" data-portfolio-open>${icon('layers')} ${ui('Portfolio and tasks', 'Portefeuille et tâches')}</button>
+    <button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Time, tokens and records', 'Temps, tokens et supports')}</button>
+    <p class="pilot-guide"><a href="./docs/index.html">${ui('Operations guide (French)', 'Guide d’exploitation')}</a></p></div>`;
   html += `<div class="grp pilot-sec"><div class="grp-h">Semaine du ${esc(shortDate(days[0]))}<em>présents / jour</em></div><div class="week">`;
   days.forEach((d, i) => {
     const team = pres[i] && pres[i] === maxP && pres[i] >= Math.ceil(N / 2);
@@ -3757,14 +3804,16 @@ const CONSOLE_SECTIONS = {
   placement: { title: 'Placement hybride', icon: 'building' },
   agentops: { title: 'Agent Ops', icon: 'clock' },
   activity: { icon: 'clock' },
+  portfolio: { icon: 'layers' },
   catalog: { title: 'Catalogue libre-service', icon: 'desk' },
   skills: { title: 'Skills Lab & R&D Lab', icon: 'users' },
   rnd: { title: 'Skills Lab & R&D Lab', icon: 'users', alias: 'skills' },
   shadow: { icon: 'shield' },
   grafana: { title: 'Grafana', icon: 'info' },
 };
-const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'activity', 'catalog', 'skills', 'grafana'];
-const consoleTitle = key => key === 'shadow' ? shadowTitle() : key === 'activity' ? ui('Work history', 'Historique du travail') : CONSOLE_SECTIONS[key]?.title || 'Console';
+const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'activity', 'portfolio', 'catalog', 'skills', 'grafana'];
+const consoleTitle = key => key === 'shadow' ? shadowTitle() : key === 'activity' ? ui('Work history', 'Historique du travail')
+  : key === 'portfolio' ? ui('Portfolio and tasks', 'Portefeuille et tâches') : CONSOLE_SECTIONS[key]?.title || 'Console';
 const TIER_BADGES = new Map([
   ['prohibited', { className: 't-prohibited', label: 'Interdit (art. 5)' }],
   ['high', { className: 't-high', label: 'Haut risque' }],
@@ -3813,10 +3862,12 @@ function tierChip(r) {
 let consoleKey = null, consoleReturn = null, catalogFilter = 'models';
 let shadowView = null;
 let activityView = null;
+let portfolioView = null, portfolioDemo = null;
 function selectConsole(key) {
   if (key === consoleKey) return;
   consoleKey = key;
   activityView = null;
+  portfolioView = null;
   shadowView = key === 'shadow' ? { status: apiReachable() ? 'loading' : 'demo', filters: {}, revision: 0, draft: { tool: '', status: 'reviewing', alternative: '' } } : null;
   if (shadowView?.status === 'loading') void loadShadow(shadowView);
 }
@@ -3832,7 +3883,7 @@ function openConsole(key) {
 }
 function closeConsole() {
   if (!consoleKey) return;
-  const wasPrivate = consoleKey === 'shadow' || consoleKey === 'activity';
+  const wasPrivate = ['shadow', 'activity', 'portfolio'].includes(consoleKey);
   selectConsole(null);
   const c = $('console'), had = c.contains(document.activeElement);
   c.classList.remove('open'); c.setAttribute('aria-hidden', 'true');
@@ -3854,8 +3905,9 @@ function renderConsole() {
   if (!consoleKey) return;
   $('console').classList.toggle('is-shadow', consoleKey === 'shadow');
   $('console').classList.toggle('is-activity', consoleKey === 'activity');
+  $('console').classList.toggle('is-portfolio', consoleKey === 'portfolio');
   $('cTitle').textContent = consoleTitle(consoleKey);
-  $('cSrc').innerHTML = consoleKey === 'shadow' || consoleKey === 'activity' ? '' : sourceBadge();
+  $('cSrc').innerHTML = ['shadow', 'activity', 'portfolio'].includes(consoleKey) ? '' : sourceBadge();
   setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(k === 'shadow' ? ui('Observatory', 'Observatoire') : consoleTitle(k).split(' ·')[0].replace(' & risques', ''))}</button>`).join(''));
   if (consoleKey === 'shadow') {
     const stamp = `${language}:${shadowView.revision}`;
@@ -3867,6 +3919,10 @@ function renderConsole() {
   }
   if (consoleKey === 'activity') {
     setHTMLKeepFocus($('cBody'), window.FactoryActivity?.render(prepareActivity(), language, esc) || '');
+    return;
+  }
+  if (consoleKey === 'portfolio') {
+    setHTMLKeepFocus($('cBody'), window.FactoryPortfolio?.render(preparePortfolio(), language, esc) || '');
     return;
   }
   const fn = { registry: secRegistry, finops: secFinops, pipeline: secPipeline, dataloop: secDataloop, placement: secPlacement, agentops: secAgentops, catalog: secCatalog, skills: secSkills, grafana: secGrafana }[consoleKey];
@@ -3926,6 +3982,141 @@ function activityFilter(key, value) {
     view.scope = value; view.subject = ''; reloadActivity(view);
   } else if (key === 'kind' && ['agent', 'user'].includes(value)) { view.kind = value; view.subject = ''; renderConsole(); }
   else if (key === 'subject') { view.subject = value; renderConsole(); }
+}
+
+/* Portfolio state is scoped to the visible console, except for the fictional tab-local fixture. */
+const portfolioSource = () => {
+  const source = activitySource();
+  return source === 'api' && SNAP?.meta?.business_scope !== true ? 'unavailable' : source;
+};
+const portfolioScope = () => portfolioSource() === 'api' ? SNAP.meta.business_view : null;
+const portfolioConflict = ['This revision changed. The current task or record has been reloaded.', 'Cette révision a changé. La version actuelle a été rechargée.'];
+const portfolioInvalid = ['The change does not satisfy the portfolio rules.', 'La modification ne respecte pas les règles du portefeuille.'];
+function preparePortfolio() {
+  const source = portfolioSource(), scope = portfolioScope();
+  if (!portfolioView || portfolioView.source !== source || portfolioView.scope !== scope) {
+    portfolioView = { source, scope, status: source === 'api' ? 'loading' : source, filters: {}, data: null,
+      selected: '', editor: null, pending: null, viewer: null, message: null, usecases: [], expanded: new Set(), usageExpanded: false };
+  }
+  const view = portfolioView;
+  view.usecases = (SNAP?.registry || []).map(row => ({ id: row.id, name: row.name, unit: row.cost_center }));
+  if (source === 'demo') {
+    if (portfolioDemo?.language !== language) portfolioDemo = { language, data: window.FactoryPortfolio.demo(language) };
+    view.data = portfolioDemo.data;
+  }
+  if (source === 'api' && view.status === 'loading' && !view.pending && !document.hidden) void readPortfolio(view);
+  return view;
+}
+const currentPortfolio = (view, request) => consoleKey === 'portfolio' && portfolioView === view &&
+  view.pending === request && view.source === portfolioSource() && view.scope === portfolioScope();
+function resetPortfolioSelection(view) {
+  view.filters = {}; view.selected = ''; view.editor = null; view.message = null; view.expanded.clear(); view.usageExpanded = false;
+}
+async function readPortfolio(view) {
+  const request = {}; view.pending = request;
+  const result = await apiFetch(`/portfolio?lang=${language}`, { mode: 'same-origin', redirect: 'error' }, 5000);
+  if (!currentPortfolio(view, request)) return;
+  view.pending = null;
+  const data = result.ok ? window.FactoryPortfolio.parse(result.body) : null;
+  if (!data) {
+    view.status = result.status === 401 || result.status === 403 ? 'blocked' : result.status === 404 ? 'unavailable' : 'error';
+    view.data = null; view.viewer = null; resetPortfolioSelection(view);
+  } else {
+    if (view.viewer && data.view !== view.viewer) resetPortfolioSelection(view);
+    view.data = data; view.viewer = data.view; view.status = 'ready';
+    const { editor, filters } = view;
+    if (editor?.key && !data[editor.collection].some(row => row.id === editor.key && row.revision === editor.revision)) {
+      view.editor = null; view.message = portfolioConflict;
+    }
+    if (!data.goals.some(row => row.id === filters.goal)) delete filters.goal;
+    if (!data.projects.some(row => row.id === filters.project)) delete filters.project;
+    if (!data.units.some(row => row.id === filters.unit)) delete filters.unit;
+    if (filters.owner && !data.tasks.some(row => row.assignee && `${row.assignee.kind}:${row.assignee.id}` === filters.owner)) delete filters.owner;
+    if (!data.tasks.some(row => row.id === view.selected)) view.selected = '';
+    for (const key of view.expanded) if (!data.tasks.some(row => row.id === key)) view.expanded.delete(key);
+  }
+  const restoreDetailFocus = data && view.selected && document.activeElement?.matches('[data-portfolio-detail]');
+  renderConsole();
+  if (restoreDetailFocus) $('cBody').querySelector('[data-portfolio-detail]')?.focus({ preventScroll: true });
+}
+function reloadPortfolio(view) {
+  view.data = null; view.status = 'loading'; view.pending = null; renderConsole();
+}
+function portfolioChoice(raw) {
+  if (!portfolioView?.data || portfolioView.pending) return;
+  const [kind, id] = raw.split(':');
+  const view = portfolioView;
+  view.editor = null; view.message = null;
+  if (kind === 'task') view.selected = view.selected === id ? '' : id;
+  else {
+    const selection = view.filters[kind] === id ? '' : id;
+    if (kind === 'goal') view.filters.project = '';
+    view.filters[kind] = selection; view.filters.owner = ''; view.selected = '';
+  }
+  renderConsole();
+  if (kind === 'task' && view.selected) $('cBody').querySelector('[data-portfolio-detail]')?.focus();
+}
+function portfolioAction(raw) {
+  const view = portfolioView;
+  if (!view || view.pending) return;
+  if (raw === 'retry' && view.source === 'api') { reloadPortfolio(view); return; }
+  if (!view.data) return;
+  view.message = null;
+  if (raw === 'cancel') view.editor = null;
+  else if (raw === 'clear') { view.selected = ''; view.editor = null; }
+  else {
+    const [kind, name, key] = raw.split(':');
+    const engine = window.FactoryPortfolio, data = view.data;
+    if (kind === 'command') {
+      const row = data.tasks.find(task => task.id === key);
+      if (!row || !(name === 'delegate' ? engine.delegationOptions(data, row, view.source === 'demo').modes.length
+        : engine.commands(data, row, view.source === 'demo').includes(name))) return;
+      if (!['assign', 'submit', 'delegate', 'report_usage'].includes(name)) {
+        void writePortfolio(view, { collection: 'tasks', key, action: name, method: 'POST', body: { revision: row.revision, action: name } });
+        return;
+      }
+      view.editor = { collection: 'tasks', key, revision: row.revision, action: name, values: {} };
+    } else if (kind === 'edit' && ['goals', 'projects', 'tasks'].includes(name)) {
+      const row = key ? data[name].find(item => item.id === key) : null;
+      if (key && !row) return;
+      if (name === 'tasks' ? (row ? !engine.role(data, row.unit, 'project_lead') || !['planned', 'ready'].includes(row.status) : !engine.leadUnits(data).length)
+        : !data.capabilities.global_admin) return;
+      view.editor = { collection: name, key, revision: row?.revision, values: {} };
+    }
+  }
+  renderConsole();
+  if (view.editor) $('cBody').querySelector('[data-portfolio-field]')?.focus();
+}
+async function writePortfolio(view, change) {
+  if (!change || view.pending) {
+    view.message = portfolioInvalid; renderConsole(); return;
+  }
+  if (view.source === 'demo') {
+    if (window.FactoryPortfolio.applyDemo(view.data, change)) {
+      if (change.action === 'delegate') view.expanded.add(change.key);
+      view.editor = null; view.message = ['Demo change recorded in this tab.', 'Modification de démo consignée dans cet onglet.'];
+    }
+    else view.message = portfolioInvalid;
+    renderConsole(); return;
+  }
+  if (view.source !== 'api') return;
+  const request = {}; view.pending = request; renderConsole();
+  const url = '/portfolio/' + change.collection + (change.action ? `/${change.key}/${change.action === 'delegate' ? 'subagents' : 'commands'}` : change.method === 'PUT' ? `/${change.key}` : '');
+  const response = await apiFetch(url, { method: change.method, body: JSON.stringify(change.body), mode: 'same-origin', redirect: 'error' }, 5000);
+  if (!currentPortfolio(view, request)) return;
+  view.pending = null;
+  if (response.ok || [404, 409].includes(response.status)) {
+    if (response.ok && change.action === 'delegate') view.expanded.add(change.key);
+    view.editor = null;
+    view.message = response.ok ? ['Change recorded.', 'Modification consignée.'] : portfolioConflict;
+    reloadPortfolio(view);
+  } else if ([401, 403].includes(response.status)) {
+    resetPortfolioSelection(view); view.data = null; view.viewer = null; view.status = 'blocked'; renderConsole();
+  } else {
+    view.message = response.status === 422 ? portfolioInvalid : ['The result could not be confirmed. Refresh before retrying.', 'Le résultat n’a pas pu être confirmé. Actualisez avant de réessayer.'];
+    if (response.status !== 422) { view.editor = null; reloadPortfolio(view); }
+    else renderConsole();
+  }
 }
 
 /* Isolated Observatory data. Only the explicitly static edition uses these fictional rows. */
@@ -4424,7 +4615,7 @@ function setHTMLKeepFocus(root, html) {
   if (root.__html === html) return;
   root.__html = html;
   const a = document.activeElement;
-  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry'].find(x => a.dataset[x] !== undefined) : null;
+  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioFilter', 'portfolioAction', 'portfolioField'].find(x => a.dataset[x] !== undefined) : null;
   const v = k && a.dataset[k];
   root.innerHTML = html;
   if (k) {
@@ -5020,7 +5211,7 @@ function bindUI() {
   window.addEventListener('offline', () => encounter.follower?.stop('offline'));
   window.addEventListener('pagehide', () => {
     encounter.follower?.stop();
-    if (consoleKey === 'activity' && activityView?.source === 'api') closeConsole();
+    if ((consoleKey === 'activity' && activityView?.source === 'api') || (consoleKey === 'portfolio' && portfolioView?.source === 'api')) closeConsole();
   });
   $('viewTop').addEventListener('click', () => setView('top'));
   $('viewLabels').addEventListener('click', () => {
@@ -5076,8 +5267,28 @@ function bindUI() {
   $('cBody').addEventListener('click', e => {
     if (e.target.closest('[data-activity-open]')) openConsole('activity');
     else if (e.target.closest('[data-activity-retry]') && activityView?.source === 'api') reloadActivity(activityView);
+    const choice = e.target.closest('[data-portfolio-choice]');
+    const action = e.target.closest('[data-portfolio-action]');
+    if (choice) portfolioChoice(choice.dataset.portfolioChoice);
+    else if (action) portfolioAction(action.dataset.portfolioAction);
   });
   $('cBody').addEventListener('change', e => {
+    const view = portfolioView, { portfolioFilter, portfolioField } = e.target.dataset;
+    if (view?.data && !view.pending && portfolioFilter) {
+      view.filters[portfolioFilter] = e.target.value; view.selected = ''; view.editor = null; renderConsole(); return;
+    }
+    if (view?.editor && !view.pending && portfolioField) {
+      const values = view.editor.values, field = e.target;
+      values[portfolioField] = field.multiple ? [...field.selectedOptions].map(option => option.value) : field.value;
+      if (['project_id', 'unit', 'owner_unit', 'mode'].includes(portfolioField)) {
+        if (portfolioField === 'project_id') delete values.unit;
+        if (portfolioField === 'project_id' || portfolioField === 'unit') delete values.dependency_ids;
+        if (portfolioField === 'owner_unit') delete values.usecase_id;
+        if (portfolioField === 'mode') delete values.agent_id;
+        renderConsole();
+      }
+      return;
+    }
     if (e.target.matches('[data-activity-filter]')) { activityFilter(e.target.dataset.activityFilter, e.target.value); return; }
     if (!shadowView || !e.target.matches('[data-shadow-filter]')) return;
     const key = e.target.dataset.shadowFilter, { filters } = shadowView;
@@ -5086,12 +5297,30 @@ function bindUI() {
     filters[key] = e.target.value;
     repaintShadow();
   });
-  $('cBody').addEventListener('input', e => { if (shadowView && e.target.matches('[data-shadow-field]')) shadowView.draft[e.target.dataset.shadowField] = e.target.value; });
+  $('cBody').addEventListener('input', e => {
+    if (shadowView && e.target.matches('[data-shadow-field]')) shadowView.draft[e.target.dataset.shadowField] = e.target.value;
+    const field = e.target.dataset.portfolioField;
+    if (field && portfolioView?.editor && !portfolioView.pending && !e.target.multiple) portfolioView.editor.values[field] = e.target.value;
+  });
+  $('cBody').addEventListener('toggle', e => {
+    const key = e.target.dataset?.portfolioParent;
+    if (key && e.target.isConnected && portfolioView) {
+      if (e.target.open) portfolioView.expanded.add(key);
+      else portfolioView.expanded.delete(key);
+    }
+    if (e.target.matches?.('[data-portfolio-usage]') && e.target.isConnected && portfolioView) portfolioView.usageExpanded = e.target.open;
+  }, true);
   $('cBody').addEventListener('submit', e => {
+    if (e.target.matches('[data-portfolio-form]') && portfolioView?.editor) {
+      e.preventDefault();
+      if (!portfolioView.pending) void writePortfolio(portfolioView, window.FactoryPortfolio.mutation(portfolioView, e.target));
+      return;
+    }
     if (e.target.id !== 'shadowProposal') return;
     e.preventDefault(); submitShadowProposal(e.target);
   });
   $('pilotPanel').addEventListener('click', e => {
+    if (e.target.closest('[data-portfolio-open]')) { openConsole('portfolio'); return; }
     if (e.target.closest('[data-activity-open]')) { openConsole('activity'); return; }
     const d = e.target.closest('[data-day]');
     if (d) { const t = timeForDay(d.dataset.day); stopPlay(); S.live = false; changeDay(d.dataset.day, t); return; }
@@ -5217,14 +5446,18 @@ function bindUI() {
   });
   document.addEventListener('visibilitychange', () => {
     if (consoleKey === 'activity' && activitySource() === 'api') { activityView = null; renderConsole(); }
+    if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
     if (!document.hidden && S.live) goLive();
   });
   window.addEventListener('offline', () => {
     if (consoleKey === 'activity' && activityView?.source === 'api') { activityView = null; renderConsole(); }
+    if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
   });
   // The proxy identity can change independently of the current booking view.
   setInterval(() => {
     if (!document.hidden && consoleKey === 'activity' && activityView?.source === 'api' && activityView.status === 'ready') reloadActivity(activityView);
+    if (!document.hidden && consoleKey === 'portfolio' && portfolioView?.source === 'api' && portfolioView.status === 'ready'
+        && !portfolioView.pending && !portfolioView.editor) void readPortfolio(portfolioView);
   }, 20000);
   // Another tab changed the saved data: reload it instead of overwriting it later
   window.addEventListener('storage', e => {

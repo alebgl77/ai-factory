@@ -417,7 +417,10 @@ def require(permission: str, *, write: bool = False) -> Callable[[Request], Acce
             # A default HTTP Workbench store is shared by its readers and has no per-case BU key.
             route_path = getattr(request.scope.get("route"), "path", request.url.path)
             if scope is not None and route_path.startswith("/api/v1/workbench/"):
-                if not scope.all_units:
+                workbench = getattr(request.app.state, "workbench", None)
+                portfolio_machine = (getattr(workbench, "mode", None) == "portfolio"
+                                     and (not principal.user or principal.user in service.bu_policy.portfolio_agents))
+                if not scope.all_units or portfolio_machine:
                     raise SecurityDenied(403, "business_scope_forbidden", "auth.forbidden")
                 # Workbench evaluates roles again inside the SDK. Restrict that role set to
                 # the grants that can address this shared workspace, not a local BU role.

@@ -44,6 +44,7 @@ RUN --mount=type=secret,id=build_ca,required=false \
 COPY index.html /build/site/index.html
 COPY exercise/ /build/site/exercise/
 COPY companion/ /build/site/companion/
+COPY docs/ /build/site/docs/
 # Optional visual pack (data-URI bundle built by scripts/build_assets.py; empty when no image was generated)
 COPY assets/assets.js /build/site/assets/assets.js
 COPY assets/camille-model.js /build/site/assets/camille-model.js
@@ -52,6 +53,7 @@ COPY assets/factory-character.js /build/site/assets/factory-character.js
 COPY assets/factory-encounters.js /build/site/assets/factory-encounters.js
 COPY assets/factory-workbench-follow.js /build/site/assets/factory-workbench-follow.js
 COPY assets/factory-activity.js /build/site/assets/factory-activity.js
+COPY assets/factory-portfolio.js /build/site/assets/factory-portfolio.js
 RUN set -eu; \
     if [ "$DASHBOARD_THREE_SOURCE" = "vendored" ]; then \
       sed -i \
@@ -68,6 +70,9 @@ RUN set -eu; \
 # This unprivileged nginx image uses UID 101 and includes Alpine fixes for CVE-2026-107891
 # (musl and musl-utils) and CVE-2026-85091 (zlib).
 FROM nginx/nginx-unprivileged:1.31.8-alpine-slim@sha256:633f37ad70b9fd48d4da573db1ebc9111a9ad174e5178e83bd2ef45381fde5e2
+# Targeted Alpine security update for CVE-2026-4738 in the pinned image.
+USER root
+RUN apk add --no-cache 'zlib=1.4-r0'
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --from=vendor --chown=root:root /build/site/ /usr/share/nginx/html/
 # Listens on port 80 as uid 101: docker-compose.yml sets
