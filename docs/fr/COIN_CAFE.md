@@ -1,10 +1,11 @@
 # Coin café et boîte à idées
 
-[Démo](#essayer-la-démo) · [Accès et visibilité](#accès-et-visibilité) · [Classement](#classement-automatique) · [API agents](#intégration-par-lapi) · [Exploitation](#déploiement-et-exploitation)
+[Démo](#essayer-la-démo) · [Accès et visibilité](#accès-et-visibilité) · [Traçabilité](#traçabilité-du-dépôt) · [Classement](#classement-automatique) · [API](#intégration-par-lapi) · [Exploitation](#déploiement-et-exploitation)
 
-Le **Coin café** rassemble des propositions courtes sous forme de post-its. Chaque idée indique
-sa BU d’origine, sa catégorie et ses tags. Dès sa création, elle est visible par toute la
-Factory authentifiée.
+Le **Coin café** rassemble des propositions courtes sous forme de post-its. En installation
+protégée, un badge coloré affiche l’origine du dépôt vérifiée par l’API. Le badge **BU** porte
+le nom de l’unité. La catégorie et les tags décrivent le sujet de l’idée. Dès sa création,
+le post-it est visible par toute la Factory authentifiée.
 
 ## Essayer la démo
 
@@ -12,7 +13,8 @@ Factory authentifiée.
    **Pilotage → Coin café · Boîte à idées**.
 2. Choisissez **Ajouter une idée**, renseignez un titre et une description, puis utilisez
    **Déposer mon idée**.
-3. Filtrez les post-its par catégorie ou recherchez des mots dans leurs titres et descriptions.
+3. Cliquez sur un badge **BU** pour filtrer par provenance. Vous pouvez combiner ce filtre avec
+   la catégorie et la recherche dans les titres et descriptions.
 
 La **démo locale** utilise des exemples fictifs. Les idées ajoutées dans la démo restent dans le
 stockage local du navigateur. Pour le travail d’entreprise, utilisez l’installation protégée.
@@ -23,10 +25,32 @@ stockage local du navigateur. Pour le travail d’entreprise, utilisez l’insta
 | --- | --- |
 | Membre authentifié et habilité | Consulter le mur de la Factory et déposer une idée dans une BU autorisée pour son identité. |
 | Agent identifié et évalué, lié à une BU | Consulter le mur par l’API et déposer une idée dans sa BU. |
-| Administrateur humain global | Consulter le mur et déposer une idée dans une BU configurée. Le même groupe SSO porte le rôle `admin` et le périmètre global `["*"]`. |
+| Administrateur humain global | Consulter le mur, déposer une idée depuis sa BU vérifiée et ouvrir la traçabilité d’un post-it. Le même groupe SSO porte le rôle `admin` et le périmètre global `["*"]`. |
+
+Un administrateur global sans BU vérifiée dépose sous l’origine transversale
+**Administration Factory** (`factory:administration`). Si une personne a plusieurs BU
+autorisées, elle choisit celle du dépôt.
+
+Une idée intitulée « Comparer les budgets des projets », déposée par la BU Opérations, affiche
+**BU · Opérations** et la catégorie **Finance** à part. L’Observatoire des usages IA est une zone
+du plan. Un badge **BU · Observatoire** suppose que l’opérateur a configuré une BU de ce nom et
+habilité l’auteur à y déposer. [Observatoire des usages IA](../SHADOW_AI.md)
 
 Le titre et la description doivent être partageables à l’échelle de la Factory. Gardez les
 secrets, données personnelles et informations client dans les systèmes dédiés.
+
+## Traçabilité du dépôt
+
+L’identité exacte du déposant reste dans la traçabilité privée. Dans l’installation protégée,
+un administrateur humain global utilise **Tracer le dépôt** sur le post-it pour la consulter
+dans le panneau **Traçabilité du dépôt**. Le panneau affiche le type d’auteur, son identifiant
+et la date du dépôt. La démo illustre les badges BU avec des données fictives conservées dans
+le navigateur.
+
+L’API enregistre l’identité vérifiée lors du dépôt dans la base privée `ideas.sqlite3`, pour
+la même durée que le post-it. Avant de restituer la provenance, l’API enregistre l’événement
+d’audit durable `ideas.author_trace` avec le demandeur, l’identifiant du post-it et l’horodatage.
+Le contenu du post-it et le sujet du déposant restent hors de cet événement d’audit.
 
 ## Classement automatique
 
@@ -43,6 +67,7 @@ langue de l’interface. [Classifieur et routes API](../../api/app/ideas.py)
 | `data` | `analytics`, `quality` |
 | `experience` | `usability`, `feedback` |
 | `adoption` | `training`, `documentation` |
+| `finance` | `financial_analysis`, `budget` |
 | `uncategorized` | Sans tag reconnu |
 
 Quelques titres pour essayer le classement.
@@ -56,8 +81,11 @@ Quelques titres pour essayer le classement.
 ## Intégration par l’API
 
 Un agent passe par le proxy authentifié avec l’identité de service associée à sa BU. Le serveur
-déduit l’identité et les habilitations de la session. Le client transmet la BU, le titre et le
-texte. Le titre accepte de 1 à 120 caractères et le texte de 1 à 1 000 caractères.
+déduit l’identité et les origines autorisées de la session. Le titre accepte de 1 à 120
+caractères et le texte de 1 à 1 000 caractères. Omettez `bu` si une seule origine est
+autorisée. Si plusieurs origines sont autorisées, fournissez l’identifiant de l’origine
+choisie. L’omission dans ce cas renvoie HTTP 422 avec `ideas_bu_required`. Une origine hors
+périmètre renvoie HTTP 403.
 
 ```http
 POST /api/v1/ideas HTTP/1.1
@@ -78,8 +106,15 @@ La création renvoie HTTP 201 avec le post-it, sa catégorie, ses tags, sa date 
 
 | Requête | Usage |
 | --- | --- |
-| `GET /api/v1/ideas?lang=fr` | Récupérer le mur partagé, les BU disponibles pour la session et le droit de création. |
-| `POST /api/v1/ideas` | Déposer une idée avec `{bu, title, text}`. |
+| `GET /api/v1/ideas?lang=fr` | Récupérer le mur partagé, les origines de dépôt autorisées et les droits de création et de traçabilité. |
+| `POST /api/v1/ideas` | Déposer une idée avec `title`, `text` et, si nécessaire, `bu`. |
+| `POST /api/v1/ideas/{id}/trace?lang=fr` | Consulter la provenance privée avec le corps JSON `{}` et une session d’administrateur humain global. Réponse `Cache-Control: no-store`. |
+
+La réponse de traçabilité contient `id`, `bu`, `kind` (`employee`, `agent` ou `admin`),
+`subject` (le sujet SSO exact), `created_at` (la date du dépôt) et `view` (le contexte
+d’accès courant). Pour une idée absente, une BU retirée ou une ancienne idée sans provenance,
+l’API renvoie HTTP 404 avec `idea_origin_unavailable`. Si l’enregistrement de l’audit échoue,
+l’API renvoie HTTP 503 avec `ideas_trace_unavailable`.
 
 ## Déploiement et exploitation
 
@@ -93,9 +128,12 @@ lui donnent un rôle de lecture dans la Factory. Tant que le compte reste lié c
 révocation de son évaluation bloque son accès au mur.
 
 Le mur affiche les 120 idées les plus récentes. Les idées plus anciennes restent en base
-jusqu’à intervention de l’exploitant. Le stockage accepte 2 000 idées par BU et refuse les
-nouveaux dépôts au-delà de ce plafond. Sauvegardez `ideas.sqlite3` avec le volume privé de l’API.
+jusqu’à intervention de l’exploitant. Le stockage accepte 2 000 idées par origine de dépôt, BU
+ou Administration Factory. Une fois le plafond atteint, l’API refuse les nouveaux dépôts.
+Sauvegardez `ideas.sqlite3` avec le volume privé de l’API.
 
 Pour la recette, déposez une idée synthétique depuis une BU et vérifiez sa présence dans le
 mur d’une autre BU. Essayez ensuite de créer une idée dans cette seconde BU avec l’identité
-de la première. Vérifiez le refus. Rejouez ces deux contrôles avec un agent évalué.
+de la première. Vérifiez le refus. Rejouez ces deux contrôles avec un agent évalué. Vérifiez
+ensuite le refus de traçabilité pour un membre ordinaire, puis consultez l’origine avec un
+administrateur humain global et contrôlez l’événement d’audit correspondant.

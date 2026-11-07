@@ -188,10 +188,11 @@ class StateStore:
 
     # -- audit -----------------------------------------------------------------------------------
     def append_audit(self, ctx: AuditContext, *, action: str, target: str, before: Any = None, after: Any = None,
-                     details: dict[str, Any] | None = None) -> dict[str, Any]:
+                     details: dict[str, Any] | None = None, require_intact: bool = False) -> dict[str, Any]:
         """Audit a write that keeps no state (e.g. a placement decision)."""
         with self._locked():
-            return self._append(ctx, action=action, target=target, before=before, after=after, details=details)
+            return self._append(ctx, action=action, target=target, before=before, after=after, details=details,
+                                require_intact=require_intact)
 
     def audit_status(self) -> dict[str, Any]:
         """Cheap chain status for the posture (cached on the file's inode, size and mtime)."""
