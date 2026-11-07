@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.1.0 (2026-11)
+
+- Portfolio and tasks connect company objectives to projects, team assignments, dependencies,
+  work evidence and token usage. Business-unit policies and verified SSO groups govern planning,
+  assignment, technical review and agent autonomy.
+- Manual and automatic delegation create up to four child tasks per parent. The optional
+  integrated runner executes configured reading and preparation tasks through scoped LiteLLM
+  virtual keys and the local-only C3/C4 `chat-sensitive` route. It records model output and
+  provider-reported usage, and blocks interrupted attempts for operator review.
+- In the private `portfolio` Workbench mode, a separate approver reviews the exact handoff
+  revision in the Decision Companion. Approval, rejection and requests for changes return to the
+  portfolio. The rationale and approver identity remain in the Workbench.
+- GitHub Pages serves the fictional demo and the [interactive operations guide](https://alebgl77.github.io/ai-factory/docs/#production).
+  The guide covers [private activation](https://alebgl77.github.io/ai-factory/docs/#sous-agents),
+  validation and [recovery](https://alebgl77.github.io/ai-factory/docs/#reprise). A Compose overlay
+  installs the first-party release images by verified digest.
+- The dashboard runtime pins Alpine zlib to `1.4-r0` to address CVE-2026-4738.
+
+For private activation, use proxy SSO, a business-unit policy and one API process. If you
+piloted an earlier portfolio build, review existing pending handoffs manually. Automatic
+reconciliation applies to handoffs recorded by this release.
+
 ## 1.0.0 (2026-11)
 
 First public release.
