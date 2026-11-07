@@ -267,7 +267,7 @@ services:
   # the edge only, through "edge-identity". Sessions are encrypted cookies (no server state).
   oauth2-proxy:
     profiles: [sso]
-    image: ${OAUTH2_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.15.5}
+    image: ${OAUTH2_PROXY_IMAGE:-quay.io/oauth2-proxy/oauth2-proxy:v7.15.6}
     <<: *hardening
     restart: unless-stopped
     user: "65532:65532"
@@ -347,7 +347,7 @@ services:
   grafana:
     # grafana/grafana is the OSS (AGPLv3) image; grafana/grafana-oss stopped receiving
     # releases after 13.0.2 (Grafana documentation, "Run Grafana Docker image").
-    image: grafana/grafana:13.0.12
+    image: grafana/grafana:13.3.0
     <<: *hardening
     restart: unless-stopped
     read_only: true
@@ -626,7 +626,7 @@ services:
 
   # =============================================================== Langfuse (MIT core)
   langfuse-web:
-    image: langfuse/langfuse:3.227.0
+    image: langfuse/langfuse:4.72.0
     <<: *hardening
     restart: unless-stopped
     # The image leaves its application files owned by its runtime user: a read-only root
@@ -672,7 +672,7 @@ services:
     logging: *logging
 
   langfuse-worker:
-    image: langfuse/langfuse-worker:3.227.0
+    image: langfuse/langfuse-worker:4.72.0
     <<: *hardening
     restart: unless-stopped
     read_only: true
@@ -705,7 +705,7 @@ services:
 
   # ============================================================================ storage
   postgres:
-    image: postgres:17.11-alpine
+    image: postgres:18.4-alpine
     <<: *hardening
     restart: unless-stopped
     # Runs directly as the postgres user (uid 70 of the Alpine image): the entrypoint never
@@ -739,7 +739,7 @@ services:
     logging: *logging
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.8.36.3
+    image: clickhouse/clickhouse-server:26.10.3.7
     <<: *hardening
     restart: unless-stopped
     user: "101:101"
@@ -776,7 +776,7 @@ services:
     logging: *logging
 
   valkey:
-    image: valkey/valkey:8.1.11-alpine
+    image: valkey/valkey:9.1.3-alpine
     <<: *hardening
     restart: unless-stopped
     # uid 999 / gid 1000 = valkey user of the image: no root step, no setpriv.
