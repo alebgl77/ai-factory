@@ -80,6 +80,10 @@
       || !Array.isArray(data.units)
       || !data.units.every(unit => unit && key(unit.id) && typeof unit.label === 'string')
       || typeof data.truncated !== 'boolean' || !Number.isSafeInteger(data.total) || data.total < data.items.length) return null;
+    if (data.next_cursor != null && !/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/.test(data.next_cursor)) return null;
+    if (data.category_totals !== undefined && (!data.category_totals || typeof data.category_totals !== 'object'
+      || Array.isArray(data.category_totals) || !Object.entries(data.category_totals).every(([name, total]) =>
+        Object.hasOwn(categories, name) && Number.isSafeInteger(total) && total >= 0))) return null;
     if (new Set(data.items.map(row => row.id)).size !== data.items.length
       || new Set(data.units.map(unit => unit.id)).size !== data.units.length) return null;
     return data;
@@ -245,14 +249,21 @@
     const tools = node('div', 'ideas-tools'); tools.append(searchField, filters, clearUnit);
     const count = node('p', 'ideas-count'); count.setAttribute('aria-live', 'polite');
     const wall = node('div', 'ideas-wall');
-    root.append(hero, composer, status, retry, tracePanel, tools, count, wall);
+    const more = button('ideas-quiet', t('Load more ideas', 'Charger plus d’idées'));
+    more.dataset.ideaMore = '';
+    root.append(hero, composer, status, retry, tracePanel, tools, count, wall, more);
 
     let current = null, active = '', selectedUnit = null, composing = false;
+    const serverFilters = () => current?.source === 'api' && current.data?.category_totals !== undefined;
+    const changeFilters = () => {
+      if (serverFilters()) actions.filter({ q: search.value.trim(), category: active, bu: selectedUnit?.id || '' });
+      else paintWall();
+    };
     const categoryButtons = new Map();
     for (const category of ['', ...Object.keys(categories)]) {
       const control = button('ideas-filter', category ? label(categories[category]) : t('All', 'Toutes'));
       control.dataset.ideaFilter = category || 'all';
-      control.addEventListener('click', () => { active = category; paintWall(); });
+      control.addEventListener('click', () => { active = category; changeFilters(); });
       categoryButtons.set(category, control); filters.append(control);
     }
 
@@ -265,10 +276,11 @@
     add.addEventListener('click', () => showComposer(true));
     dismiss.addEventListener('click', () => showComposer(false));
     retry.addEventListener('click', actions.retry);
-    search.addEventListener('input', paintWall);
+    more.addEventListener('click', actions.more);
+    search.addEventListener('input', changeFilters);
     clearUnit.addEventListener('click', () => {
       const origin = selectedUnit?.origin;
-      selectedUnit = null; paintWall();
+      selectedUnit = null; changeFilters();
       (wall.querySelector(`[data-idea-id="${origin}"] .idea-unit`) || search).focus({ preventScroll: true });
     });
     traceClose.addEventListener('click', () => {
@@ -299,7 +311,7 @@
       unitPill.addEventListener('click', () => {
         if (selectedUnit?.id === row.bu) { clearUnit.click(); return; }
         selectedUnit = { id: row.bu, label: unitLabel, origin: row.id };
-        paintWall(); clearUnit.focus({ preventScroll: true });
+        changeFilters(); clearUnit.focus({ preventScroll: true });
       });
       const category = node('span', 'idea-category', label(categories[row.category]));
       const heading = node('h4', '', row.title);
@@ -329,8 +341,9 @@
       const items = data?.items || [];
       const unitLabels = new Map((data?.units || []).map(item => [item.id, item.label]));
       const query = fold(search.value.trim());
-      const scoped = selectedUnit ? items.filter(row => row.bu === selectedUnit.id) : items;
-      const searched = query ? scoped.filter(row =>
+      const remote = serverFilters();
+      const scoped = !remote && selectedUnit ? items.filter(row => row.bu === selectedUnit.id) : items;
+      const searched = !remote && query ? scoped.filter(row =>
         fold([row.title, row.text, label(categories[row.category]), ...row.tags.map(tag => label(tags[tag])),
           row.bu_label || unitLabels.get(row.bu) || row.bu].join(' ')).includes(query)) : scoped;
       clearUnit.hidden = !selectedUnit;
@@ -339,19 +352,23 @@
         : t(`Clear BU filter · ${selectedUnit.label}`, `Effacer le filtre BU · ${selectedUnit.label}`);
       const totals = new Map();
       for (const row of searched) totals.set(row.category, (totals.get(row.category) || 0) + 1);
+      const all = remote ? Object.values(data.category_totals).reduce((sum, total) => sum + total, 0) : searched.length;
       for (const [category, control] of categoryButtons) {
         control.setAttribute('aria-pressed', String(active === category));
-        control.textContent = `${category ? label(categories[category]) : t('All', 'Toutes')} · ${category ? totals.get(category) || 0 : searched.length}`;
+        const total = category ? (remote ? data.category_totals[category] : totals.get(category)) || 0 : all;
+        control.textContent = `${category ? label(categories[category]) : t('All', 'Toutes')} · ${total}`;
       }
-      const shown = searched.filter(row => !active || row.category === active);
+      const shown = remote ? searched : searched.filter(row => !active || row.category === active);
       const visibleCount = shown.length === 1 ? t('1 idea', '1 idée') : t(`${shown.length} ideas`, `${shown.length} idées`);
-      count.textContent = !data ? '' : data.truncated ? t(`${visibleCount} · ${data.items.length} latest of ${data.total}`,
-        `${visibleCount} · parmi les ${data.items.length} dernières sur ${data.total}`) : visibleCount;
+      count.textContent = !data || current.filtering ? '' : data.truncated ? t(`${shown.length} of ${data.total} ideas`,
+        `${shown.length} idées sur ${data.total}`) : visibleCount;
+      more.hidden = !data?.next_cursor || !!current.filtering;
+      more.disabled = !!current.pending;
       const focus = wall.contains(document.activeElement) ? document.activeElement : null;
       const focusId = focus?.closest('[data-idea-id]')?.dataset.ideaId;
       const focusControl = focus?.matches('[data-idea-trace]') ? '[data-idea-trace]' : '.idea-unit';
       wall.replaceChildren();
-      if (!data) return;
+      if (!data || current.filtering) return;
       if (shown.length) {
         wall.append(...shown.map(row => card(row, unitLabels)));
       } else {
@@ -388,6 +405,8 @@
       }
       unitField.hidden = !data || data.units.length <= 1;
       name.disabled = body.disabled = unit.disabled = submit.disabled = !!view.pending;
+      search.disabled = clearUnit.disabled = !!view.pending?.write;
+      for (const control of categoryButtons.values()) control.disabled = !!view.pending?.write;
       if (view.completed && view.completed !== previous?.completed) {
         composer.reset(); active = ''; selectedUnit = null; search.value = ''; showComposer(false);
       }
@@ -397,7 +416,7 @@
         unavailable: t('The idea wall needs the protected workspace.', 'Ce mur d’idées nécessite l’espace protégé.'),
         error: t('The wall could not be loaded.', 'Impossible de charger le mur.'),
       };
-      status.textContent = view.message || states[view.status] || (view.source === 'demo'
+      status.textContent = view.message || (view.filtering ? t('Searching the idea wall…', 'Recherche dans le mur des idées…') : '') || states[view.status] || (view.source === 'demo'
         ? t('Fictional examples. Your notes stay in this browser.', 'Exemples fictifs. Vos post-it restent dans ce navigateur.') : '');
       retry.hidden = view.source !== 'api' || !['denied', 'error'].includes(view.status) || !!view.pending;
       tools.hidden = !data; count.hidden = !data;

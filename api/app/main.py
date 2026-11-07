@@ -268,11 +268,16 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
 
     @app.get("/metrics", include_in_schema=False)
     def prometheus_metrics() -> Response:
-        # The unauthenticated internal scrape carries platform security counters only in BU mode.
+        # In BU mode, the internal scrape carries only platform-level aggregates.
         snap = (app.state.service.snapshot() if service.bu_policy is None
                 else {"meta": {"mode": "scoped", "version": API_VERSION}})
         extra = metrics_mod.security_families(service.state.audit_status(), service.state.audit_counts(),
                                               service.guard.denials())
+        engine = getattr(app.state, "portfolio_engine", None)
+        if engine is not None:
+            age = engine.oldest_queue_age_seconds()
+            if age is not None:
+                extra.append(metrics_mod.portfolio_queue_age(age))
         return Response(content=metrics_mod.render(snap, extra),
                         media_type="text/plain; version=0.0.4; charset=utf-8")
 

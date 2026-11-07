@@ -28,14 +28,10 @@ def audit_records(offset: int = Query(0, ge=0, le=1_000_000), limit: int = Query
                   svc: FactoryService = Depends(service), lang: str = Depends(response_lang)) -> dict[str, Any]:
     require_global(svc, access)
     try:
-        records = svc.state.audit_records()
+        total, records = svc.state.audit_page(offset=offset, limit=limit, action=action)
     except StateError:
         raise state_unavailable(lang, audit=True) from None
-    if action:
-        records = [r for r in records if r.get("action") == action]
-    records.reverse()
-    return {"total": len(records), "offset": offset, "limit": limit, "order": "desc",
-            "records": records[offset:offset + limit]}
+    return {"total": total, "offset": offset, "limit": limit, "order": "desc", "records": records}
 
 
 @router.get("/audit/verify", summary="Recompute the audit hash chain and reconcile it with the state")

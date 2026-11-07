@@ -15,11 +15,12 @@ from pathlib import Path
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import StringConstraints, ValidationInfo, field_validator
 
+from .pagination import Cursor, decode_cursor, encode_cursor
 from .portfolio import EntityID, Input, Key, PortfolioContext, Reader, Title, Writer, _context
 from .routers.shadow_ai import _check_origin
 from .security import Access
@@ -69,11 +70,30 @@ _RULES = (
     )),
 )
 _TOKEN = re.compile(r"[a-z0-9]+")
+_SEARCH_LABELS = {
+    "security": "Security Sécurité", "automation": "Automation Automatisation", "finance": "Finance",
+    "data": "Data & quality Données & qualité", "experience": "Experience Expérience",
+    "adoption": "Learning & adoption Formation & adoption", "uncategorized": "To explore À explorer",
+    "access": "Access Accès", "compliance": "Compliance Conformité", "workflow": "Workflow",
+    "integration": "Integration Intégration", "financial_analysis": "Financial analysis Analyse financière",
+    "budget": "Budget", "analytics": "Analyse Analytics", "quality": "Quality Qualité",
+    "usability": "Usability Ergonomie", "feedback": "Feedback Retours", "training": "Training Formation",
+    "documentation": "Documentation",
+}
+_CATEGORIES = frozenset(category for category, _ in _RULES) | {"uncategorized"}
+
+
+def _fold(value: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", value.casefold()) if not unicodedata.combining(c))
 
 
 def _words(value: str) -> frozenset[str]:
-    plain = "".join(c for c in unicodedata.normalize("NFKD", value.casefold()) if not unicodedata.combining(c))
-    return frozenset(_TOKEN.findall(plain))
+    return frozenset(_TOKEN.findall(_fold(value)))
+
+
+def _search_text(title: str, text: str, category: str, tags: str, source_label: str, bu: str) -> str:
+    terms = [category, *json.loads(tags)]
+    return _fold(" ".join([title, text, *terms, *(_SEARCH_LABELS.get(term, "") for term in terms), source_label, bu]))
 
 
 def classify_idea(title: str, text: str) -> tuple[str, list[str]]:
@@ -157,18 +177,45 @@ class IdeasStore:
         return {**dict(row), "tags": json.loads(row["tags"]), "visibility": "factory"}
 
     def list(self, units: frozenset[str]) -> tuple[list[dict], int]:
-        configured = json.dumps(sorted(units))
+        items, totals, _ = self.page(dict.fromkeys(units, ""), limit=_VISIBLE_LIMIT)
+        return items, sum(totals.values())
+
+    def page(self, sources: dict[str, str], *, limit: int, query: str = "", category: str | None = None,
+             bu: str | None = None, position: list | None = None) -> tuple[list[dict], dict[str, int], list | None]:
+        configured = json.dumps(sources)
         with self._transaction(write=False) as db:
             if db is None:
-                return [], 0
-            total = db.execute("SELECT COUNT(*) FROM ideas WHERE bu IN (SELECT value FROM json_each(?))",
-                               (configured,)).fetchone()[0]
+                return [], {}, None
+            db.create_function("idea_search", 6, _search_text, deterministic=True)
+            if position is None:
+                newest = db.execute("""
+                    SELECT id FROM ideas WHERE bu IN (SELECT key FROM json_each(?)) ORDER BY rowid DESC LIMIT 1
+                """, (configured,)).fetchone()
+                if newest is None:
+                    return [], {}, None
+                anchor, created_at, idea_id = newest["id"], None, None
+            else:
+                anchor, created_at, idea_id = position
+            # The anchor excludes arrivals after the first page, including
+            # imports or submissions with the same clock value.
+            filters = """
+                FROM ideas JOIN json_each(:sources) AS source ON ideas.bu = source.key
+                WHERE ideas.rowid <= (SELECT rowid FROM ideas WHERE id = :anchor)
+                  AND (:bu IS NULL OR ideas.bu = :bu)
+                  AND (:query = '' OR instr(idea_search(title, text, category, tags, source.value, ideas.bu), :query))
+            """
+            args = {"sources": configured, "anchor": anchor, "bu": bu, "query": query, "category": category,
+                    "created_at": created_at, "id": idea_id, "limit": limit + 1}
+            totals = dict(db.execute(f"SELECT category, COUNT(*) {filters} GROUP BY category", args).fetchall())
             rows = db.execute(f"""
-                SELECT {_FIELDS} FROM ideas
-                WHERE bu IN (SELECT value FROM json_each(?))
-                ORDER BY created_at DESC, id LIMIT ?
-            """, (configured, _VISIBLE_LIMIT)).fetchall()
-            return [self._card(row) for row in rows], total
+                SELECT ideas.id, bu, title, text, category, tags, created_at {filters}
+                  AND (:category IS NULL OR category = :category)
+                  AND (:created_at IS NULL OR created_at < :created_at OR (created_at = :created_at AND ideas.id > :id))
+                ORDER BY created_at DESC, ideas.id LIMIT :limit
+            """, args).fetchall()
+            items = [self._card(row) for row in rows[:limit]]
+            continuation = [anchor, items[-1]["created_at"], items[-1]["id"]] if len(rows) > limit else None
+            return items, totals, continuation
 
     def create(self, idea: IdeaIn, *, bu: str, subject: str, kind: AuthorKind) -> dict:
         category, tags = classify_idea(idea.title, idea.text)
@@ -209,7 +256,8 @@ class IdeasRoute(APIRoute):
         async def handle(request: Request):
             _check_origin(request)
             pairs = request.query_params.multi_items()
-            if len(pairs) > 1 or any(key != "lang" for key, _ in pairs):
+            allowed = {"lang", "q", "category", "bu", "limit", "cursor"} if request.method == "GET" else {"lang"}
+            if len(pairs) != len(request.query_params) or any(key not in allowed for key, _ in pairs):
                 raise HTTPException(422, detail="invalid_ideas_request")
             if request.method == "POST":
                 types = request.headers.getlist("content-type")
@@ -254,15 +302,34 @@ def _store(request: Request) -> IdeasStore:
 
 
 @router.get("")
-def board(request: Request, access: Reader):
+def board(request: Request, access: Reader, q: Annotated[str, Query(max_length=120)] = "",
+          category: Annotated[str, Query(max_length=32)] | None = None,
+          bu: Annotated[str, Query(max_length=128)] | None = None,
+          limit: Annotated[int, Query(ge=1, le=120)] | None = None, cursor: Cursor | None = None):
     ctx = _ideas_context(request, access)
     writable = _writable(ctx)
     sources = _sources(request, ctx)
-    items, total = _store(request).list(frozenset(sources))
+    if (bu is not None and bu not in sources or category is not None and category not in _CATEGORIES
+            or any(unicodedata.category(character).startswith("C") for character in q)):
+        raise HTTPException(422, detail="invalid_ideas_request")
+    query = _fold(q.strip())
+    page_size = _VISIBLE_LIMIT if limit is None else limit
+    key = request.app.state.service.booking_key
+    page_scope = ["ideas", ctx.cursor_scope, request.app.state.service.lang(request.query_params.get("lang")),
+                  query, category, bu, page_size, sorted(sources.items())]
+    position = None
+    if cursor is not None:
+        position = decode_cursor(key, page_scope, cursor)
+        if position is None or len(position) != 3:
+            raise HTTPException(422, detail="invalid_ideas_cursor")
+    items, totals, next_position = _store(request).page(
+        sources, limit=page_size, query=query, category=category, bu=bu, position=position)
+    total = totals.get(category, 0) if category is not None else sum(totals.values())
     return {"items": [{**item, "bu_label": sources[item["bu"]]} for item in items],
             "units": [{"id": unit, "label": sources[unit]} for unit in sorted(writable)],
             "permissions": {"create": bool(writable), "trace": ctx.global_admin}, "view": ctx.view,
-            "total": total, "truncated": total > len(items)}
+            "total": total, "category_totals": totals, "truncated": next_position is not None,
+            "next_cursor": encode_cursor(key, page_scope, next_position) if next_position else None}
 
 
 @router.post("", status_code=201)

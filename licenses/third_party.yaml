@@ -96,7 +96,7 @@ images:
     note: "Only container that mounts the Docker socket; GET allowlist for Alloy's log discovery."
   - service: oauth2-proxy
     image: quay.io/oauth2-proxy/oauth2-proxy
-    tag: v7.15.5
+    tag: v7.15.6
     spdx: MIT
     license: MIT
     usage: separate-service

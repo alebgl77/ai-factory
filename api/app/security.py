@@ -6,7 +6,7 @@ Identity (``FACTORY_AUTH_MODE``)
     ``proxy`` an SSO proxy in front of the API (oauth2-proxy or any equivalent) authenticates the
               user and forwards ``X-Forwarded-User`` / ``X-Forwarded-Email`` / ``X-Forwarded-Groups``.
               Those headers are read **only** when the TCP peer is in ``FACTORY_TRUSTED_PROXIES``;
-              every other request to ``/api/*`` (except ``/api/v1/health``) is refused with 401.
+              every other request to ``/api/*`` (except public probes) is refused with 401.
     Any other value fails closed: it is treated as ``proxy`` and reported as a warning.
 
 Authorisation (RBAC)
@@ -65,7 +65,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
 
 APPROVING_DECISIONS = frozenset({"approved", "approved_with_conditions"})
 ANONYMOUS = "anonymous"
-PUBLIC_API_PATHS = frozenset({"/api/v1/health"})  # liveness probe: no identity, no secret
+PUBLIC_API_PATHS = frozenset({"/api/v1/health", "/api/v1/ready"})
 
 H_USER, H_EMAIL, H_GROUPS = b"x-forwarded-user", b"x-forwarded-email", b"x-forwarded-groups"
 IDENTITY_HEADERS = (H_USER, H_EMAIL, H_GROUPS)

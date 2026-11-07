@@ -350,7 +350,7 @@
       error.status === 401 || error.status === 403 ? 'blocked' : 'requestError', true, caseId);
   }
 
-  async function loadCases() {
+  async function loadCases(fromEntry = false) {
     const version = ++listRevision;
     setRefreshing(true);
     try {
@@ -364,6 +364,15 @@
         .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
       if (!cases.some(item => item.id === pendingDecisionId)) pendingDecisionId = null;
       capabilities = result.capabilities ?? {};
+      if (fromEntry && staticMode && (query.has('demo_case') || query.has('demo_revision'))) {
+        const guided = window.FactoryDemoDecision;
+        const ids = query.getAll('demo_case');
+        const revisions = query.getAll('demo_revision');
+        if (ids.length === 1 && ids[0] === guided.id && revisions.length === 1 && revisions[0] === String(guided.revision) &&
+            cases.some(item => item.id === guided.id && item.revision === guided.revision)) openCase(guided.id);
+        else selectCase(null);
+        return;
+      }
       const next = current();
       if (previous && next && (previous.revision !== next.revision || previous.proposal_hash !== next.proposal_hash)) {
         byId('rationale').value = '';
@@ -544,5 +553,5 @@
   });
 
   translate();
-  void loadCases();
+  void loadCases(true);
 })();

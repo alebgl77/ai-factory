@@ -29,6 +29,26 @@ MAX_RESULT = 4000
 MAX_TOKENS = 512
 _MAX_RESPONSE = 32768
 _LATEST_START = "SELECT MAX(revision) FROM task_history WHERE task_id = parent.id AND action = 'start'"
+_QUEUE_FILTER = f"""
+    FROM tasks AS task
+    JOIN tasks AS parent ON parent.id = task.parent_task_id
+      AND parent.unit = task.unit AND parent.project_id = task.project_id
+    JOIN projects ON projects.id = task.project_id
+    JOIN json_each(?) AS rule ON task.assignee_id = json_extract(rule.value, '$[0]')
+      AND task.unit = json_extract(rule.value, '$[1]')
+      AND json_extract(task.payload, '$.execution') = json_extract(rule.value, '$[2]')
+    JOIN json_each(?) AS eligible_parent ON eligible_parent.key = parent.assignee_id
+      AND eligible_parent.value = parent.unit
+    WHERE task.assignee_kind = 'agent' AND task.status = 'ready'
+      AND parent.assignee_kind = 'agent' AND parent.status = 'in_progress'
+      AND ({_LATEST_START}) IS NOT NULL
+      AND json_extract(parent.payload, '$.execution') IN (SELECT value FROM json_each(rule.value, '$[4]'))
+      AND NOT EXISTS (SELECT 1 FROM portfolio_runner_claims WHERE task_id = task.id)
+      AND json_extract(projects.payload, '$.state') NOT IN ('done', 'archived')
+      AND (json_extract(rule.value, '$[3]') = 'autonomous'
+           OR (task.start_policy = ? AND json_extract(task.payload, '$.start_authorized') = 1))
+      AND {_BLOCKERS}
+"""
 _IDENTIFIER = re.compile(r"[a-z0-9][a-z0-9_-]{0,95}")
 _VIRTUAL_KEY = re.compile(r"sk-[a-zA-Z0-9_-]{16,200}")
 _INSTRUCTION = (
@@ -173,10 +193,8 @@ class PortfolioEngine:
                if subject else hmac.digest(key, b"factory-portfolio-runner-v1", "sha256").hex())
         return PortfolioActor(ref, "Moteur des sous-agents")
 
-    def _select(self) -> _Claim | None:
-        if not self.store.path.is_file():
-            return None
-        bindings, active_agents = self._eligibility(self.service.config.get())
+    def _queue_params(self, bindings: dict[str, _Binding], active_agents: dict[str, str]
+                      ) -> tuple[str, str, str] | None:
         # Scope by bound agent and expected BU before parsing task content. A
         # pending grant is usable only in this process and policy generation.
         rules = [(binding.agent_id, binding.unit, mode, self._autonomy(binding.unit, mode),
@@ -184,6 +202,30 @@ class PortfolioEngine:
                    if self._autonomy(binding.unit, parent_mode) != "blocked"])
                  for binding in bindings.values() for mode in ("read_only", "prepare")
                  if self._autonomy(binding.unit, mode) != "blocked"]
+        return (_encode(rules), _encode(active_agents), self.generation) if rules else None
+
+    def oldest_queue_age_seconds(self) -> float | None:
+        """Seconds since the oldest claimable task's last update, or zero for an empty queue."""
+        try:
+            with self.store._transaction(write=False) as db:
+                if db is None:
+                    return 0.0
+                params = self._queue_params(*self._eligibility(self.service.config.get()))
+                if params is None:
+                    return 0.0
+                oldest = db.execute(f"SELECT MIN(task.updated_at) {_QUEUE_FILTER}", params).fetchone()[0]
+                if oldest is None:
+                    return 0.0
+                age = dt.datetime.fromisoformat(self.store._now()) - dt.datetime.fromisoformat(oldest)
+                return max(0.0, age.total_seconds())
+        except (OSError, sqlite3.Error, ValueError, TypeError):
+            return None
+
+    def _select(self) -> _Claim | None:
+        if not self.store.path.is_file():
+            return None
+        bindings, active_agents = self._eligibility(self.service.config.get())
+        params = self._queue_params(bindings, active_agents)
         with self.store._transaction(write=True) as db:
             assert db is not None
             now = self.store._now()
@@ -192,34 +234,17 @@ class PortfolioEngine:
                 WHERE lease_until <= ? ORDER BY lease_until LIMIT 16
             """, (now,)).fetchall():
                 self._resolve(db, row, None, None, "interrupted", {}, now)
-            if not rules:
+            if params is None:
                 return None
             row = db.execute(f"""
                 SELECT task.id, parent.assignee_id AS parent_agent_id,
                        ({_LATEST_START}) AS parent_start_revision,
                        json_extract(projects.payload, '$.revision') AS project_revision
-                FROM tasks AS task
-                JOIN tasks AS parent ON parent.id = task.parent_task_id
-                  AND parent.unit = task.unit AND parent.project_id = task.project_id
-                JOIN projects ON projects.id = task.project_id
-                JOIN json_each(?) AS rule ON task.assignee_id = json_extract(rule.value, '$[0]')
-                  AND task.unit = json_extract(rule.value, '$[1]')
-                  AND json_extract(task.payload, '$.execution') = json_extract(rule.value, '$[2]')
-                JOIN json_each(?) AS eligible_parent ON eligible_parent.key = parent.assignee_id
-                  AND eligible_parent.value = parent.unit
-                WHERE task.assignee_kind = 'agent' AND task.status = 'ready'
-                  AND parent.assignee_kind = 'agent' AND parent.status = 'in_progress'
-                  AND ({_LATEST_START}) IS NOT NULL
-                  AND json_extract(parent.payload, '$.execution') IN (SELECT value FROM json_each(rule.value, '$[4]'))
-                  AND NOT EXISTS (SELECT 1 FROM portfolio_runner_claims WHERE task_id = task.id)
-                  AND json_extract(projects.payload, '$.state') NOT IN ('done', 'archived')
-                  AND (json_extract(rule.value, '$[3]') = 'autonomous'
-                       OR (task.start_policy = ? AND json_extract(task.payload, '$.start_authorized') = 1))
-                  AND {_BLOCKERS}
+                {_QUEUE_FILTER}
                 ORDER BY CASE json_extract(task.payload, '$.priority')
                     WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
                     task.updated_at, task.id LIMIT 1
-            """, (_encode(rules), _encode(active_agents), self.generation)).fetchone()
+            """, params).fetchone()
             if row is None:
                 return None
             task = self.store._task(db, row["id"], self.generation)

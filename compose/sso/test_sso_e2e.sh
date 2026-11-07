@@ -7,7 +7,7 @@
 # and the API.
 #
 #   compose/sso/test_sso_e2e.sh                  # default images (quay.io for oauth2-proxy)
-#   OAUTH2_PROXY_IMAGE=<mirror>/oauth2-proxy:v7.15.5 compose/sso/test_sso_e2e.sh
+#   OAUTH2_PROXY_IMAGE=<mirror>/oauth2-proxy:v7.15.6 compose/sso/test_sso_e2e.sh
 #
 # Checks: anonymous pages redirect to sign-in, anonymous API calls get 401, forged
 # X-Forwarded-* headers never reach the API, the sign-in flow (PKCE) succeeds, the API sees the

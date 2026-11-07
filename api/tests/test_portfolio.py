@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from tests.test_bu_access import CONFIG, ROLE_MAP, policy_file
+from tests.test_bu_access import CONFIG, FINANCE, ROLE_MAP, policy_file
 from tests.test_security import UNTRUSTED_PEER, build, proxy, who
 
 PORTFOLIO = "/api/v1/portfolio"
@@ -113,6 +113,76 @@ def test_proxy_scope_and_validation_fail_closed(tmp_path):
     assert response.status_code == 422 and "never-echo" not in response.text
     assert api.get(PORTFOLIO + "?user=alice", headers=GLOBAL).status_code == 422
     assert api.get(PORTFOLIO + "?lang=fr&lang=en", headers=GLOBAL).status_code == 422
+
+
+def test_strategic_summary_drops_ids_and_metadata_outside_participating_units(tmp_path):
+    api = make_client(tmp_path)
+    goal_id, project_id = identifier(81), identifier(82)
+    goal = post(api, "/goals", GLOBAL, {
+        "id": goal_id, "title": "Reduce handling time", "description": "PRIVATE_GOAL", "due_on": "2026-12-31",
+        "metric": "PRIVATE_METRIC", "target": 23, "current": 24, "direction": "at_least",
+    })
+    project_row = post(api, "/projects", GLOBAL, {
+        "id": project_id, "goal_id": goal_id, "title": "Improve handover", "description": "PRIVATE_PROJECT",
+        "owner_unit": OPS, "unit_ids": [OPS, REL], "state": "active", "usecase_id": "uc-01",
+    })
+    task(api, 80, project_id, description="PRIVATE_TASK")
+    for reader in (FINANCE, who("readonly", "global-read")):
+        for params in ({}, {"limit": 1}):
+            response = api.get(PORTFOLIO, headers=reader, params=params)
+            assert response.status_code == 200, response.text
+            body = response.json()
+            assert body["goals"] == [{"title": goal["title"], "status": "met"}]
+            assert body["projects"] == [{"title": project_row["title"], "state": "active"}]
+            assert body["tasks"] == []
+            assert all(value not in response.text for value in
+                       ("PRIVATE_", goal_id, project_id, "uc-01", OPS, REL, "2026-12-31"))
+        denied = api.put(f"{PORTFOLIO}/projects/{project_id}", headers=reader,
+                         json={"revision": 1, "description": "Probe"})
+        assert denied.status_code == 403
+    for reader in (GLOBAL, OPS_PERSON, REL_LEAD):
+        body = snapshot(api, reader)
+        assert body["goals"] == [goal] and body["projects"] == [project_row]
+
+
+def test_task_cursor_survives_restart_and_updates_and_keeps_agent_context(tmp_path):
+    api = make_client(tmp_path)
+    first_project = project(api, 81)
+    second_project = project(api, 85)
+    foreign_project = project(api, 91, REL)
+    own = [task(api, index, project_id, execution="read_only")
+           for index, project_id in ((83, first_project), (87, second_project), (88, second_project))]
+    for row in own:
+        assign(api, row, OPS_MANAGER, "agent", "ag-doc-research")
+    task(api, 93, foreign_project, REL)
+    task(api, 84, first_project)
+    params = {"limit": 1}
+    first = api.get(PORTFOLIO, headers=OPS_AGENT, params=params).json()
+    assert [row["id"] for row in first["tasks"]] == [own[2]["id"]]
+    assert {row["id"] for row in first["projects"]} == {first_project, second_project}
+    assert len(first["goals"]) == 2 and first["truncated"]
+    cursor = first["next_cursor"]
+    assert api.get(PORTFOLIO, headers=OPS_PERSON, params={**params, "cursor": cursor}).json() == {
+        "detail": "invalid_portfolio_cursor"}
+    for changed in ({"limit": 2, "cursor": cursor}, {"cursor": cursor},
+                    {"limit": 1, "cursor": ("b" if cursor[0] == "a" else "a") + cursor[1:]}):
+        response = api.get(PORTFOLIO, headers=OPS_AGENT, params=changed)
+        assert response.status_code == 422 and response.json() == {"detail": "invalid_portfolio_cursor"}
+    assert api.get(PORTFOLIO + "?limit=1&limit=2", headers=OPS_AGENT).status_code == 422
+    # Both mutation and insertion occur ahead of the boundary by update time.
+    row = next(item for item in snapshot(api, OPS_AGENT)["tasks"] if item["id"] == own[0]["id"])
+    command(api, row, OPS_AGENT, "start")
+    added = task(api, 89, second_project, execution="read_only")
+    assign(api, added, OPS_MANAGER, "agent", "ag-doc-research")
+    api = make_client(tmp_path)
+    for expected in reversed(own[:2]):
+        response = api.get(PORTFOLIO, headers=OPS_AGENT, params={**params, "cursor": cursor})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert [row["id"] for row in body["tasks"]] == [expected["id"]]
+        assert {row["id"] for row in body["projects"]} == {first_project, second_project}
+        cursor = body["next_cursor"]
+    assert cursor is None and body["tasks"][0]["history"][0]["action"] == "start"
 
 
 @pytest.mark.parametrize("invalid", [

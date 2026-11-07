@@ -285,6 +285,7 @@ Endpoints (JSON, read endpoints are GET):
 | Path | Content |
 |---|---|
 | `/api/v1/health` | `{status, mode, sources:{prometheus,grafana,langfuse,litellm,qdrant}: bool, security:{...} (same object as meta.security)}`; public (probes) |
+| `/api/v1/ready` | Public local readiness probe. HTTP 200 with `{"status":"ready"}` or HTTP 503 with `{"status":"not_ready"}`. |
 | `/api/v1/snapshot` | everything the dashboard needs, schema in section 4 |
 | `/api/v1/registry` and `/api/v1/registry/{id}` | evaluated use cases (risk tier, flags, controls) |
 | `POST /api/v1/registry/{id}/model-version` | see 2.4 |
@@ -309,7 +310,7 @@ Endpoints (JSON, read endpoints are GET):
 Security rules: no endpoint returns a secret; the Grafana proxy only issues GET to an
 allow-list of Grafana paths and only runs named queries; request bodies are size-limited;
 CORS is closed by default (same origin through the edge proxy).
-Permissions: `read` (viewer and above, every GET except `/health`, which stays public),
+The `/health` and `/ready` probes are public. The `read` permission covers the general read endpoints (viewer and above),
 `spaces.write` and `placement.decide` (editor), `registry.model_version` (maintainer),
 `registry.assessment` and `audit.read` (approver); `admin` has all. Refusals are `{detail, code}`
 with `code` in `untrusted_source | unauthenticated | invalid_identity | forbidden |

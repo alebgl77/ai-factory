@@ -101,6 +101,22 @@ class StateStore:
         self._mutex = threading.RLock()
         self.audit = AuditLog(self.dir)
 
+    def ready(self) -> bool:
+        """Check the local state path without taking a lock, opening the log or writing."""
+        directory = self.dir.absolute()
+        try:
+            while not directory.exists() and not directory.is_symlink() and directory != directory.parent:
+                directory = directory.parent
+            if not directory.is_dir() or not os.access(directory, os.R_OK | os.W_OK | os.X_OK):
+                return False
+            for path in (self.dir / ".state.lock", self.audit.path):
+                if path.is_symlink() or (path.exists() and (not path.is_file()
+                                                           or not os.access(path, os.R_OK | os.W_OK))):
+                    return False
+        except OSError:
+            return False
+        return True
+
     # -- low level ---------------------------------------------------------------------------
     def _ensure_dir(self) -> None:
         try:
@@ -210,12 +226,12 @@ class StateStore:
         except OSError:
             return {}
 
-    def audit_records(self) -> list[dict[str, Any]]:
+    def audit_page(self, *, offset: int, limit: int, action: str | None) -> tuple[int, list[dict[str, Any]]]:
         if not self.audit.path.exists():
-            return []
+            return 0, []
         try:
             with self._locked():
-                return self.audit.records()
+                return self.audit.page(offset=offset, limit=limit, action=action)
         except OSError as exc:
             raise StateError("audit read failed") from exc
 

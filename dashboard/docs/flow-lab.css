@@ -44,7 +44,7 @@ p { color: var(--dim); }
 nav { display: flex; gap: 1.2rem; }
 nav a { color: var(--dim); font-size: .9rem; }
 .sealed { color: var(--mint); border: 1px solid var(--line); border-radius: 2rem; padding: .23rem .7rem; font-size: .77rem; white-space: nowrap; }
-.sealed span { width: .47rem; height: .47rem; display: inline-block; background: var(--mint); border-radius: 50%; }
+.sealed [aria-hidden] { width: .47rem; height: .47rem; display: inline-block; background: var(--mint); border-radius: 50%; }
 .hero { padding: 3rem 0 2.2rem; position: relative; overflow: hidden; }
 .hero::after {
   content: ""; position: absolute; right: 0; top: 1.5rem; bottom: 1rem; width: 34%;
@@ -163,6 +163,7 @@ details > summary { cursor: pointer; color: var(--mint); font-weight: 640; }
   #scenario-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 610px) {
+  .run, .preset, .secondary { min-height: 44px; }
   .shell { width: calc(100% - 1.3rem); }
   .top-row { min-height: 3.4rem; gap: .45rem; flex-wrap: wrap; padding: .35rem 0; }
   .top-row nav { order: 3; width: 100%; justify-content: space-between; gap: .25rem; }

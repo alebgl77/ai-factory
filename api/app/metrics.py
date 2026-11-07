@@ -114,6 +114,13 @@ DENIAL_REASONS = ("untrusted_source", "unauthenticated", "invalid_identity", "fo
                   "rate_limited")
 
 
+def portfolio_queue_age(seconds: float) -> GaugeMetricFamily:
+    gauge = GaugeMetricFamily("factory_portfolio_runner_oldest_queue_age_seconds",
+                              "Seconds since the last update of the oldest claimable Portfolio runner task")
+    gauge.add_metric([], seconds)
+    return gauge
+
+
 class _SnapshotCollector(Collector):
     def __init__(self, snap: dict[str, Any], extra: list[Metric] | None = None) -> None:
         self.snap = snap

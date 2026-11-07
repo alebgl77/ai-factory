@@ -110,6 +110,12 @@ La création renvoie HTTP 201 avec le post-it, sa catégorie, ses tags, sa date 
 | `POST /api/v1/ideas` | Déposer une idée avec `title`, `text` et, si nécessaire, `bu`. |
 | `POST /api/v1/ideas/{id}/trace?lang=fr` | Consulter la provenance privée avec le corps JSON `{}` et une session d’administrateur humain global. Réponse `Cache-Control: no-store`. |
 
+Le paramètre `q` recherche dans tout l’historique visible, sans tenir compte des accents ni
+de la casse. Les paramètres `category` et `bu` filtrent respectivement le thème et l’origine.
+`limit` accepte de 1 à 120 résultats. Utilisez `next_cursor` dans `cursor` avec la même
+identité, la même langue et les mêmes filtres. `next_cursor` vaut `null` à la dernière page.
+Les notes ajoutées depuis la première page apparaissent lors d’une nouvelle recherche.
+
 La réponse de traçabilité contient `id`, `bu`, `kind` (`employee`, `agent` ou `admin`),
 `subject` (le sujet SSO exact), `created_at` (la date du dépôt) et `view` (le contexte
 d’accès courant). Pour une idée absente, une BU retirée ou une ancienne idée sans provenance,
@@ -127,10 +133,19 @@ Lorsque vous retirez la liaison d’un compte de service, retirez-le aussi des g
 lui donnent un rôle de lecture dans la Factory. Tant que le compte reste lié comme agent, la
 révocation de son évaluation bloque son accès au mur.
 
-Le mur affiche les 120 idées les plus récentes. Les idées plus anciennes restent en base
-jusqu’à intervention de l’exploitant. Le stockage accepte 2 000 idées par origine de dépôt, BU
-ou Administration Factory. Une fois le plafond atteint, l’API refuse les nouveaux dépôts.
-Sauvegardez `ideas.sqlite3` avec le volume privé de l’API.
+Le mur affiche jusqu’à 120 idées à la fois. **Charger plus d’idées** permet de parcourir les
+résultats anciens. Le stockage accepte 2 000 idées par origine de dépôt, BU ou Administration
+Factory. Au plafond, le dépôt renvoie HTTP 409 avec `ideas_capacity_reached`.
+
+Pour libérer de la place, planifiez une fenêtre d’archivage avec l’exploitant et le responsable
+de l’origine concernée. Arrêtez les écritures en arrêtant l’API et sauvegardez le volume privé,
+dont `ideas.sqlite3`. Vérifiez la restauration de cette sauvegarde avant toute suppression.
+Sur la base active, activez `PRAGMA foreign_keys = ON` avant d’ouvrir une transaction SQLite.
+Sélectionnez les identifiants à archiver pour la seule origine approuvée (`bu`) et vérifiez-les
+avant de supprimer ces lignes d’`ideas`. La suppression retire aussi les lignes associées
+d’`idea_origins`. Vérifiez le périmètre et le nombre de suppressions avant de valider, puis
+redémarrez l’API et repartez de la première page. Conservez la sauvegarde sous les mêmes
+contrôles d’accès que la base active, car elle contient la provenance privée.
 
 Pour la recette, déposez une idée synthétique depuis une BU et vérifiez sa présence dans le
 mur d’une autre BU. Essayez ensuite de créer une idée dans cette seconde BU avec l’identité

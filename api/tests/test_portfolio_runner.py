@@ -73,8 +73,8 @@ def completion(content=WORK, finish="stop"):
                                      "usage": {"prompt_tokens": 17, "completion_tokens": 9}})
 
 
-def queue(api, *, technical=False, automatic=False, execution="read_only"):
-    project_id = project(api, unit=REL)
+def queue(api, *, technical=False, automatic=False, execution="read_only", index=1):
+    project_id = project(api, index, unit=REL)
     parent = task(api, 1, project_id, REL, execution=execution, technical=technical)
     parent = assign(api, parent, REL_MANAGER, "agent", "ag-support-supervisor")
     if parent["autonomy"] == "human_review":
@@ -166,6 +166,37 @@ def test_single_claim_grant_and_technical_review(setup):
     assert reviewed["status"] == "review" and len(calls) == 1
     command(api, reviewed, REL_ARCHITECT, "approve")
     assert row(api, child["id"])["status"] == "done"
+
+
+def test_queue_age_uses_claimable_tasks_and_exposes_only_an_aggregate(setup):
+    build, _, clock = setup
+
+    def unexpected_request(_):
+        pytest.fail("A metrics scrape must never dispatch inference")
+
+    api = build(unexpected_request, mode="human_review")
+    engine = api.app.state.portfolio_engine
+    name = "factory_portfolio_runner_oldest_queue_age_seconds"
+
+    def age_sample():
+        result = api.get("/metrics")
+        assert result.status_code == 200
+        return next(line for line in result.text.splitlines() if line.startswith(name))
+
+    assert age_sample() == f"{name} 0.0"
+    assert not engine.store.path.exists()
+    _, child = queue(api, execution="prepare")
+    clock[0] += dt.timedelta(minutes=5)
+    assert age_sample() == f"{name} 0.0"  # an unapproved child is ineligible
+    command(api, child, REL_MANAGER, "authorize_start")
+    clock[0] += dt.timedelta(seconds=40)
+    _, newer = queue(api, index=3)
+    clock[0] += dt.timedelta(seconds=2)
+    assert age_sample() == f"{name} 42.0"
+    assert row(api, child["id"])["status"] == row(api, newer["id"])["status"] == "ready"
+    claim = engine._select()
+    assert claim is not None and claim.task["id"] == child["id"]
+    assert age_sample() == f"{name} 2.0"
 
 
 @pytest.mark.parametrize("cancel", [False, True])

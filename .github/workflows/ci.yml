@@ -71,11 +71,35 @@ jobs:
 
   config:
     name: Configuration, snapshot and visual pack
+    # This required check also reports applicable stack and SSO failures.
+    needs: [stack-changes, smoke, sso-e2e]
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
     steps:
+      - name: Require applicable disposable deployment tests
+        env:
+          DETECTION_RESULT: ${{ needs.stack-changes.result }}
+          DETECTION_CHANGED: ${{ needs.stack-changes.outputs.changed }}
+          SMOKE_RESULT: ${{ needs.smoke.result }}
+          SSO_RESULT: ${{ needs.sso-e2e.result }}
+          EXPECT_SMOKE: ${{ (github.event_name == 'workflow_dispatch' && inputs.smoke) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
+          EXPECT_SSO: ${{ (github.event_name == 'workflow_dispatch' && inputs.sso_e2e) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
+        run: |
+          if [[ "$DETECTION_RESULT" != success || ! "$DETECTION_CHANGED" =~ ^(true|false)$ ]]; then
+            echo "::error::Unable to determine which deployment tests are required"
+            exit 1
+          fi
+          if [[ "$EXPECT_SMOKE" == true && "$SMOKE_RESULT" != success ]]; then
+            echo "::error::Full-stack smoke and persistence test did not pass"
+            exit 1
+          fi
+          if [[ "$EXPECT_SSO" == true && "$SSO_RESULT" != success ]]; then
+            echo "::error::Single sign-on end-to-end test did not pass"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -91,6 +115,8 @@ jobs:
         run: python -m pytest -q tests/assets
       - name: Production configuration preflight
         run: python -m pytest -q tests/security/test_production_preflight.py
+      - name: Immutable release inventory and Compose overlay
+        run: python -m pytest -q tests/deployment
 
   licenses:
     name: Licenses (MIT compatibility)
@@ -261,10 +287,28 @@ jobs:
       - name: Mobile Companion and QR handoff
         run: node tests/e2e/companion.mjs
 
+  stack-changes:
+    name: Detect deployment changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # compare the merge result or pushed range, without GitHub's path-filter limit
+          persist-credentials: false
+      - id: detect
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: bash .github/scripts/detect_stack_changes.sh "$BASE" >> "$GITHUB_OUTPUT"
+
   smoke:
     name: Full stack (smoke test, sim profile)
-    if: github.event_name == 'workflow_dispatch' && inputs.smoke
-    needs: [compose]
+    if: (github.event_name == 'workflow_dispatch' && inputs.smoke) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true')
+    needs: [compose, stack-changes]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -274,11 +318,15 @@ jobs:
         with:
           persist-credentials: false
       - run: cp .env.example .env
-      - run: scripts/smoke_stack.sh --down
+      - name: Disposable full stack and PostgreSQL persistence after recreation
+        env:
+          COMPOSE_PROJECT_NAME: factory-ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: scripts/smoke_stack.sh --down --verify-persistence
 
   sso-e2e:
     name: Single sign-on (end-to-end, sso profile)
-    if: github.event_name == 'workflow_dispatch' && inputs.sso_e2e
+    if: (github.event_name == 'workflow_dispatch' && inputs.sso_e2e) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true')
+    needs: [compose, stack-changes]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

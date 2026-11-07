@@ -9,6 +9,7 @@ let chromium;
 try { ({ chromium } = await import('playwright')); } catch { ({ chromium } = createRequire(import.meta.url)('playwright')); }
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const sources = new Map([
+  'assets/factory-demo-decision.js',
   'companion/index.html', 'companion/companion.css', 'companion/companion.js', 'companion/demo.js',
   'companion/handoff.css', 'companion/handoff.js', 'companion/vendor/qrcode.js',
   'companion/fonts/fonts.css', 'companion/fonts/Geist-Variable.woff2', 'companion/fonts/GeistMono-Variable.woff2',
@@ -136,6 +137,14 @@ try {
   assert.deepEqual(demoRequests, []);
   assert.deepEqual(errors, []);
 
+  for (const selection of ['demo_case=DEMO-105&demo_revision=1', 'demo_case=DEMO-104&demo_revision=2',
+    'demo_case=DEMO-104', 'demo_case=DEMO-104&demo_revision=1&demo_revision=2']) {
+    await demo.goto(`${file.href}?lang=en&${selection}`);
+    await demo.locator('#cases button').first().waitFor();
+    assert.equal(await demo.locator('#case-detail').isVisible(), false);
+    assert.equal(await demo.locator('#cases button[aria-current]').count(), 0);
+  }
+
   const workshop = await context.newPage();
   await workshop.setViewportSize({ width: 320, height: 700 });
   const external = [];
@@ -204,7 +213,7 @@ try {
     if (url.pathname.endsWith('/chat')) return route.fulfill({ json: { answer: '<b>Advice</b>', source: 'local', escalated: false } });
     return route.fulfill({ status: 404 });
   });
-  await protectedPage.goto('https://factory.test/project/companion/index.html?lang=en');
+  await protectedPage.goto('https://factory.test/project/companion/index.html?lang=en&demo_case=DEMO-104&demo_revision=1');
   await protectedPage.getByText('Workspace unavailable').first().waitFor();
   await protectedPage.getByText(/Sign in with an authorized identity/).waitFor();
   assert.equal(await protectedPage.getByRole('button', { name: 'Agent conversation' }).isEnabled(), false);

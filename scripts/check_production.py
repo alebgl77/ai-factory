@@ -15,7 +15,8 @@ IDENTITY_SERVICES = {"edge", "api", "oauth2-proxy"}
 EDGE_PORTS = {(80, "tcp"), (443, "tcp"), (443, "udp"), (3001, "tcp"), (3002, "tcp")}
 DEMO_SERVICES = {"mock-llm", "traffic", "gpu-sim"}
 GPU_SERVICES = {"vllm-local", "vllm-embed"}
-OPENAI_LOCAL_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
+OPENAI_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
+VPS_HTTP_BASE = "http://ollama-vps:11434/v1"
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7",
 ))
@@ -77,6 +78,57 @@ def _http_url(value):
 def _https_url(value):
     url = _http_url(value)
     return url is not None and url.scheme == "https" and _hostname(url.hostname)
+
+
+def _https_provider_base(value):
+    url = _http_url(value)
+    if url is None or url.scheme != "https":
+        return False
+    host = url.hostname
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if len(host) > 253 or not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                                      for label in host.split(".")):
+            return False
+        authority = host
+    else:
+        authority = f"[{host}]" if address.version == 6 else host
+    return url.netloc.lower() == (authority if url.port is None else f"{authority}:{url.port}")
+
+
+def _private_ollama(services, networks, project):
+    gateway = services["litellm"]
+    ollama = _object(services.get("ollama-vps"))
+    factory = _object(networks.get("factory"))
+    attached = _object(gateway.get("networks"))
+    ollama_networks = _object(ollama.get("networks"))
+    if (not isinstance(project, str) or not project or factory.get("internal") is not True
+            or "factory" not in attached or "factory" not in ollama_networks
+            or gateway.get("extra_hosts") or ollama.get("ports")):
+        return False
+    # External or custom networks can host peers and aliases absent from this Compose model.
+    managed = attached.keys() | ollama_networks.keys()
+    network_names = {f"{project}_{key}" for key in managed}
+    for key in managed:
+        network = _object(networks.get(key))
+        if (network.get("name") != f"{project}_{key}" or network.get("external") not in (None, False)
+                or network.get("driver") not in (None, "bridge") or network.get("driver_opts")
+                or network.get("attachable")):
+            return False
+    if any(_value(_object(networks[key]), "name") in network_names for key in networks.keys() - managed):
+        return False
+    # A Compose peer cannot also claim the name on a network visible to the gateway.
+    for name, service in services.items():
+        if name == "ollama-vps":
+            continue
+        peer_networks = _object(service.get("networks"))
+        for network in attached.keys() & peer_networks.keys():
+            aliases = _object(peer_networks[network]).get("aliases") or []
+            if (not isinstance(aliases, list) or "ollama-vps" in aliases
+                    or "ollama-vps" in (service.get("hostname"), service.get("container_name"))):
+                return False
+    return True
 
 
 def _gpu_dns_name(value):
@@ -255,6 +307,8 @@ def production_errors(config, *, private_gpu_hosts=()):
             or not {"C3", "C4"}.issubset(part.strip().upper() for part in
                                          _value(gateway, "FACTORY_SENSITIVE_CLASSES").split(","))):
         errors.append("Enable blocking LiteLLM guardrails, PII redaction and sensitive routing for C3 and C4.")
+    if "LITELLM_LOG" in gateway and _value(gateway, "LITELLM_LOG").upper() not in {"WARNING", "ERROR", "CRITICAL"}:
+        errors.append("Set LITELLM_LOG to WARNING, ERROR or CRITICAL for strict LiteLLM inference.")
     if (_value(gateway, "FACTORY_DEMO_MODE") != "never"
             or _value(gateway, "FACTORY_GATEWAY_POLICY") != "/run/factory-gateway/policy.json"
             or _value(gateway, "FACTORY_GATEWAY_REGISTRY") != "/factory-usecases"
@@ -266,13 +320,23 @@ def production_errors(config, *, private_gpu_hosts=()):
             or gateway.get("FACTORY_LOCAL_ALIASES", "chat-sensitive,embed-default")
             != "chat-sensitive,embed-default"):
         errors.append("Keep the shipped LiteLLM sensitive and local alias allowlists for production.")
+    if not _https_provider_base(_value(gateway, "CLOUD_API_BASE")):
+        errors.append("Set CLOUD_API_BASE to an HTTPS provider URL without credentials, a query or a fragment.")
+    vps_base = _value(gateway, "VPS_API_BASE")
+    if not (_https_provider_base(vps_base) or (vps_base == VPS_HTTP_BASE
+            and _private_ollama(services, _object(config.get("networks")), config.get("name")))):
+        errors.append("Set VPS_API_BASE to HTTPS or the unpublished Compose ollama-vps service on the factory network.")
     for key in ("LOCAL_API_BASE", "LOCAL_EMBED_API_BASE"):
         if not _local_gpu_url(_value(gateway, key), services, private_gpu_hosts):
             errors.append(f"Set {key} to an active local GPU service, a private IP or an approved private GPU DNS host.")
     for key in ("LOCAL_CHAT_MODEL", "LOCAL_EMBED_MODEL"):
         model = _value(gateway, key)
-        if len(model) > 256 or not OPENAI_LOCAL_MODEL.fullmatch(model):
+        if len(model) > 256 or not OPENAI_MODEL.fullmatch(model):
             errors.append(f"Set {key} to an explicit openai/ model name for the private GPU endpoint.")
+    for key in ("CLOUD_CHAT_MODEL", "CLOUD_SMALL_MODEL", "VPS_CHAT_MODEL"):
+        model = _value(gateway, key)
+        if len(model) > 256 or not OPENAI_MODEL.fullmatch(model):
+            errors.append(f"Set {key} to an explicit openai/ model name for the strict provider transport.")
 
     ports = services["edge"].get("ports", [])
     if not isinstance(ports, list) or not all(_port_allowed(port) for port in ports):

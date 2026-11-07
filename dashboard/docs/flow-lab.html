@@ -11,67 +11,67 @@
   <script defer src="./flow-lab.js"></script>
 </head>
 <body>
-  <a class="skip" href="#atelier">Aller à l’atelier</a>
+  <a class="skip" href="#atelier" data-en="Skip to the workbench">Aller à l’atelier</a>
   <header class="top">
     <div class="shell top-row">
-      <a class="brand" href="../index.html?lang=fr">AI FACTORY <span>R&amp;D</span></a>
-      <nav aria-label="Navigation du laboratoire"><a href="#atelier">Topologie</a><a href="#injection">Injection</a><a href="#historique">Historique</a></nav>
-      <span class="sealed"><span aria-hidden="true"></span> Hors réseau</span>
+      <a class="brand" id="dashboard-link" href="../index.html?lang=fr">AI FACTORY <span>R&amp;D</span></a>
+      <nav aria-label="Navigation du laboratoire" data-en-label="Lab navigation"><a href="#atelier" data-en="Topology">Topologie</a><a href="#injection" data-en="Injection">Injection</a><a href="#historique" data-en="History">Historique</a></nav>
+      <span class="sealed"><span aria-hidden="true"></span> <span class="sealed-label" data-en="Offline">Hors réseau</span></span>
     </div>
   </header>
   <main class="shell">
     <section class="hero" aria-labelledby="titre-lab">
-      <p class="eyebrow">Banc d’essai / Scénarios synthétiques</p>
-      <h1 id="titre-lab">Laboratoire de flux <em>IA</em></h1>
-      <p>Assemblez une topologie, injectez un lot fictif et suivez son trajet. Comparez le routage, les blocages, les tokens et le coût estimé.</p>
+      <p class="eyebrow" data-en="Test bench / Synthetic scenarios">Banc d’essai / Scénarios synthétiques</p>
+      <h1 id="titre-lab"><span data-en="AI Flow">Laboratoire de flux</span> <em data-en="Lab">IA</em></h1>
+      <p data-en="Build a topology, inject a synthetic batch and follow its path. Compare routing, policy blocks, token counts and estimated costs.">Assemblez une topologie, injectez un lot fictif et suivez son trajet. Comparez le routage, les blocages, les tokens et le coût estimé.</p>
       <ul class="meta">
-        <li>01 · Construire</li><li>02 · Injecter</li><li>03 · Comparer</li>
+        <li data-en="01 · Build">01 · Construire</li><li data-en="02 · Inject">02 · Injecter</li><li data-en="03 · Compare">03 · Comparer</li>
       </ul>
     </section>
     <noscript><p class="notice">Le moteur de simulation a besoin de JavaScript. Il s’exécute dans cette page, sans connexion à des modèles ou à des services.</p></noscript>
 
     <section id="atelier" aria-labelledby="titre-atelier">
       <div class="section-head">
-        <div><p class="eyebrow">01 / Atelier</p><h2 id="titre-atelier">Topologie</h2></div>
-        <button id="reset-topology" type="button" class="secondary">Charger l’exemple</button>
+        <div><p class="eyebrow" data-en="01 / Workbench">01 / Atelier</p><h2 id="titre-atelier" data-en="Topology">Topologie</h2></div>
+        <button id="reset-topology" type="button" class="secondary" data-en="Load the example">Charger l’exemple</button>
       </div>
       <div class="workbench">
         <aside class="panel palette" aria-labelledby="palette-title">
-          <h3 id="palette-title">Composants</h3>
-          <p>Ajoutez un nœud au canevas.</p>
+          <h3 id="palette-title" data-en="Components">Composants</h3>
+          <p data-en="Add a node to the canvas.">Ajoutez un nœud au canevas.</p>
           <div id="palette" class="palette-list"></div>
         </aside>
         <div class="panel canvas-panel">
           <div class="canvas-head">
-            <h3>Canevas</h3><span id="topology-count" class="mono"></span>
+            <h3 data-en="Canvas">Canevas</h3><span id="topology-count" class="mono"></span>
           </div>
-          <div class="canvas-scroll" tabindex="0" role="region" aria-label="Canevas de topologie défilable">
+          <div class="canvas-scroll" tabindex="0" role="region" aria-label="Canevas de topologie défilable" data-en-label="Scrollable topology canvas">
             <div class="canvas">
               <svg id="paths" viewBox="0 0 1000 440" preserveAspectRatio="none" aria-hidden="true"></svg>
-              <div id="nodes" class="nodes" aria-label="Nœuds de la topologie"></div>
+              <div id="nodes" class="nodes" aria-label="Nœuds de la topologie" data-en-label="Topology nodes"></div>
             </div>
           </div>
-          <div class="legend" aria-label="Types de liens">
-            <span><i aria-hidden="true"></i> Défaut</span>
+          <div class="legend" aria-label="Types de liens" data-en-label="Connection types">
+            <span><i aria-hidden="true"></i> <span data-en="Default">Défaut</span></span>
             <span><i class="restricted" aria-hidden="true"></i> C3/C4</span>
-            <span><i class="fallback" aria-hidden="true"></i> Repli</span>
-            <span><i class="taken" aria-hidden="true"></i> Trajet simulé</span>
+            <span><i class="fallback" aria-hidden="true"></i> <span data-en="Fallback">Repli</span></span>
+            <span><i class="taken" aria-hidden="true"></i> <span data-en="Simulated path">Trajet simulé</span></span>
           </div>
         </div>
         <aside class="panel inspector" aria-labelledby="inspector-title">
-          <h3 id="inspector-title" tabindex="-1">Inspecteur</h3>
+          <h3 id="inspector-title" tabindex="-1" data-en="Inspector">Inspecteur</h3>
           <div id="inspector"></div>
         </aside>
       </div>
       <div class="panel connections">
         <div>
-          <h3>Relier les nœuds</h3>
-          <p>Les contrôles sont utilisables au clavier.</p>
+          <h3 data-en="Connect nodes">Relier les nœuds</h3>
+          <p data-en="The controls support keyboard navigation.">Les contrôles sont utilisables au clavier.</p>
           <form id="edge-form">
-            <label for="edge-from">Départ <select id="edge-from" required></select></label>
-            <label for="edge-to">Arrivée <select id="edge-to" required></select></label>
+            <label for="edge-from"><span data-en="From">Départ</span> <select id="edge-from" required></select></label>
+            <label for="edge-to"><span data-en="To">Arrivée</span> <select id="edge-to" required></select></label>
             <label for="edge-route">Route <select id="edge-route" required></select></label>
-            <button type="submit" class="secondary">Relier</button>
+            <button type="submit" class="secondary" data-en="Connect">Relier</button>
           </form>
         </div>
         <details>
@@ -83,61 +83,61 @@
     </section>
 
     <section id="injection" aria-labelledby="titre-injection">
-      <div class="section-head"><div><p class="eyebrow">02 / Exécution</p><h2 id="titre-injection">Injecter un scénario</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow" data-en="02 / Execution">02 / Exécution</p><h2 id="titre-injection" data-en="Inject a scenario">Injecter un scénario</h2></div></div>
       <div class="panel scenario">
-        <div class="preset-row" aria-label="Scénarios prédéfinis">
-          <button type="button" class="preset" data-preset="nominal">Nominal C2</button>
-          <button type="button" class="preset" data-preset="restricted">Données sensibles C4</button>
-          <button type="button" class="preset" data-preset="fault">Panne du modèle distant</button>
+        <div class="preset-row" aria-label="Scénarios prédéfinis" data-en-label="Scenario presets">
+          <button type="button" class="preset" data-preset="nominal" data-en="Standard C2">Nominal C2</button>
+          <button type="button" class="preset" data-preset="restricted" data-en="Restricted C4 data">Données sensibles C4</button>
+          <button type="button" class="preset" data-preset="fault" data-en="Remote model outage">Panne du modèle distant</button>
         </div>
         <form id="scenario-form">
           <label for="classification">Classification <select id="classification" name="classification">
-            <option value="1">C1 · Public</option><option value="2" selected>C2 · Interne</option>
-            <option value="3">C3 · Sensible</option><option value="4">C4 · Restreint</option>
+            <option value="1">C1 · Public</option><option value="2" selected data-en="C2 · Internal">C2 · Interne</option>
+            <option value="3" data-en="C3 · Sensitive">C3 · Sensible</option><option value="4" data-en="C4 · Restricted">C4 · Restreint</option>
           </select></label>
-          <label for="requests">Nombre de demandes <input id="requests" type="number" min="1" max="5000" value="100" required></label>
-          <label for="input-tokens">Tokens d’entrée / demande <input id="input-tokens" type="number" min="1" max="8192" value="600" required></label>
-          <label for="output-tokens">Tokens de sortie / modèle <input id="output-tokens" type="number" min="1" max="4096" value="220" required></label>
-          <label for="fault">Panne simulée <select id="fault">
-            <option value="none">Aucune</option><option value="cpu">Modèle CPU local</option>
-            <option value="gpu">Modèle GPU local</option><option value="remote">Modèle distant</option>
+          <label for="requests"><span data-en="Number of requests">Nombre de demandes</span> <input id="requests" type="number" min="1" max="5000" value="100" required></label>
+          <label for="input-tokens"><span data-en="Input tokens / request">Tokens d’entrée / demande</span> <input id="input-tokens" type="number" min="1" max="8192" value="600" required></label>
+          <label for="output-tokens"><span data-en="Output tokens / model">Tokens de sortie / modèle</span> <input id="output-tokens" type="number" min="1" max="4096" value="220" required></label>
+          <label for="fault"><span data-en="Simulated outage">Panne simulée</span> <select id="fault">
+            <option value="none" data-en="None">Aucune</option><option value="cpu" data-en="Local CPU model">Modèle CPU local</option>
+            <option value="gpu" data-en="Local GPU model">Modèle GPU local</option><option value="remote" data-en="Remote model">Modèle distant</option>
           </select></label>
-          <button type="submit" class="run">Simuler le lot</button>
+          <button type="submit" class="run" data-en="Simulate the batch">Simuler le lot</button>
         </form>
         <p id="run-status" class="status" role="status" aria-live="polite"></p>
       </div>
       <div id="results" class="result-grid">
         <article class="panel metrics">
-          <div class="result-head"><h3>Mesures estimées</h3><span id="outcome" class="outcome"></span></div>
+          <div class="result-head"><h3 data-en="Estimated metrics">Mesures estimées</h3><span id="outcome" class="outcome"></span></div>
           <dl id="metric-list"></dl>
           <p id="model-split" class="model-split"></p>
         </article>
         <article class="panel timeline">
-          <h3>Trajet et contrôles</h3>
+          <h3 data-en="Path and checks">Trajet et contrôles</h3>
           <ol id="steps"></ol>
           <ul id="warnings" class="warnings"></ul>
         </article>
       </div>
       <details class="method panel">
-        <summary>Méthode de calcul et règles de routage</summary>
+        <summary data-en="Calculation method and routing rules">Méthode de calcul et règles de routage</summary>
         <ul>
-          <li>Chaque demande d’un lot partage le même scénario. Les compteurs et le coût sont multipliés par le nombre de demandes.</li>
-          <li>Pour C3/C4, un routeur privilégie la liaison sensible si elle existe. Un modèle distant simulé bloque toujours ces classes, même si aucune passerelle ne précède le modèle.</li>
-          <li>Une panne peut déclencher le repli du dernier routeur. Une tentative indisponible ajoute du délai et ne consomme aucun token. Un blocage de sécurité termine le trajet.</li>
-          <li>La latence représente un trajet unitaire estimé à partir de délais fixes et d’un débit de tokens fictif. Le modèle n’inclut ni attente en file ni concurrence réelle.</li>
-          <li>Un nœud de recherche ajoute des tokens d’entrée simulés. Chaque modèle facture ses propres tokens selon un barème fictif.</li>
+          <li data-en="Every request in a batch shares the same scenario. Counts and costs scale with the number of requests.">Chaque demande d’un lot partage le même scénario. Les compteurs et le coût sont multipliés par le nombre de demandes.</li>
+          <li data-en="For C3/C4 data, a router prefers the sensitive route when one exists. A simulated remote model always blocks those classes, even without an upstream gateway.">Pour C3/C4, un routeur privilégie la liaison sensible si elle existe. Un modèle distant simulé bloque toujours ces classes, même si aucune passerelle ne précède le modèle.</li>
+          <li data-en="An outage may trigger the last router’s fallback. An unavailable attempt adds delay and consumes zero tokens. A policy block ends the path.">Une panne peut déclencher le repli du dernier routeur. Une tentative indisponible ajoute du délai et ne consomme aucun token. Un blocage de sécurité termine le trajet.</li>
+          <li data-en="Latency estimates a single path from fixed delays and a synthetic token rate. The calculation excludes queueing and concurrent requests.">La latence représente un trajet unitaire estimé à partir de délais fixes et d’un débit de tokens fictif. Le modèle n’inclut ni attente en file ni concurrence réelle.</li>
+          <li data-en="A retrieval node adds synthetic input tokens. Each model prices its own tokens at a fictional rate.">Un nœud de recherche ajoute des tokens d’entrée simulés. Chaque modèle facture ses propres tokens selon un barème fictif.</li>
         </ul>
       </details>
     </section>
 
     <section id="historique" aria-labelledby="titre-historique">
-      <div class="section-head"><div><p class="eyebrow">03 / Comparaison</p><h2 id="titre-historique">Historique local</h2></div></div>
+      <div class="section-head"><div><p class="eyebrow" data-en="03 / Comparison">03 / Comparaison</p><h2 id="titre-historique" data-en="Local history">Historique local</h2></div></div>
       <div class="panel history">
-        <p>Le navigateur conserve les douze dernières simulations synthétiques. Le graphe et les paramètres permettent de rejouer chaque lot avec la même version du moteur.</p>
+        <p data-en="Your browser stores the last twelve synthetic simulations. The graph and parameters let you replay each batch with the same engine version.">Le navigateur conserve les douze dernières simulations synthétiques. Le graphe et les paramètres permettent de rejouer chaque lot avec la même version du moteur.</p>
         <p id="storage-status" class="status" role="status"></p>
         <div class="history-controls">
-          <label for="history-pick">Choisir une simulation <select id="history-pick"></select></label>
-          <button id="replay" type="button" class="secondary" disabled>Rejouer la sélection</button>
+          <label for="history-pick"><span data-en="Choose a simulation">Choisir une simulation</span> <select id="history-pick"></select></label>
+          <button id="replay" type="button" class="secondary" data-en="Replay the selection" disabled>Rejouer la sélection</button>
         </div>
         <p id="comparison" class="comparison" aria-live="polite"></p>
         <ol id="history-list"></ol>
@@ -145,8 +145,8 @@
     </section>
   </main>
   <footer class="shell footer">
-    <span>AI FACTORY · LABORATOIRE R&amp;D</span>
-    <a href="./index.html">Guide d’exploitation</a>
+    <span data-en="AI FACTORY · R&amp;D LAB">AI FACTORY · LABORATOIRE R&amp;D</span>
+    <a href="./index.html" data-en="Operations guide (French)">Guide d’exploitation</a>
   </footer>
 </body>
 </html>

@@ -13,6 +13,7 @@
 <script defer src="assets/factory-encounters.js"></script>
 <script defer src="assets/factory-workbench-follow.js"></script>
 <script defer src="assets/factory-activity.js"></script>
+<script defer src="assets/factory-demo-decision.js"></script>
 <script defer src="assets/factory-portfolio.js"></script>
 <script defer src="assets/factory-assist.js"></script>
 <script defer src="assets/factory-ideas.js"></script>
@@ -73,6 +74,11 @@ button svg{pointer-events:none}
 #app{display:grid;height:100vh;height:100dvh;padding:10px;gap:10px;
   grid-template-columns:300px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
   grid-template-areas:"top top" "side stage" "time time"}
+#app[data-demo-entry]{grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"top top" "demo demo" "side stage" "time time"}
+.demo-entry{grid-area:demo;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r)}
+.demo-entry[hidden],.view-ctrl[hidden],.legend[hidden],#fallbackSpaces[hidden]{display:none}
+.demo-entry strong{margin-right:4px;font-size:12px}
+.demo-entry .btn{min-height:44px;display:inline-flex;align-items:center;text-align:center;text-decoration:none}
 
 /* ---------- Top bar ---------- */
 .top{grid-area:top;display:flex;align-items:stretch;gap:12px;min-width:0}
@@ -474,7 +480,7 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 .portfolio-caption h4,.portfolio-detail h4{margin:0;font-size:16px;letter-spacing:-.02em}.portfolio-caption h4 span{margin-inline-end:5px}
 .portfolio-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
 .portfolio-card,.portfolio-task{appearance:none;min-width:0;display:grid;gap:5px;padding:8px 9px;color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:7px;text-align:left;overflow-wrap:anywhere}
-.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-ink)}
+button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-ink)}
 .portfolio-card[aria-pressed="true"],.portfolio-task[aria-pressed="true"]{border-color:var(--portfolio-ink);box-shadow:inset 2px 0 var(--portfolio-ink)}
 .portfolio-card b,.portfolio-task b{font-size:12.5px;line-height:1.3}.portfolio-card small,.portfolio-task small,.portfolio-task span{color:var(--muted);font-size:10.5px;line-height:1.35}
 .portfolio-card progress{appearance:none;height:5px;width:100%;border:0;border-radius:3px;background:var(--border)}
@@ -751,6 +757,13 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
   .timeline{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"day day" "play live" "track track";gap:8px}
   .live-btn{justify-self:end}
 }
+@media (max-width:860px){
+  #app[data-demo-entry]{grid-template-rows:auto auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto;grid-template-areas:"top" "demo" "stage" "time" "side"}
+  .demo-entry strong{width:100%}
+  .demo-entry .btn{flex:1;justify-content:center;white-space:normal}
+  :is(.top-actions,.d-head,.c-head,.help-head) .icon-btn,.timeline .icon-btn{min-width:44px;min-height:44px}
+  :is(.top-actions,.tabs,.c-tabs,.timeline,.actions,.encounter-actions) :is(button,a,select),.srow-btn,#slider{min-height:44px}
+}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
@@ -854,6 +867,13 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
     </div>
   </header>
 
+  <nav class="demo-entry" id="demoEntry" aria-labelledby="demoEntryTitle" hidden>
+    <strong id="demoEntryTitle">Explorer la démo</strong>
+    <button type="button" class="btn primary" id="demoProjects">Projets et tâches</button>
+    <a class="btn ghost" id="demoDecision" href="./companion/index.html?lang=fr">Compagnon de décision</a>
+    <a class="btn ghost" id="demoFlows" href="./docs/flow-lab.html?lang=fr">Laboratoire de flux</a>
+  </nav>
+
   <aside class="side" aria-label="Équipe et espaces">
     <div class="tabs" role="tablist">
       <button role="tab" id="tabTeam" type="button" aria-selected="true" aria-controls="teamPanel">Équipe</button>
@@ -871,8 +891,8 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 
   <main class="stage" id="stage">
     <div class="canvas-host" id="canvasHost"></div>
-    <div class="loading" id="loading" role="status"><div class="spinner"></div><p>Chargement de la scène 3D…</p></div>
-    <div class="view-ctrl" role="toolbar" aria-label="Contrôles de vue">
+    <div class="loading" id="loading"><div class="spinner" aria-hidden="true"></div><p role="status">Chargement de la scène 3D…</p><button type="button" class="btn primary" id="fallbackSpaces" hidden>Consulter les espaces</button></div>
+    <div class="view-ctrl" role="toolbar" aria-label="Contrôles de vue" hidden>
       <button type="button" class="seg" id="view3d" aria-pressed="true">3D</button>
       <button type="button" class="seg" id="viewTop" aria-pressed="false">Plan</button>
       <button type="button" class="seg" id="viewLabels" aria-pressed="true">Étiquettes</button>
@@ -898,7 +918,7 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
         <button type="submit" class="btn primary" id="encounterSend">Répondre</button>
       </form>
     </section>
-    <div class="legend" id="legend" aria-label="Légende">
+    <div class="legend" id="legend" aria-label="Légende" hidden>
       <span data-st="free"><i class="dot"></i>Libre</span>
       <span data-st="busy"><i class="dot"></i>Occupé</span>
       <span data-st="soon"><i class="dot"></i>Arrivée sous 30 min</span>
@@ -1023,22 +1043,16 @@ kbd{font:600 11.5px/1 var(--font);padding:3px 6px;border-radius:6px;border:1px s
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-  window.__bootFail = function () {
-    clearTimeout(window.__bootTimer);
+  window.__bootTimer = setTimeout(function () {
     if (window.__appReady) return;
-    var l = document.getElementById('loading');
-    if (!l) return;
-    l.classList.add('error');
-    l.querySelector('p').textContent = "Impossible de charger Three.js depuis le CDN (cdn.jsdelivr.net). Vérifiez la connexion Internet puis rechargez la page.";
-  };
-  window.__bootTimer = setTimeout(function () { if (!window.__modStarted) window.__bootFail(); }, 15000);
+    var loading = document.getElementById('loading');
+    loading.classList.add('error');
+    loading.querySelector('p').textContent = 'Le tableau de bord ne répond pas. Rechargez la page.';
+  }, 15000);
 </script>
 <div class="peg-ghost" id="pegGhost" hidden aria-hidden="true"><svg viewBox="0 0 24 32" aria-hidden="true"><circle cx="12" cy="6" r="4.6" fill="#f5b301" stroke="#6b4b00" stroke-width="1.3"/><path d="M6.4 13.6c0-2.3 1.9-3.6 5.6-3.6s5.6 1.3 5.6 3.6V20h-2.4v10h-2.3v-8h-1.8v8H8.8V20H6.4z" fill="#f5b301" stroke="#6b4b00" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
-<script type="module" onerror="window.__bootFail && window.__bootFail()">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-window.__modStarted = true;
+<script type="module">
+let THREE, OrbitControls, CSS2DRenderer, CSS2DObject;
 
 /* =====================================================================
    1. Constants & helpers
@@ -1197,11 +1211,10 @@ const weekStart = iso => { const d = parseISO(iso); d.setDate(d.getDate() - ((d.
 const weekDays = iso => { const w = Array.from({ length: 5 }, (_, i) => addDays(weekStart(iso), i)); return w.includes(iso) ? w : [...w, iso]; };
 const byRole = r => EMPLOYEES.filter(e => e.roleId === r);
 
-/* Demo planning, generic for any profile list: today is anchored on the current time so every state is visible live,
-   the other weekdays follow each person's presence pattern; rituals avoid person/room clashes. */
+/* The public sample opens during a populated workday. API-backed demo plans follow the live clock. */
 function demoBookings(date) {
   const n = nowMin();
-  const A = (date === todayISO() && n >= 510 && n <= 1050) ? Math.floor(n / 15) * 15 : 600;
+  const A = (apiReachable() && date === todayISO() && n >= 510 && n <= 1050) ? Math.floor(n / 15) * 15 : DEMO_HOUR;
   const defs = [];
   const ppl = x => [x.e, ...(x.a || [])];
   const clash = (x, d) => defs.some(y => (y.d || date) === d && RES[y.r].type !== 'desk' && y.s < x.f && x.s < y.f && (y.r === x.r || ppl(y).some(q => ppl(x).includes(q))));
@@ -1289,16 +1302,17 @@ const Store = {
     this.dropped = valid && raw ? dropped : 0;
     if (this.dropped && rawIn == null && !Remote.private && !Remote.memoryOnly) { try { localStorage.setItem(STORE_KEY + '.backup', raw); } catch (e) {} }
     this.d = d;
-    const t = todayISO();
-    if (d.meta.autoDemo && d.meta.seededFor !== t) this.reseed(persist);
+    const t = planningAnchorDay();
+    if (d.meta.autoDemo && (d.meta.seededFor !== t || !apiReachable() && d.meta.demoHour !== DEMO_HOUR)) this.reseed(persist);
     else if (persist) this.save({ remote: rawIn == null });
   },
   reseed(persist = true) {
     if (Remote.private) return;
-    const t = todayISO();
+    const t = planningAnchorDay();
     this.d.bookings = demoBookings(t);
     this.d.dayStatus = {};
     this.d.meta = { autoDemo: true, seededFor: t };
+    if (!apiReachable()) this.d.meta.demoHour = DEMO_HOUR;
     this.version++; if (persist) this.save();
   },
   save({ remote = true } = {}) {
@@ -1330,6 +1344,12 @@ const Store = {
 /* Same-origin calls to the aggregation API (through the edge proxy). No token ever lives in the browser. */
 const API_BASE = './api/v1';
 const apiReachable = () => /^https?:$/.test(location.protocol) && document.documentElement.dataset.staticDemo !== '1';
+const DEMO_HOUR = 600;
+function planningAnchorDay() {
+  const today = todayISO(), weekday = parseISO(today).getDay();
+  if (apiReachable() || weekday > 0 && weekday < 6) return today;
+  return addDays(today, weekday === 6 ? 2 : 1);
+}
 async function apiFetch(path, opts = {}, timeoutMs = 4000) {
   const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
@@ -1508,7 +1528,7 @@ const STATUS_HEX = {
 };
 const effTheme = () => document.documentElement.getAttribute('data-theme') || (mqDark.matches ? 'dark' : 'light');
 
-let renderer, labelRenderer, scene, camera, controls, hemi, sun, amb, groundMesh;
+let renderer, labelRenderer, scene, camera, controls, hemi, sun, amb, groundMesh, sceneResize;
 const MATS = {};
 const VIS = {};          // resource id -> visual handles
 const LOCKERS = [];      // locker visuals
@@ -1516,7 +1536,7 @@ const CUT_WALLS = [];    // walls that lower when facing the camera
 const PICK = [];         // raycast targets
 const ZONE_LABELS = [];
 let haloTex, tileTex, screenCanvas, screenCtx, screenTex, lastScreenKey = '';
-const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector2();
+let tmpV, tmpV2;
 
 function mat(key, opts = {}) {
   const m = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, ...opts });
@@ -1687,7 +1707,7 @@ function makeAvatar(parent, x, z, ry) {
 function setAvatar(av, e) {
   const demo = demoPortraits();
   if (faceView?.avatar === av && (e?.id !== faceView.emp || faceView.demo !== demo)) endFaceView(true);
-  syncAvatarPortrait(av, demo ? e?.id : null);
+  syncAvatarPortrait(av, demo && sceneVisualsReady ? e?.id : null);
   if (e) {
     const demoStyle = demo && AV_DEMO_STYLE[e.id];
     av.bodyMat.color.set(e.color);
@@ -1918,7 +1938,7 @@ function buildRack(x, z) {
   }
   RACK = { mats, active: 0 };
 }
-const RACK_HOT = new THREE.Color('#f87171');
+let RACK_HOT;
 function animateRack(time) {
   if (!RACK) return;
   const speed = 0.4 + (RACK.util || 0) / 60;
@@ -2279,7 +2299,7 @@ function initScene() {
   buildPovAssets();
   applyTheme();
 
-  const ro = new ResizeObserver(resize); ro.observe(host);
+  sceneResize = new ResizeObserver(resize); sceneResize.observe(host);
   resize();
   setView('3d', true);
 
@@ -2326,7 +2346,7 @@ function initScene() {
 }
 
 /* ---------- Picking ---------- */
-const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+let raycaster, pointer;
 let pickDirty = false, lastPointer = null, pointerInside = false;
 function setPointer(e) {
   const r = renderer.domElement.getBoundingClientRect();
@@ -2357,7 +2377,7 @@ const FACE_ANGLES = {
   front: [0, 'Front', 'Face'], three: [Math.PI / 4, 'Three-quarter', 'Trois quarts'],
   profile: [Math.PI / 2, 'Profile', 'Profil'], back: [Math.PI, 'Back', 'Dos'],
 };
-const HOME_TARGET = new THREE.Vector3(0.6, 0, 1.2);
+let HOME_TARGET;
 function viewPose(kind) {
   const el = $('canvasHost'), w = el.clientWidth || 1, h = el.clientHeight || 1;
   const vf = THREE.MathUtils.degToRad(camera.fov), aspect = w / h;
@@ -2396,6 +2416,7 @@ function flyTo(p, t, ms = 850) {
   camAnim = { p0: camera.position.clone(), t0: controls.target.clone(), p1: p, t1: t, start: performance.now(), ms };
 }
 function setView(kind, instant = false) {
+  if (!renderer) return;
   encounter.follow = false;
   endFaceView();
   if (POV.active || POV.anim) exitPov(true);
@@ -2477,6 +2498,7 @@ function toggleFaceView() {
 
 let viewShift = 0, viewShiftApplied = -1, viewShiftY = 0, viewShiftYApplied = -1;
 function resize() {
+  if (!renderer) return;
   const el = $('canvasHost'), w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight);
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
   labelRenderer.domElement.classList.toggle('tiny', w < 600);
@@ -2499,9 +2521,17 @@ function applyViewShift() {
 
 /* ---------- Per-frame ---------- */
 const ease = k => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
-let lastFrame = performance.now(), labelsCompact = null, labelsNear = null;
+let lastFrame = performance.now(), labelsCompact = null, labelsNear = null, frameRequest = 0;
+function scheduleSceneFrame() {
+  if (renderer && !document.hidden && !frameRequest) {
+    lastFrame = performance.now();
+    frameRequest = requestAnimationFrame(frame);
+  }
+}
 function frame(now) {
-  requestAnimationFrame(frame);
+  frameRequest = 0;
+  if (!renderer || document.hidden) return;
+  frameRequest = requestAnimationFrame(frame);
   const time = now / 1000, dt = Math.min(0.25, Math.max(0, (now - lastFrame) / 1000));  // sub-stepped moves stay collision-safe at low FPS
   lastFrame = now;
   const inPov = POV.active || !!POV.anim;
@@ -2570,6 +2600,7 @@ function frame(now) {
 // assets/assets.js is a data-URI bundle (works from file:// too). Whatever is missing keeps the
 // procedural look; nothing here may break the scene.
 const ASSET = { load: null, items: {}, img: {}, texMats: [], extras: [], version: '' };
+let sceneVisualsReady = false;
 function loadVisualScript(src) {
   return new Promise(resolve => {
     const s = document.createElement('script');
@@ -3067,7 +3098,7 @@ async function applyAssetPack() {
 // Street View-like: drop the character on the floor, look around by dragging, walk with the keyboard,
 // the on-screen pad or a click on the floor; colliders keep the visitor out of walls and furniture.
 const POV = {
-  active: false, anim: null, pos: new THREE.Vector3(), yaw: 0, pitch: -0.06, eye: 1.6, bob: 0, turnTo: null,
+  active: false, anim: null, pos: null, yaw: 0, pitch: -0.06, eye: 1.6, bob: 0, turnTo: null,
   keys: new Set(), walk: null, saved: null, boxes: [], walls: [], wallMeshes: [], avatars: [], ceiling: null,
   marker: null, cursor: null, drag: null, look: null, target: null, zone: '', hint: '', touch: false,
   lastScan: 0, lastMap: 0, mapBase: null, fovIn: 70, fovOut: 38, ignoreClick: false,
@@ -3086,7 +3117,7 @@ function povZone(x, z) {
   return key === 'shadow' ? shadowTitle() : key || 'Circulation';
 }
 const angDiff = (a, b) => { let d = (a - b) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
-const POV_CENTER = new THREE.Vector2(0, 0), povPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), povHitV = new THREE.Vector3(), povLook = new THREE.Vector3();
+let POV_CENTER, povPlane, povHitV, povLook;
 
 function buildPovAssets() {
   // Colliders: world footprints of what one would bump into (the 0.3–1.5 m band), taken from the scene itself
@@ -3653,7 +3684,7 @@ function drawFactoryScreens() {
 /* ---------- AI Factory analytics ---------- */
 const HEAT = { light: ['#e2e8f0', '#6d28d9'], dark: ['#27314d', '#a78bfa'] };
 const NEUTRAL = { light: '#c3cad6', dark: '#3b4766' }, INTERNAL = { light: '#1e293b', dark: '#e2e8f0' };
-const _h0 = new THREE.Color(), _h1 = new THREE.Color();
+let _h0, _h1;
 const heatHex = (u, theme) => '#' + _h0.set(HEAT[theme][0]).lerp(_h1.set(HEAT[theme][1]), clamp(u, 0, 1)).getHexString();
 function usageOfDay(rid, date) {
   let m = 0;
@@ -3877,8 +3908,25 @@ function setTab(k) {
 }
 /* Help dialog */
 let helpReturn = null;
-function openHelp() { helpReturn = document.activeElement; $('help').hidden = false; $('app').inert = true; $('helpClose').focus(); }
-function closeHelp() { $('help').hidden = true; $('app').inert = false; helpReturn?.focus?.({ preventScroll: true }); helpReturn = null; }
+function openHelp() {
+  if (!$('help').hidden) return;
+  helpReturn = document.activeElement;
+  $('help').hidden = false; $('app').inert = true; $('helpClose').focus();
+}
+function closeHelp() {
+  $('help').hidden = true; $('app').inert = !!$('businessOffline');
+  helpReturn?.focus({ preventScroll: true }); helpReturn = null;
+}
+function trapPanelTab(event, panel) {
+  const focusable = [...panel.querySelectorAll('a[href],button,input,select,textarea,details > summary:first-of-type,[tabindex]')]
+    .filter(el => el.tabIndex >= 0 && !el.matches(':disabled') && !el.closest('[hidden],[inert]') &&
+      el.getClientRects().length && getComputedStyle(el).visibility === 'visible');
+  const first = focusable[0], last = focusable.at(-1), active = document.activeElement;
+  if (!first || !focusable.includes(active) || active === (event.shiftKey ? first : last)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first)?.focus();
+  }
+}
 
 /* =====================================================================
    Console AI Factory (registry, FinOps, LLMOps pipeline, data loop, placement, Agent Ops, catalogue, Skills & R&D, Grafana)
@@ -4090,12 +4138,37 @@ const portfolioSource = () => {
 const portfolioScope = () => portfolioSource() === 'api' ? SNAP.meta.business_view : null;
 
 /* Ideas use the same authenticated snapshot boundary as Portfolio. The fixture is browser-local only. */
+async function readProtectedPages(path, parse, collection, current, viewer, count, cursor) {
+  let data, result, pages = 0;
+  const seen = new Set();
+  do {
+    result = await apiFetch(path(cursor), { mode: 'same-origin', redirect: 'error' }, 5000);
+    if (!current()) return null;
+    const page = result.ok && parse(result.body);
+    if (!page) return { result, restart: !!cursor && result.status === 422 };
+    if (viewer && page.view !== viewer) return { result, data: page, pages: 1, restart: !!cursor };
+    if (!data) {
+      data = page;
+      for (const row of page[collection]) seen.add(row.id);
+    } else {
+      for (const row of page[collection]) {
+        if (!seen.has(row.id)) { data[collection].push(row); seen.add(row.id); }
+      }
+      data.next_cursor = page.next_cursor;
+      data.truncated = page.truncated;
+    }
+    pages++;
+    cursor = page.next_cursor;
+  } while (pages < count && cursor);
+  return { result, data, pages };
+}
+
 const ideasSource = () => {
   const source = portfolioSource();
   return source === 'api' && (!navigator.onLine || !portfolioScope()) ? 'unavailable' : source;
 };
 const ideasScope = () => ideasSource() === 'api' ? portfolioScope() : null;
-const ideasPath = view => `/ideas?${new URLSearchParams({ lang: view.language })}`;
+const ideasPath = (view, params = {}) => `/ideas?${new URLSearchParams({ lang: view.language, ...params })}`;
 const currentIdeas = (view, request) => consoleKey === 'ideas' && ideasView === view && view.pending === request
   && view.source === ideasSource() && view.scope === ideasScope() && view.language === language;
 function renderIdeas() {
@@ -4103,7 +4176,7 @@ function renderIdeas() {
   if (!helper) { $('cBody').replaceChildren(); $('cBody').__html = ''; return; }
   const source = ideasSource(), scope = ideasScope();
   if (!ideasView || ideasView.source !== source || ideasView.scope !== scope || ideasView.language !== language) {
-    ideasView = { source, scope, language, data: null, panel: null, pending: null, viewer: null, message: '',
+    ideasView = { source, scope, language, data: null, panel: null, pending: null, viewer: null, message: '', filters: {}, pages: 1,
       status: source === 'api' ? 'loading' : source === 'demo' ? 'ready' : 'unavailable' };
     if (source === 'demo') {
       ideasView.notes = helper.demoNotes();
@@ -4115,6 +4188,11 @@ function renderIdeas() {
     view.panel = helper.create(language, {
       create: fields => void submitIdea(view, fields),
       trace: id => void traceIdea(view, id),
+      filter: filters => filterIdeas(view, filters),
+      more: () => {
+        if (view !== ideasView || view.pending || !view.data?.next_cursor) return;
+        void readIdeas(view, view.data.next_cursor);
+      },
       closeTrace: () => {
         if (view !== ideasView || !view.trace) return;
         view.trace = null; renderConsole();
@@ -4132,6 +4210,7 @@ function renderIdeas() {
 }
 function failIdeas(view, status) {
   view.pending = null; view.data = null; view.panel = null; view.viewer = null; view.message = ''; view.trace = null;
+  view.filters = {}; view.filtering = false; view.pages = 1;
   view.status = status === 401 || status === 403 ? 'denied' : 'error';
   renderConsole();
 }
@@ -4141,20 +4220,46 @@ function ideaPosted(note, saved = true) {
     : ui(`Idea shown for this visit · ${category}`, `Idée affichée pour cette visite · ${category}`);
 }
 async function loadIdeas(view, request, note) {
-  const result = await apiFetch(ideasPath(view), { mode: 'same-origin', redirect: 'error' }, 5000);
-  if (!currentIdeas(view, request)) return;
-  const data = result.ok && window.FactoryIdeas.parse(result.body);
+  const filters = view.filters;
+  const path = cursor => ideasPath(view, cursor ? { ...filters, cursor } : filters);
+  const loaded = await readProtectedPages(path, window.FactoryIdeas.parse, 'items', () => currentIdeas(view, request),
+    view.viewer, request.cursor ? 1 : view.pages, request.cursor);
+  if (!loaded || !currentIdeas(view, request)) return;
+  const { data, result, restart, pages } = loaded;
+  const changed = data && view.viewer !== null && view.viewer !== data.view;
+  if (restart || changed && Object.keys(filters).length) {
+    view.pending = null; view.data = null; view.viewer = null; view.filtering = false; view.trace = null;
+    view.panel = null; view.message = ''; view.completed = null; view.filters = {}; view.pages = 1;
+    view.status = 'loading'; renderConsole(); return;
+  }
   if (!data) { failIdeas(view, result.status); return; }
-  const changed = view.viewer !== null && view.viewer !== data.view;
   if (changed) { view.panel = null; view.message = ''; view.completed = null; }
+  if (request.cursor) {
+    const seen = new Set(view.data.items.map(row => row.id));
+    data.items = [...view.data.items, ...data.items.filter(row => !seen.has(row.id))];
+  }
+  view.pages = request.cursor ? view.pages + pages : pages;
   if (changed || !data.permissions.trace || !data.items.some(row => row.id === view.trace?.id)) view.trace = null;
-  view.pending = null; view.viewer = data.view; view.data = data; view.status = 'ready';
+  view.pending = null; view.filtering = false; view.viewer = data.view; view.data = data; view.status = 'ready';
   if (note && !changed) { view.message = ideaPosted(note); view.completed = {}; }
   renderConsole();
 }
-function readIdeas(view) {
-  const request = {}; view.pending = request;
+function readIdeas(view, cursor) {
+  const request = { cursor }; view.pending = request;
+  if (cursor) renderConsole();
   return loadIdeas(view, request);
+}
+function filterIdeas(view, filters) {
+  if (view !== ideasView || view.pending?.write || view.source !== 'api') return;
+  const next = Object.fromEntries(Object.entries(filters).filter(([, value]) => value));
+  if (JSON.stringify(next) === JSON.stringify(view.filters)) return;
+  const request = {};
+  view.filters = next; view.pending = request; view.filtering = true; view.message = ''; view.trace = null; view.pages = 1;
+  clearTimeout(view.filterTimer);
+  view.filterTimer = setTimeout(() => {
+    if (currentIdeas(view, request)) void loadIdeas(view, request);
+  }, 160);
+  renderConsole();
 }
 async function traceIdea(view, id) {
   if (view !== ideasView || view.source !== 'api' || !view.data?.permissions.trace
@@ -4184,10 +4289,10 @@ async function submitIdea(view, fields) {
     renderConsole();
     return;
   }
-  const request = {}; view.pending = request; view.message = ''; renderConsole();
+  const request = { write: true }; view.pending = request; view.message = ''; renderConsole();
   const result = await apiFetch(ideasPath(view), { method: 'POST', body: JSON.stringify(fields), mode: 'same-origin', redirect: 'error' }, 5000);
   if (!currentIdeas(view, request)) return;
-  if (result.ok && helper.idea(result.body)) { await loadIdeas(view, request, result.body); return; }
+  if (result.ok && helper.idea(result.body)) { view.filters = {}; view.pages = 1; await loadIdeas(view, request, result.body); return; }
   if (result.status === 401 || result.status === 403 || result.status === 0 || result.status >= 500) {
     failIdeas(view, result.status); return;
   }
@@ -4378,8 +4483,8 @@ async function applyAssist(view) {
 
 function preparePortfolio() {
   const source = portfolioSource(), scope = portfolioScope();
-  if (!portfolioView || portfolioView.source !== source || portfolioView.scope !== scope) {
-    portfolioView = { source, scope, status: source === 'api' ? 'loading' : source, filters: {}, data: null,
+  if (!portfolioView || portfolioView.source !== source || portfolioView.scope !== scope || portfolioView.language !== language) {
+    portfolioView = { source, scope, language, status: source === 'api' ? 'loading' : source, filters: {}, data: null, pages: 1,
       selected: '', editor: null, pending: null, viewer: null, message: null, usecases: [], expanded: new Set(), usageExpanded: false };
   }
   const view = portfolioView;
@@ -4392,21 +4497,36 @@ function preparePortfolio() {
   return view;
 }
 const currentPortfolio = (view, request) => consoleKey === 'portfolio' && portfolioView === view &&
-  view.pending === request && view.source === portfolioSource() && view.scope === portfolioScope();
+  view.pending === request && view.source === portfolioSource() && view.scope === portfolioScope() && view.language === language;
 function resetPortfolioSelection(view) {
-  view.filters = {}; view.selected = ''; view.editor = null; view.message = null; view.expanded.clear(); view.usageExpanded = false;
+  view.filters = {}; view.selected = ''; view.editor = null; view.message = null; view.expanded.clear(); view.usageExpanded = false; view.pages = 1;
 }
-async function readPortfolio(view) {
+async function readPortfolio(view, cursor) {
   const request = {}; view.pending = request;
-  const result = await apiFetch(`/portfolio?lang=${language}`, { mode: 'same-origin', redirect: 'error' }, 5000);
-  if (!currentPortfolio(view, request)) return;
+  const path = next => {
+    const params = new URLSearchParams({ lang: view.language, limit: '50' });
+    if (next) params.set('cursor', next);
+    return `/portfolio?${params}`;
+  };
+  if (cursor) renderConsole();
+  const loaded = await readProtectedPages(path, window.FactoryPortfolio.parse, 'tasks', () => currentPortfolio(view, request),
+    view.viewer, cursor ? 1 : view.pages, cursor);
+  if (!loaded || !currentPortfolio(view, request)) return;
+  const { result, data, restart, pages } = loaded;
   view.pending = null;
-  const data = result.ok ? window.FactoryPortfolio.parse(result.body) : null;
+  if (restart) {
+    resetPortfolioSelection(view); reloadPortfolio(view); return;
+  }
   if (!data) {
     view.status = result.status === 401 || result.status === 403 ? 'blocked' : result.status === 404 ? 'unavailable' : 'error';
     view.data = null; view.viewer = null; resetPortfolioSelection(view);
   } else {
     if (view.viewer && data.view !== view.viewer) resetPortfolioSelection(view);
+    if (cursor) {
+      const seen = new Set(view.data.tasks.map(row => row.id));
+      data.tasks = [...view.data.tasks, ...data.tasks.filter(row => !seen.has(row.id))];
+    }
+    view.pages = cursor ? view.pages + pages : pages;
     view.data = data; view.viewer = data.view; view.status = 'ready';
     const { editor, filters } = view;
     if (editor?.key && !data[editor.collection].some(row => row.id === editor.key && row.revision === editor.revision)) {
@@ -4424,7 +4544,7 @@ async function readPortfolio(view) {
   if (restoreDetailFocus) $('cBody').querySelector('[data-portfolio-detail]')?.focus({ preventScroll: true });
 }
 function reloadPortfolio(view) {
-  view.data = null; view.status = 'loading'; view.pending = null; renderConsole();
+  view.data = null; view.status = 'loading'; view.pending = null; view.pages = 1; renderConsole();
 }
 function portfolioChoice(raw) {
   if (!portfolioView?.data || portfolioView.pending) return;
@@ -4444,6 +4564,9 @@ function portfolioAction(raw) {
   const view = portfolioView;
   if (!view || view.pending) return;
   if (raw === 'retry' && view.source === 'api') { reloadPortfolio(view); return; }
+  if (raw === 'more' && view.source === 'api' && view.data?.next_cursor) {
+    void readPortfolio(view, view.data.next_cursor); return;
+  }
   if (!view.data) return;
   view.message = null;
   if (raw === 'cancel') view.editor = null;
@@ -4792,7 +4915,9 @@ function secSkills() {
     <section class="csec"><h3>Sessions Skills Lab à venir <em>${ses.length}</em></h3><ul class="clist">${ses.slice(0, 8).map(s => { const m = (k.modules || []).find(x => x.id === s.module);
       return `<li><b>${esc(m?.title || s.title || s.module)}</b><span>${esc(shortDate(s.date))} · ${esc(s.start)}–${esc(s.end)} · formateur ${esc(personName(s.trainer))} · ${(s.attendees || []).length} inscrit(s)${m?.format ? ' · ' + esc(m.format) : ''}</span><button type="button" class="mini" data-cact="s1" data-date="${esc(s.date)}">Voir la salle</button></li>`; }).join('') || '<li>Aucune session.</li>'}</ul></section>
     <section class="csec"><h3>R&D Lab · ${num(r.gpu_hours_month)} h GPU / mois</h3>
-      <a class="mini" href="./docs/flow-lab.html?lang=${language}">${ui('Open the Flow Lab', 'Ouvrir le laboratoire de flux')}</a>
+      ${language === 'en'
+        ? '<a class="mini" href="./docs/flow-lab.html?lang=en">Open the Flow Lab</a>'
+        : '<a class="mini" href="./docs/flow-lab.html?lang=fr">Ouvrir le laboratoire de flux</a>'}
       <div class="kanban">${stages.map(([id, l]) => `<div><h4>${l}</h4>${(r.experiments || []).filter(e => e.stage === id).map(e => `<div class="kcard"><b>${esc(e.title)}</b><small>${esc(e.id)} · ${esc(personName(e.owner))}${e.linked_usecase ? ' · ' + ucCode(e.linked_usecase) : ''} · ${num(e.gpu_hours)} h GPU</small>${e.transfer_criteria ? `<small>Transfert si : ${esc(e.transfer_criteria)}</small>` : ''}</div>`).join('')}</div>`).join('')}</div></section>`;
 }
 function secGrafana() {
@@ -4890,6 +5015,14 @@ function setLanguage(lang) {
   $('exerciseLaunch').textContent = ui('UC-04 workshop', 'Atelier UC-04');
   $('exercise2d').textContent = ui('2D workshop', 'Atelier 2D');
   $('exercise2d').href = `exercise/index.html?lang=${lang}`;
+  $('demoEntryTitle').textContent = ui('Explore the demo', 'Explorer la démo');
+  $('demoProjects').textContent = ui('Projects and tasks', 'Projets et tâches');
+  $('demoDecision').textContent = ui('Decision Companion', 'Compagnon de décision');
+  $('demoDecision').href = language === 'en' ? './companion/index.html?lang=en' : './companion/index.html?lang=fr';
+  $('demoFlows').textContent = ui('AI Flow Lab', 'Laboratoire de flux');
+  $('demoFlows').href = language === 'en' ? './docs/flow-lab.html?lang=en' : './docs/flow-lab.html?lang=fr';
+  $('fallbackSpaces').textContent = ui('Browse spaces', 'Consulter les espaces');
+  if ($('loading').dataset.scene) renderSceneStatus($('loading').dataset.scene);
   $('tabTeam').textContent = ui('Team', 'Équipe');
   $('tabSpaces').textContent = ui('Spaces', 'Espaces');
   $('tabPilot').textContent = ui('Planning', 'Pilotage');
@@ -5544,6 +5677,12 @@ function goLive() {
   S.live = true;
   changeDay(todayISO(), nowMin());
 }
+function openInitialDay() {
+  if (apiReachable() || !Store.d.meta.autoDemo) { goLive(); return; }
+  stopPlay();
+  S.live = false;
+  changeDay(planningAnchorDay(), DEMO_HOUR);
+}
 function setTime(t) { S.live = false; S.t = clamp(t, DAY_START, DAY_END); refresh(); }
 let playTimer = null;
 function stopPlay() { if (playTimer) clearInterval(playTimer); playTimer = null; S.playing = false; }
@@ -5562,6 +5701,11 @@ function togglePlay() {
 }
 
 function bindUI() {
+  $('demoProjects').addEventListener('click', () => openConsole('portfolio'));
+  $('fallbackSpaces').addEventListener('click', () => {
+    setTab('spaces');
+    $('tabSpaces').focus();
+  });
   bindPov();
   $('languageSelect').addEventListener('change', e => changeLanguage(e.target.value));
   document.addEventListener('factory:exercise-inspect', e => {
@@ -5634,7 +5778,7 @@ function bindUI() {
       ideasView = null;
     }
     if (S.selected) closeDrawer();
-    goLive(); toast('Données de démonstration réinitialisées');
+    openInitialDay(); toast('Données de démonstration réinitialisées');
   });
 
   // Tabs
@@ -5824,9 +5968,14 @@ function bindUI() {
   $('dGantt').addEventListener('click', onDrawerAction);
 
   document.addEventListener('keydown', e => {
-    if (e.target.closest?.('#uc04-dialog')) return;
+    if (e.target.closest?.('dialog[open]')) return;
     if (e.key === 'Escape') { if (!$('help').hidden) closeHelp(); else if (assistView) closeAssist(); else if (consoleKey) closeConsole(); else if (S.selected) closeDrawer(); else if (!$('encounterPanel').hidden) closeEncounter(true); else if (POV.active) exitPov(); return; }
-    if (e.key === 'Tab' && !$('help').hidden) { e.preventDefault(); $('helpClose').focus(); return; }
+    if (e.key === 'Tab') {
+      const panel = !$('help').hidden ? $('help') : assistView ? $('assistHost') : consoleKey ? $('console') :
+        S.selected ? $('drawer') : !$('encounterPanel').hidden ? $('encounterPanel') : null;
+      if (panel) trapPanelTab(e, panel);
+      return;
+    }
     const t = e.target;
     if (e.ctrlKey || e.metaKey || e.altKey || t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || !$('help').hidden || t.closest?.('#assistHost')) return;
     if (POV.active && povKeyDown(e)) return;
@@ -5848,6 +5997,10 @@ function bindUI() {
     if (fn) { e.preventDefault(); fn(); }
   });
   document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      cancelAnimationFrame(frameRequest); frameRequest = 0;
+      POV.keys.clear();
+    } else scheduleSceneFrame();
     closeAssist(false);
     if (consoleKey === 'activity' && activitySource() === 'api') { activityView = null; renderConsole(); }
     if (consoleKey === 'portfolio' && portfolioView?.source === 'api') { portfolioView = null; renderConsole(); }
@@ -5904,7 +6057,7 @@ setInterval(() => {
   if (S.live) {
     const t = todayISO(), m = nowMin();
     if (t !== S.date || Math.floor(m) !== Math.floor(S.t)) {
-      if (t !== S.date && Store.d.meta.autoDemo && Store.d.meta.seededFor !== t) Store.reseed();
+      if (t !== S.date && Store.d.meta.autoDemo && Store.d.meta.seededFor !== planningAnchorDay()) Store.reseed();
       changeDay(t, m);
       return;
     }
@@ -5915,11 +6068,73 @@ setInterval(() => {
 /* =====================================================================
    7. Boot
    ===================================================================== */
+function renderSceneStatus(status) {
+  const loading = $('loading');
+  loading.dataset.scene = status;
+  loading.classList.toggle('done', status === 'ready');
+  loading.classList.toggle('error', status === 'unavailable');
+  loading.querySelector('p').textContent = status === 'unavailable'
+    ? ui('The 3D scene is unavailable. You can still browse the spaces and use the dashboard.', 'La scène 3D est indisponible. Vous pouvez consulter les espaces et utiliser le tableau de bord.')
+    : ui('Loading the 3D scene…', 'Chargement de la scène 3D…');
+  $('fallbackSpaces').hidden = status !== 'unavailable';
+}
+
+async function startScene() {
+  let deadline;
+  try {
+    const modules = Promise.all([
+      import('three'),
+      import('three/addons/controls/OrbitControls.js'),
+      import('three/addons/renderers/CSS2DRenderer.js'),
+    ]);
+    [THREE, { OrbitControls }, { CSS2DRenderer, CSS2DObject }] = await Promise.race([
+      modules,
+      new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Three.js load timed out')), 15000); }),
+    ]);
+    tmpV = new THREE.Vector3(); tmpV2 = new THREE.Vector2();
+    RACK_HOT = new THREE.Color('#f87171');
+    raycaster = new THREE.Raycaster(); pointer = new THREE.Vector2();
+    HOME_TARGET = new THREE.Vector3(0.6, 0, 1.2);
+    POV.pos = new THREE.Vector3(); POV_CENTER = new THREE.Vector2();
+    povPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    povHitV = new THREE.Vector3(); povLook = new THREE.Vector3();
+    _h0 = new THREE.Color(); _h1 = new THREE.Color();
+    initScene();
+    applyLabels();
+    if (snap) updateScene(snap, true);
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+    document.querySelector('.view-ctrl').hidden = false;
+    $('legend').hidden = false;
+    renderSceneStatus('ready');
+    renderEncounterGate();
+    scheduleSceneFrame();
+    const loadVisuals = () => {
+      sceneVisualsReady = true;
+      if (snap) updateScene(snap, true);
+      void applyAssetPack();
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(loadVisuals, { timeout: 1500 });
+    else setTimeout(loadVisuals, 0);
+  } catch (err) {
+    sceneResize?.disconnect();
+    controls?.dispose(); renderer?.dispose();
+    renderer = null; scene = null;
+    for (const id of Object.keys(VIS)) delete VIS[id];
+    $('canvasHost').replaceChildren();
+    renderSceneStatus('unavailable');
+    console.warn('3D scene unavailable:', err.message);
+  } finally {
+    clearTimeout(deadline);
+  }
+}
+
 async function boot() {
   Prefs.load();
   const linked = new URLSearchParams(location.search).get('lang');
   const preferred = [linked, Prefs.p.lang].find(lang => lang === 'en' || lang === 'fr');
   setLanguage(preferred || (navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en'));
+  renderSceneStatus('loading');
   const api = await fetchSnapshot(language);
   // A failed first request cannot establish that this origin is a public demo. Old versions
   // mirrored API reservations locally, so an unverified origin must start in memory only.
@@ -5957,13 +6172,6 @@ async function boot() {
     if (remote) Store.load({ raw: JSON.stringify(remote) });
     else { Store.load(); if (Remote.enabled) Remote.push(); } // demo only: seed the first server copy
   }
-  try { initScene(); }
-  catch (err) {
-    console.error(err);
-    renderer = null;
-    const l = $('loading'); l.classList.add('error');
-    l.querySelector('p').textContent = 'WebGL est indisponible sur ce navigateur : la vue 3D ne peut pas s’afficher. Utilisez l’onglet « Espaces » pour consulter et réserver.';
-  }
   try {
     bindUI();
     applyTheme();
@@ -5971,7 +6179,7 @@ async function boot() {
     S.lens = ['status', 'uc', 'heat'].includes(Prefs.p.lens) ? Prefs.p.lens : 'status';
     for (const b of document.querySelectorAll('[data-lens]')) b.setAttribute('aria-pressed', String(b.dataset.lens === S.lens));
     renderLegend();
-    goLive();
+    openInitialDay();
   } catch (err) {
     console.error(err);
     const l = $('loading'); l.classList.remove('done'); l.classList.add('error');
@@ -5980,12 +6188,10 @@ async function boot() {
     window.__appReady = true; clearTimeout(window.__bootTimer);
     return;
   }
-  if (renderer) {
-    updateScene(snap, true);
-    requestAnimationFrame(frame);
-    $('loading').classList.add('done');
+  if (demoPortraits()) {
+    $('app').dataset.demoEntry = '';
+    $('demoEntry').hidden = false;
   }
-  applyAssetPack();  // optional visual pack, applied progressively
   window.onStoreHealth(Store.ok);
   if (Store.recovered) toast('Données locales illisibles : copie conservée (aiFactoryRef.v2.backup), démo rechargée');
   else if (Store.dropped) toast(`${Store.dropped} référence(s) à un use case ou une activité inconnus retirée(s) · copie conservée (aiFactoryRef.v2.backup)`);
@@ -5996,8 +6202,9 @@ async function boot() {
   window.__appReady = true;
   clearTimeout(window.__bootTimer);
   // Debug / automation hook (read-only use recommended)
-  window.__twin = { pov: { get active() { return POV.active; }, get animating() { return !!POV.anim; }, get pos() { return { x: POV.pos.x, z: POV.pos.z }; }, get yaw() { return POV.yaw; }, get target() { return POV.target; }, get zone() { return POV.zone; }, get boxes() { return POV.boxes.length; }, keys: POV.keys, enter: enterPov, exit: exitPov, blocked: povBlocked, free: povFree }, S, Store, refresh, setView, viewPose, get camera() { return camera; }, get controls() { return controls; }, get renderer() { return renderer; }, VIS, RES, resState, personAt, get UC() { return UC; }, squadsOf, recommendations, setLens, setTab, openConsole, closeConsole, get snap() { return snap; }, get SNAP() { return SNAP; }, get source() { return SNAP_SOURCE; }, get EMPLOYEES() { return EMPLOYEES; } };
+  window.__twin = { pov: { get active() { return POV.active; }, get animating() { return !!POV.anim; }, get pos() { return POV.pos && { x: POV.pos.x, z: POV.pos.z }; }, get yaw() { return POV.yaw; }, get target() { return POV.target; }, get zone() { return POV.zone; }, get boxes() { return POV.boxes.length; }, keys: POV.keys, enter: enterPov, exit: exitPov, blocked: povBlocked, free: povFree }, S, Store, refresh, setView, viewPose, get camera() { return camera; }, get controls() { return controls; }, get renderer() { return renderer; }, VIS, RES, resState, personAt, get UC() { return UC; }, squadsOf, recommendations, setLens, setTab, openConsole, closeConsole, get snap() { return snap; }, get SNAP() { return SNAP; }, get source() { return SNAP_SOURCE; }, get EMPLOYEES() { return EMPLOYEES; } };
   if (hideOnBoot) protectedOffline();
+  requestAnimationFrame(() => setTimeout(startScene, 0));
 }
 boot();
 </script>
