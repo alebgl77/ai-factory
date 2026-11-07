@@ -46,6 +46,74 @@ flowchart LR
     CLI["Sonde CLI en lecture seule"] -. HTTPS .-> Odoo["Partenaires Odoo 19"]
 ```
 
+## Suivre une revue depuis la carte 3D
+
+Dans le tableau de bord protégé, sélectionnez **Suivre le Workbench**, puis **Activer le suivi**.
+La carte utilise l’authentification existante du Workbench par proxy sur la même origine. Si des
+périmètres par BU sont configurés, l’utilisateur doit disposer d’un accès global en lecture au
+Workbench. Des avatars symboliques représentent l’agent et la personne chargée de la revue.
+Ils montrent la demande en cours et l’issue enregistrée pour la révision du dossier. La carte
+reçoit uniquement l’identifiant, la révision et le statut du dossier. Pour consulter la proposition
+et rendre une décision selon votre rôle, ouvrez le **Compagnon de décision**.
+
+Sur le tableau de bord public, **Échanges 3D** propose des scénarios fictifs dont les réponses
+restent dans le navigateur. Le tableau de bord protégé suit le Workbench en lecture seule. La
+configuration existante du Workbench protégé et du proxy suffit.
+
+## Historique du travail et consommation de tokens
+
+Ouvrez **Pilotage → Historique du travail** pour filtrer les exécutions enregistrées par agent ou
+utilisateur. Le tableau de bord statique présente un historique fictif. L’historique protégé
+utilise le proxy d’identité sur la même origine. Chaque utilisateur consulte ses événements
+dans son périmètre BU actuel. Un administrateur dont le rôle vient d’un groupe de confiance
+peut choisir explicitement tous les utilisateurs. Avec une politique BU, ce même groupe doit
+accorder l’accès global. Une consultation globale produit un journal de sécurité avec des
+références pseudonymisées.
+
+`GET /api/v1/activity?days=7&view=own` renvoie jusqu’à 300 événements, du plus récent au plus
+ancien dans la période UTC. Les périodes disponibles sont 7, 30 et 90 jours. Vérifiez
+`truncated` avant d’interpréter les cumuls. `view=all` exige le droit administrateur global.
+Une exécution d’agent porte aussi l’identité vérifiée de l’utilisateur qui l’a initiée ou
+déclarée, de façon à retrouver le même événement avec les deux filtres.
+
+Un éditeur ou administrateur authentifié peut déclarer une exécution instrumentée avec
+`POST /api/v1/activity` au format JSON via le proxy d’identité. Exemple de déclaration :
+
+```json
+{
+  "id": "763fcb2113ee49e481602a88a7ec326bc",
+  "actor_type": "agent",
+  "actor_id": "assistant-documentaire",
+  "unit": "cc-ops",
+  "action": "Synthèse des documents de référence",
+  "started_at": "2026-11-06T10:00:00Z",
+  "finished_at": "2026-11-06T10:00:08Z",
+  "status": "completed",
+  "tokens": {"input": 1200, "output": 400},
+  "supports": [{"kind": "file", "label": "Référence.pdf", "ref": "doc-42"}]
+}
+```
+
+Réutilisez le même identifiant hexadécimal minuscule de 32 caractères et la même BU en cas de
+nouvel essai. Pour le même utilisateur et la même BU, un rejeu identique réussit et un rejeu
+différent renvoie 409. Pour une action d’utilisateur,
+omettez `actor_id`. Le serveur fournit l’identité de l’utilisateur. Omettez `unit` quand aucune
+politique BU ne s’applique ou qu’une seule BU est autorisée en écriture. Les supports sont
+identifiés par un libellé d’affichage et une référence opaque. L’intégration fournit les
+libellés de l’action et des supports. Elle doit fournir des métadonnées d’affichage exemptes
+de prompts, de contenu de document et de secrets. L’API rejette les champs inconnus, les
+chemins et les URL.
+
+Le Workbench protégé journalise les nouvelles décisions. Il journalise aussi les tentatives de
+conseil quand le conseiller local est activé. Avec une politique BU, les intégrations externes
+déclarent leurs exécutions via l’API d’activité. La durée du conseil correspond au temps
+écoulé de l’exécution. Les tokens viennent du
+fournisseur lorsqu’il les communique. La durée et les tokens d’une décision restent inconnus.
+La provenance distingue les exécutions déclarées. Une mesure absente reste inconnue et un
+zéro explicite reste zéro. Le journal mesure des intervalles d’exécution, indépendamment de
+la présence ou du temps de travail humain. Il collecte les nouveaux événements dans le volume
+d’état local.
+
 ## Décisions et conversations
 
 - Les rôles de lecture peuvent consulter les dossiers et l’historique, poser des questions
@@ -85,6 +153,7 @@ Les routes sont relatives à `/api/v1/workbench`. Le navigateur écrit en JSON s
 | Méthode et route | Comportement |
 |---|---|
 | `GET /cases` | Retourne le mode, les capacités de l’utilisateur et les dossiers priorisés avec leur révision et leur empreinte. |
+| `GET /encounters` | Retourne les identifiants, révisions et statuts de 100 dossiers prioritaires au maximum, avec un accès en lecture au Workbench protégé. Ajoutez `?case_id=<id>` pour suivre un dossier même s’il sort de la file prioritaire. |
 | `POST /events` | Reçoit le sous-ensemble CloudEvents 1.0 pris en charge pour `crm.opportunity.won` depuis `crm-sim`. |
 | `POST /cases/{id}/decisions` | Accepte `approve`, `reject` ou `request_changes` avec révision, empreinte et motif. |
 | `GET /cases/{id}/history` | Retourne le reçu, les décisions visibles selon le rôle et le résumé des avis. |

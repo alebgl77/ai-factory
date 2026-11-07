@@ -247,7 +247,9 @@ jobs:
       - name: file:// mode with the embedded demo snapshot
         env:
           THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three
-        run: node tests/e2e/run.mjs
+        run: |
+          node --test tests/e2e/factory-character.test.cjs tests/e2e/factory-encounters.test.cjs tests/e2e/factory-workbench-follow.test.cjs tests/e2e/factory-portrait-model.test.cjs
+          node tests/e2e/run.mjs
       - name: UC-04 workshop in 2D and 3D
         env:
           THREE_VENDOR_DIR: ${{ github.workspace }}/node_modules/three

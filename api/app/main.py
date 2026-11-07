@@ -22,6 +22,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import metrics as metrics_mod
 from . import seclog
+from .activity import ActivityJournal, router as activity_router
 from .i18n import DEFAULT_LANG, msg, normalize_lang
 from .routers import audit, core, grafana, placement, registry, spaces, workbench
 from .routers.shadow_ai import router as shadow_ai_router
@@ -168,6 +169,9 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
 
     for r in (core.router, registry.router, placement.router, grafana.router, spaces.router, audit.router):
         app.include_router(r)
+    if settings.auth_mode == "proxy":
+        app.state.activity = ActivityJournal(settings.state_dir, clock=clock)
+        app.include_router(activity_router)
     if service.bu_policy is not None:
         app.include_router(spaces.recovery_router)
     if settings.workbench_mode != "off":

@@ -7,10 +7,9 @@ Ce document liste les 15 images qui enrichissent le rendu du dashboard 3D, avec 
 son rendu procédural actuel. Les prompts ci-dessous sont en français ; la
 [version anglaise](../ASSETS.md) donne les mêmes prompts en anglais, pour les mêmes fichiers.
 
-Le pack actif contient sept matériaux générés avec ChatGPT. La scène utilise du chêne, de la
-moquette, du béton et du terrazzo pour les sols, du bois et du feutre acoustique pour le mobilier,
-et une surface paysagère pour le parvis. Le sol de l’Observatoire est en terrazzo. Les [empreintes
-des sources et la procédure de reconstruction](../../dashboard/assets/PROVENANCE.md) sont disponibles.
+Le tableau de bord intègre sept matériaux et des portraits à une et quatre vues pour douze
+profils fictifs de démonstration. Le sol de l’Observatoire est en terrazzo. Les [empreintes des
+sources et la procédure de reconstruction](../../dashboard/assets/PROVENANCE.md) sont disponibles.
 
 ## Mode opératoire (≈ 30 min)
 
@@ -24,7 +23,7 @@ des sources et la procédure de reconstruction](../../dashboard/assets/PROVENANC
 4. Déposer les fichiers dans `dashboard/assets/src/`, puis lancer :
    ```bash
    pip install -r scripts/requirements-assets.txt
-   python scripts/build_assets.py            # contrôle, optimise et publie dashboard/assets/assets.js
+   python scripts/build_assets.py --out chemin/vers/construction-visuelle
    python scripts/build_assets.py --check    # liste ce qui manque ou ne respecte pas le format
    ```
 
@@ -33,8 +32,12 @@ Le script :
 - détoure les fonds magenta (`#FF00FF`) quand l'image n'a pas de transparence ;
 - découpe la planche de portraits en 12 avatars ;
 - convertit en WebP ;
-- écrit un bundle `dashboard/assets/assets.js` qui fonctionne aussi hors ligne (`file://`) ;
-- trace la provenance (empreinte SHA-256, générateur, date) dans `dashboard/assets/PROVENANCE.md`.
+- écrit un bundle `assets.js` qui fonctionne aussi hors ligne (`file://`) ;
+- trace la provenance (empreinte SHA-256, générateur, date) dans le `PROVENANCE.md` généré.
+
+Intégrez uniquement les entrées reconstruites dans `dashboard/assets/assets.js`. Conservez
+`camille-turnaround`, intégré séparément de la planche découpée par le script, ainsi que les
+autres atlas à quatre vues dans `dashboard/assets/portrait-atlases.js`.
 
 ## Règles communes
 
@@ -42,11 +45,10 @@ Le script :
   aucun logo existant, aucun texte lisible (sauf mention contraire).
 - **Fond magenta** `#FF00FF` uni pour les éléments à détourer : le script le rend transparent.
   ChatGPT ne garantit pas la transparence native selon le modèle utilisé.
-- **Licence** : par décision de l'auteur, les images du pack visuel sont publiées sous la licence
-  MIT du dépôt, avec leur provenance (SHA-256). Selon les conditions d'utilisation d'OpenAI, les
-  images générées appartiennent à l'utilisateur, qui peut les publier ; point à vérifier dans les
-  conditions en vigueur au moment de la génération. La protection par le droit d'auteur d'une
-  image entièrement générée n'est pas garantie selon les pays (voir [LICENSES.md](LICENSES.md)).
+- L’approbation MIT de l’auteur couvre les sept matériaux listés dans le [dossier de
+  provenance](../../dashboard/assets/PROVENANCE.md). Ce dossier documente aussi les sources des
+  portraits et leur publication avec la démo. La licence du code est décrite dans
+  [LICENSES.md](LICENSES.md).
 
 ## Message de cadrage (à coller en premier)
 
