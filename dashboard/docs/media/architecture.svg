@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1088 848" role="img" aria-labelledby="title description">
+  <title id="title">Architecture du portefeuille AI Factory</title>
+  <desc id="description">GitHub Pages sert une démonstration fictive. Dans l’installation privée, Caddy et le proxy OIDC protègent l’interface et FastAPI sur la même origine. L’API applique la politique de BU et conserve deux bases. Le moteur intégré utilise LiteLLM pour le modèle local. Le Workbench rapproche la décision exacte avec le portefeuille.</desc>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#163144" stroke-width="1"/></pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8Z" fill="#7ee8d5"/></marker>
+    <marker id="review" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#ffcb86"/></marker>
+    <style>
+      .label{font:700 16px Consolas,monospace;letter-spacing:2px;fill:#7ee8d5}.title{font:700 45px Georgia,serif;fill:#f2faf8}.sub{font:17px 'Trebuchet MS',sans-serif;fill:#bbd0dc}.name{font:700 21px 'Trebuchet MS',sans-serif;fill:#f2faf8}.small{font:16px 'Trebuchet MS',sans-serif;fill:#c6d9e4}.tag{font:700 14px Consolas,monospace;letter-spacing:.7px;fill:#b3d4e1}.wire{fill:none;stroke:#7ee8d5;stroke-width:2.5;marker-end:url(#arrow)}.pair{marker-start:url(#arrow)}.amber{fill:none;stroke:#ffcb86;stroke-width:2.5;stroke-dasharray:6 5;marker-end:url(#review)}.box{fill:#112d40;stroke:#42687f;stroke-width:1.5}.accent{stroke:#579d98}.approval{stroke:#aa835a}.public{fill:#172d41;stroke:#58758b}.boundary{fill:#0a2334;fill-opacity:.8;stroke:#50948f;stroke-width:1.5;stroke-dasharray:7 6}
+    </style>
+  </defs>
+  <rect width="1088" height="848" rx="20" fill="#081b2a"/>
+  <rect width="1088" height="848" rx="20" fill="url(#grid)" opacity=".6"/>
+  <path d="M36 112H1052" stroke="#42687f"/>
+  <text class="label" x="46" y="40">AI FACTORY / 01 · ARCHITECTURE LOGIQUE</text>
+  <text class="title" x="44" y="91">Du navigateur à la décision</text>
+  <text class="tag" x="1043" y="39" text-anchor="end">VUE DE CONFIANCE</text>
+
+  <rect class="box public" x="44" y="136" width="310" height="100" rx="10"/>
+  <text class="tag" x="62" y="161">PUBLIC · GITHUB PAGES</text>
+  <text class="name" x="62" y="192">Démo statique</text>
+  <text class="small" x="62" y="217">Three.js · données fictives embarquées</text>
+  <rect class="box accent" x="390" y="136" width="308" height="100" rx="10"/>
+  <text class="tag" x="408" y="161">ACCÈS PRIVÉ</text>
+  <text class="name" x="408" y="192">Navigateur</text>
+  <text class="small" x="408" y="217">Employés, managers, approbateurs</text>
+  <rect class="box" x="734" y="136" width="310" height="100" rx="10"/>
+  <text class="tag" x="752" y="161">IDENTITÉ FÉDÉRÉE</text>
+  <text class="name" x="752" y="192">Fournisseur OIDC</text>
+  <text class="small" x="752" y="217">Sujet stable et groupes vérifiés</text>
+
+  <rect class="boundary" x="35" y="272" width="1018" height="500" rx="14"/>
+  <text class="label" x="60" y="304">INSTALLATION PRIVÉE</text>
+  <path class="wire" d="M544 236V324"/>
+  <path class="wire pair" d="M889 236V265H725V366H698"/>
+  <path class="wire" d="M390 372H322"/>
+  <path class="wire" d="M544 422V468"/>
+  <path class="wire" stroke-dasharray="5 5" d="M698 502H724V372H766"/>
+  <path class="wire pair" d="M390 521H322"/>
+  <path class="wire pair" d="M698 521H766"/>
+  <path class="amber" d="M891 574V617H210V574"/>
+  <path class="wire pair" d="M137 574V655"/>
+  <path class="wire pair" d="M322 703H390"/>
+  <path class="wire pair" d="M698 703H766"/>
+
+  <rect class="box" x="60" y="325" width="262" height="97" rx="10"/>
+  <text class="name" x="77" y="356">Interface web</text>
+  <text class="small" x="77" y="384">Carte 3D et console Pilotage</text>
+  <text class="small" x="77" y="407">Compagnon de décision</text>
+  <rect class="box accent" x="390" y="325" width="308" height="97" rx="10"/>
+  <text class="name" x="408" y="356">Caddy + proxy SSO</text>
+  <text class="small" x="408" y="384">TLS · identité en provenance du proxy</text>
+  <text class="small" x="408" y="407">Interface et API sur la même origine</text>
+  <rect class="box" x="766" y="325" width="262" height="97" rx="10"/>
+  <text class="name" x="784" y="356">Politique de BU</text>
+  <text class="small" x="784" y="384">Un même groupe réunit</text>
+  <text class="small" x="784" y="407">le rôle et le périmètre</text>
+
+  <rect class="box accent" x="60" y="469" width="262" height="105" rx="10"/>
+  <text class="tag" x="77" y="493">SQLITE · BASE PRIVÉE</text>
+  <text class="name" x="77" y="523">Portefeuille</text>
+  <text class="small" x="77" y="549">Tâches, preuves et tentatives</text>
+  <rect class="box accent" x="390" y="469" width="308" height="105" rx="10"/>
+  <text class="tag" x="408" y="493">CONTRÔLE D’ACCÈS</text>
+  <text class="name" x="408" y="523">API FastAPI</text>
+  <text class="small" x="408" y="549">Identité, droits et révisions</text>
+  <rect class="box approval" x="766" y="469" width="262" height="105" rx="10"/>
+  <text class="tag" x="784" y="493">SQLITE · BASE PRIVÉE</text>
+  <text class="name" x="784" y="523">Workbench</text>
+  <text class="small" x="784" y="549">Dossiers, décisions et audit</text>
+  <rect x="298" y="603" width="480" height="28" rx="14" fill="#302c29" stroke="#aa835a"/>
+  <text x="538" y="622" fill="#ffdcad" text-anchor="middle" font-family="'Trebuchet MS', sans-serif" font-size="15">Décision rapprochée · dossier + révision + empreinte exacts</text>
+
+  <rect class="box accent" x="60" y="656" width="262" height="93" rx="10"/>
+  <text class="name" x="77" y="687">Moteur intégré</text>
+  <text class="small" x="77" y="714">Lecture / préparation</text>
+  <text class="small" x="77" y="735">Résultat, durée et tokens</text>
+  <rect class="box accent" x="390" y="656" width="308" height="93" rx="10"/>
+  <text class="name" x="408" y="687">LiteLLM · routage strict</text>
+  <text class="small" x="408" y="714">Clé virtuelle du cas d’usage</text>
+  <text class="small" x="408" y="735">Alias chat-sensitive</text>
+  <rect class="box accent" x="766" y="656" width="262" height="93" rx="10"/>
+  <text class="name" x="784" y="687">Modèle local</text>
+  <text class="small" x="784" y="714">Réseau privé</text>
+  <text class="small" x="784" y="735">Réponse texte bornée</text>
+
+  <path d="M47 805H81" stroke="#7ee8d5" stroke-width="2.5"/>
+  <text class="small" x="92" y="810">Flux applicatif</text>
+  <path d="M260 805H294" stroke="#ffcb86" stroke-dasharray="6 5" stroke-width="2.5"/>
+  <text class="small" x="306" y="810">Retour de décision</text>
+  <text class="tag" x="1042" y="810" text-anchor="end">PÉRIMÈTRE · PORTEFEUILLE</text>
+</svg>

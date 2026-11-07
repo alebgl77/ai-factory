@@ -1,0 +1,238 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Architecture technique, plan 2D des dix zones et matrice des rôles et périmètres d’AI Factory.">
+  <title>Atlas d’architecture · AI Factory</title>
+  <link rel="stylesheet" href="./architecture.css">
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
+  <header class="masthead">
+    <a class="brand" href="../index.html?lang=fr"><span class="mark" aria-hidden="true">AF</span> AI Factory</a>
+    <a class="back" href="./index.html">Guide d’exploitation <span aria-hidden="true">↗</span></a>
+  </header>
+  <main id="contenu" tabindex="-1">
+    <div class="hero">
+      <p class="eyebrow">Atlas technique · 01 à 05</p>
+      <h1>Architecture<br>de la Factory</h1>
+      <p class="lead">Du poste de travail au modèle local, suivez une tâche, les autorisations qui l’encadrent et le retour de la décision humaine.</p>
+      <dl class="hero-stats">
+        <div><dt>10</dt><dd>zones sur le plan</dd></div>
+        <div><dt>4</dt><dd>périmètres BU d’exemple</dd></div>
+        <div><dt>2</dt><dd>bases d’état distinctes</dd></div>
+      </dl>
+    </div>
+
+    <nav class="section-nav" aria-label="Sections de l’atlas">
+      <ol>
+        <li><a href="#architecture"><span>01</span> Architecture</a></li>
+        <li><a href="#plan-2d"><span>02</span> Plan 2D</a></li>
+        <li><a href="#matrice-bu"><span>03</span> BU et rôles</a></li>
+        <li><a href="#parcours"><span>04</span> Parcours</a></li>
+        <li><a href="#securite"><span>05</span> Sécurité</a></li>
+      </ol>
+    </nav>
+
+    <section id="architecture" aria-labelledby="titre-architecture">
+      <p class="eyebrow">01 · Vue logique</p>
+      <h2 id="titre-architecture">Services et frontières de confiance</h2>
+      <p>GitHub Pages sert une démonstration statique alimentée par des données fictives. Dans l’installation privée, Caddy sert l’interface et l’API sur la même origine HTTPS. Le proxy SSO vérifie l’identité auprès du fournisseur OIDC. FastAPI applique ensuite les droits de l’utilisateur ou du compte de service à la BU du cas d’usage.</p>
+      <figure>
+        <a class="plate" href="./media/architecture.svg" aria-label="Agrandir le schéma d’architecture logique"><img src="./media/architecture.svg" width="1088" height="848" alt="Flux public et privé du navigateur vers l’API, le portefeuille, le Workbench et le modèle local." fetchpriority="high" decoding="async"></a>
+        <figcaption>Vue de la chaîne portefeuille. <a href="./media/architecture.svg">Ouvrir le schéma en plein écran</a>.</figcaption>
+      </figure>
+      <div class="split">
+        <article class="panel">
+          <h3>Identité et données</h3>
+          <p>Le sujet stable vient du proxy approuvé. Un même groupe SSO doit fournir le droit fonctionnel et le périmètre BU. L’API filtre les cas, les profils, les réservations et les résultats avant de les présenter. Les dossiers Workbench et les tâches du portefeuille résident dans deux bases SQLite privées.</p>
+        </article>
+        <article class="panel">
+          <h3>Exécution et retour</h3>
+          <p>Le moteur intégré prend en charge les sous-tâches éligibles et appelle le modèle local via LiteLLM en mode strict. Les tokens du fournisseur sont conservés lorsqu’ils sont disponibles. Le rapprochement Workbench s’exécute en arrière-plan, indépendamment du moteur intégré.</p>
+        </article>
+      </div>
+      <ul class="sources" aria-label="Sources de l’architecture">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/compose/caddy/Caddyfile">Entrée Caddy</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/security.py">Contrôle d’accès API</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/portfolio_runner.py">Moteur intégré</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/portfolio_workbench.py">Rapprochement Workbench</a></li>
+      </ul>
+    </section>
+
+    <section id="plan-2d" aria-labelledby="titre-plan">
+      <p class="eyebrow">02 · Vue de dessus</p>
+      <h2 id="titre-plan">Plan 2D et fonctions des espaces</h2>
+      <p>Le plan reprend à l’échelle les emprises de repérage de la scène 3D. Le haut correspond à l’axe <code>−Z</code>. Les espaces servent de repères dans la démo. Les accès de l’installation privée découlent de la <a href="#matrice-bu">politique BU</a>.</p>
+      <figure>
+        <a class="plate" href="./media/floor-plan.svg" aria-label="Agrandir le plan 2D de la Factory"><img src="./media/floor-plan.svg" width="1066" height="903" alt="Vue de dessus des dix zones numérotées avec la War Room et le lab en haut, le Delivery floor au centre et l’entrée en bas à droite." loading="lazy" decoding="async"></a>
+        <figcaption>Emprises de la scène et ressources associées. <a href="./media/floor-plan.svg">Agrandir le plan</a> ou <a href="../index.html?lang=fr">ouvrir la Factory</a> et choisir <strong>Plan</strong>.</figcaption>
+      </figure>
+
+      <nav class="room-nav" aria-label="Accès direct aux fiches des zones">
+        <ol>
+          <li><a href="#zone-war"><span>01</span> War Room</a></li>
+          <li><a href="#zone-lab"><span>02</span> Lab sécurisé</a></li>
+          <li><a href="#zone-cafe"><span>03</span> Coin café</a></li>
+          <li><a href="#zone-observatoire"><span>04</span> Observatoire</a></li>
+          <li><a href="#zone-rd"><span>05</span> R&amp;D Lab</a></li>
+          <li><a href="#zone-skills"><span>06</span> Skills Lab</a></li>
+          <li><a href="#zone-agent-ops"><span>07</span> Agent Ops</a></li>
+          <li><a href="#zone-delivery"><span>08</span> Delivery floor</a></li>
+          <li><a href="#zone-pods"><span>09</span> Focus pods</a></li>
+          <li><a href="#zone-entree"><span>10</span> Entrée et casiers</a></li>
+        </ol>
+      </nav>
+
+      <div class="room-grid">
+        <details id="zone-war" open>
+          <summary><span>01</span> War Room</summary>
+          <p><strong>Fonction.</strong> Revue et arbitrage, salle <code>R1</code> avec six places et visioconférence.</p>
+          <p><strong>Actions.</strong> Réserver une revue et lancer une simulation d’échange. Pour une décision auditée du portefeuille privé, ouvrir le Compagnon avec l’habilitation Workbench.</p>
+        </details>
+        <details id="zone-lab" open>
+          <summary><span>02</span> Lab sécurisé</summary>
+          <p><strong>Fonction.</strong> Postes de travail pour les données sensibles. Les labels de la scène <code>L1</code> et <code>L2</code> correspondent aux identifiants <code>B1</code> et <code>B2</code> de la politique.</p>
+          <p><strong>Actions.</strong> Réserver un poste autorisé pour un cas C3/C4. Dans la politique d’exemple, <code>B1</code> relève des RH et <code>B2</code> de la Finance.</p>
+        </details>
+        <details id="zone-cafe">
+          <summary><span>03</span> Coin café</summary>
+          <p><strong>Fonction.</strong> Repère de collaboration informelle dans la scène. <strong>Action.</strong> Traverser la zone en mode Visite.</p>
+        </details>
+        <details id="zone-observatoire">
+          <summary><span>04</span> Observatoire des usages IA</summary>
+          <p><strong>Fonction.</strong> Vue agrégée des usages IA et suivi des outils et alternatives.</p>
+          <p><strong>Actions.</strong> Ouvrir depuis la zone 3D ou le menu <strong>Usine</strong>. En privé, les groupes dédiés filtrent les équipes par BU. Les décisions et imports exigent une habilitation globale explicite dans le groupe concerné.</p>
+        </details>
+        <details id="zone-rd">
+          <summary><span>05</span> R&amp;D Lab</summary>
+          <p><strong>Fonction.</strong> Exploration sur les bancs <code>X1</code> à <code>X3</code>. <strong>Actions.</strong> Inspecter un banc et consulter la vue « Skills Lab &amp; R&amp;D Lab » dans la console.</p>
+        </details>
+        <details id="zone-skills">
+          <summary><span>06</span> Skills Lab</summary>
+          <p><strong>Fonction.</strong> Formation et partage de compétences. Salle <code>S1</code> de huit places. <strong>Actions.</strong> Consulter les sessions et le calendrier, puis réserver la salle selon son périmètre.</p>
+        </details>
+        <details id="zone-agent-ops">
+          <summary><span>07</span> Salle Agent Ops</summary>
+          <p><strong>Fonction.</strong> Supervision depuis les consoles <code>O1</code> et <code>O2</code>. <strong>Actions.</strong> Consulter les indicateurs Agent Ops. Dans le portefeuille, examiner le résultat et la durée d’une tentative avant une éventuelle reprise.</p>
+        </details>
+        <details id="zone-delivery">
+          <summary><span>08</span> Delivery floor</summary>
+          <p><strong>Fonction.</strong> Espace des squads, postes <code>D1</code> à <code>D6</code>. <strong>Actions.</strong> Retrouver le travail de sa BU dans <strong>Pilotage → Portefeuille et tâches</strong>. Planifier, affecter, déléguer ou soumettre selon son rôle.</p>
+        </details>
+        <details id="zone-pods">
+          <summary><span>09</span> Focus pods</summary>
+          <p><strong>Fonction.</strong> Deux cabines individuelles, <code>C1</code> et <code>C2</code>, pour les appels. <strong>Action.</strong> Consulter les disponibilités et réserver une ressource attribuée par la politique opérateur.</p>
+        </details>
+        <details id="zone-entree">
+          <summary><span>10</span> Entrée et casiers</summary>
+          <p><strong>Fonction.</strong> Accueil de la scène et départ du mode Visite, indiqué par le point turquoise sur le plan. <strong>Actions.</strong> S’orienter, passer en vue Plan et rejoindre un espace.</p>
+        </details>
+      </div>
+      <ul class="sources" aria-label="Sources du plan">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/dashboard/index.html">Scène 3D et coordonnées <code>POV_ZONES</code></a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/SHADOW_AI.md">Observatoire des usages IA</a></li>
+      </ul>
+    </section>
+
+    <section id="matrice-bu" aria-labelledby="titre-matrice">
+      <p class="eyebrow">03 · Frontières métier</p>
+      <h2 id="titre-matrice">Matrice des BU et des rôles</h2>
+      <p>Les BU et sujets ci-dessous proviennent du fichier de configuration d’exemple. L’opérateur associe chaque groupe aux centres métier, profils, ressources et équipes de son organisation. Les rôles du portefeuille s’ajoutent à cette politique.</p>
+      <div class="table-frame" tabindex="0" role="region" aria-label="Tableau des périmètres BU d’exemple, défilable horizontalement">
+        <table>
+          <caption>Exemple de configuration des périmètres</caption>
+          <thead><tr><th scope="col">BU</th><th scope="col">Groupe SSO</th><th scope="col">Poste et profil</th><th scope="col">Équipes Observatoire</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Opérations <code>cc-ops</code></th><td><code>bu-operations</code></td><td><code>D1</code> · <code>p02</code></td><td>Opérations</td></tr>
+            <tr><th scope="row">Relation client <code>cc-relation</code></th><td><code>bu-relation</code></td><td><code>D2</code> · <code>p03</code></td><td>Relation client et marketing</td></tr>
+            <tr><th scope="row">Ressources humaines <code>cc-rh</code></th><td><code>bu-rh</code></td><td><code>B1</code> sécurisé · <code>p06</code></td><td>Ressources humaines</td></tr>
+            <tr><th scope="row">Finance <code>cc-finance</code></th><td><code>bu-finance</code></td><td><code>B2</code> sécurisé · <code>p07</code></td><td>Finance</td></tr>
+            <tr><th scope="row">Gouvernance <code>["*"]</code></th><td><code>factory-governance-admin</code></td><td><code>R1</code> · transversal</td><td>Selon le rôle global du groupe</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-frame" tabindex="0" role="region" aria-label="Tableau des rôles opérationnels, défilable horizontalement">
+        <table>
+          <caption>Responsabilités dans l’installation privée</caption>
+          <thead><tr><th scope="col">Rôle</th><th scope="col">Actions</th><th scope="col">Contrôle</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Direction <code>admin</code></th><td>Administrer objectifs, indicateurs et projets.</td><td>Rôle et périmètre global <code>["*"]</code> dans le même groupe.</td></tr>
+            <tr><th scope="row">Chef de projet <code>project_lead</code></th><td>Créer et planifier les tâches de sa BU.</td><td>Rôle du portefeuille déclaré pour ce périmètre.</td></tr>
+            <tr><th scope="row">Manager <code>manager</code></th><td>Affecter, déléguer et autoriser un démarrage soumis à validation.</td><td>Agent éligible et politique d’autonomie de la BU.</td></tr>
+            <tr><th scope="row">Architecte <code>architect</code></th><td>Revoir les preuves d’un livrable technique.</td><td>Architecte distinct du soumissionnaire.</td></tr>
+            <tr><th scope="row">Employé ou agent affecté</th><td>Consulter sa tâche, démarrer selon l’état et soumettre des preuves. Un agent éligible peut déclarer son usage selon le mode d’exécution.</td><td>Sujet vérifié, affectation active et cas d’usage de la BU. L’agent doit avoir passé son évaluation.</td></tr>
+            <tr><th scope="row">Approbateur Workbench <code>approver</code> ou <code>admin</code></th><td>Approuver, refuser ou demander des modifications sur la révision présentée.</td><td>Groupe global <code>["*"]</code> et séparation d’avec le soumissionnaire et l’architecte de la tâche.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="sources" aria-label="Sources de la matrice BU">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/config/business-units.example.yaml">Politique BU d’exemple</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/BU_SECURITY.md">Cloisonnement et réservations</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/fr/PORTFOLIO.md">Rôles du portefeuille</a></li>
+      </ul>
+    </section>
+
+    <section id="parcours" aria-labelledby="titre-parcours">
+      <p class="eyebrow">04 · Schéma de séquence</p>
+      <h2 id="titre-parcours">De la tâche au retour de décision</h2>
+      <ol class="sequence" aria-label="Séquence du portefeuille vers le Workbench">
+        <li><span>01</span><strong>Planifier</strong><p>Le chef de projet fixe la tâche et ses dépendances.</p></li>
+        <li><span>02</span><strong>Affecter</strong><p>Le manager choisit l’agent ou lance la sélection automatique.</p></li>
+        <li><span>03</span><strong>Exécuter</strong><p>L’agent éligible prépare le résultat et soumet les preuves.</p></li>
+        <li><span>04</span><strong>Revoir</strong><p>Un architecte distinct examine la tâche quand la revue technique est requise.</p></li>
+        <li><span>05</span><strong>Décider</strong><p>La tâche sensible passe en relais Workbench. Le Compagnon porte la décision.</p></li>
+      </ol>
+      <div class="outcomes" aria-label="Résultats de la décision Workbench">
+        <div><strong>Approuver → Terminée</strong><p>Les tâches dépendantes peuvent reprendre.</p></div>
+        <div><strong>Refuser → Annulée</strong><p>Une dépendance qui exige la réussite reste en attente.</p></div>
+        <div><strong>Modifications → Prête</strong><p>Une nouvelle soumission ouvre un dossier distinct.</p></div>
+      </div>
+      <div class="split">
+        <article class="panel">
+          <h3>Délégation et reprise</h3>
+          <p>Un parent en cours peut porter jusqu’à quatre sous-tâches sur un niveau, annulations comprises. Elles restent dans son projet et sa BU. Les dépendances, l’affectation et le mode autonome, à validation humaine ou bloqué encadrent le démarrage.</p>
+          <p>Le moteur vérifie l’exécution du parent et la révision du projet avant d’appliquer le résultat. Une réponse devenue périmée est écartée.</p>
+        </article>
+        <article class="panel">
+          <h3>Portée de la décision</h3>
+          <p>L’API rapproche le dossier, la révision et l’empreinte, puis renvoie l’issue et son horodatage au portefeuille. Le motif et l’identité du décideur restent dans le Workbench.</p>
+          <p>Une opération CRM ou ERP suit le circuit du connecteur approuvé. La décision du portefeuille porte sur le travail préparé.</p>
+        </article>
+      </div>
+      <ul class="sources" aria-label="Sources du parcours">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/portfolio.py">Commandes et sous-tâches de l’API</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/ai_factory_workbench/service.py">Service de décision Workbench</a></li>
+      </ul>
+    </section>
+
+    <section id="securite" aria-labelledby="titre-securite">
+      <p class="eyebrow">05 · Conditions d’exploitation</p>
+      <h2 id="titre-securite">Contrôles à qualifier en privé</h2>
+      <div class="table-frame" tabindex="0" role="region" aria-label="Tableau des contrôles et preuves, défilable horizontalement">
+        <table>
+          <caption>Points de contrôle pour la mise en service</caption>
+          <thead><tr><th scope="col">Contrôle</th><th scope="col">Comportement attendu</th><th scope="col">Preuve de recette</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Isolement BU</th><td>Rôle et périmètre proviennent d’un même groupe SSO. Un cas C3/C4 exige une ressource sécurisée pour les réservations.</td><td>Vérifier un refus inter-BU et le refus d’un poste hors du périmètre.</td></tr>
+            <tr><th scope="row">Passerelle locale</th><td>Une clé virtuelle par cas et l’alias <code>chat-sensitive</code> bornent le routage. Le moteur intégré utilise la réponse texte du modèle local.</td><td>Exécuter une sous-tâche synthétique, observer la durée et contrôler la provenance des tokens.</td></tr>
+            <tr><th scope="row">Autorisation et concurrence</th><td>L’autorisation de départ est à usage unique. Les mutations utilisent la révision courante. Les résultats tardifs suivent la tentative à laquelle ils appartiennent.</td><td>Simuler une réaffectation et un redémarrage. Renouveler une autorisation de départ si elle est encore requise.</td></tr>
+            <tr><th scope="row">Décision et audit</th><td>Le mode <code>portfolio</code> requiert l’audit Workbench. Les deux bases se rapprochent avec l’identité du dossier et sa révision exacte.</td><td>Tester les trois issues avec un autre approbateur et un redémarrage entre décision et affichage.</td></tr>
+            <tr><th scope="row">Livraison et restauration</th><td>Le déploiement documenté utilise un processus API et des images vérifiées par empreinte. Le volume <code>api-state</code> conserve les bases et l’état.</td><td>Vérifier les attestations, exécuter le précontrôle et restaurer une sauvegarde cohérente sur un réseau isolé.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="sources" aria-label="Guides de qualification">
+        <li><a href="./index.html#production">Mise en production</a></li>
+        <li><a href="./index.html#reprise">Sauvegarde et reprise</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/GATEWAY_SECURITY.md">Sécurité LiteLLM</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/fr/SECURITY.md">Durcissement de la pile</a></li>
+      </ul>
+    </section>
+  </main>
+  <footer><span>AI Factory · Atlas d’architecture</span><a href="#contenu">Revenir au début</a></footer>
+</body>
+</html>

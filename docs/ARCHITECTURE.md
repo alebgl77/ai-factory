@@ -6,6 +6,26 @@ Virtual AI Factory is generic and published under the MIT license. All demo data
 and every element (profiles, use cases, catalog, rates, thresholds, regulatory calendar) is
 configured in `config/`.
 
+## Deployment and approval paths
+
+The public demo runs from an embedded snapshot. The protected installation uses the SSO edge and
+FastAPI to scope portfolio actions to authorized business units, run eligible sub-tasks through
+the local model and reconcile a Workbench decision against the exact task revision.
+In portfolio mode, Workbench reviews submitted work. CRM and ERP connector actions follow their own
+approval flow.
+
+[![Public and private flows from the browser to the API, portfolio, Workbench and local model](../dashboard/docs/media/architecture.svg)](../dashboard/docs/media/architecture.svg)
+
+## 2D floor plan
+
+The plan shows ten fictional work areas for delivery, technical review, supervision and
+collaboration. Production permissions are configured through [business-unit groups and roles](BU_SECURITY.md).
+
+[![Annotated plan of the Factory’s ten work areas](../dashboard/docs/media/floor-plan.svg)](../dashboard/docs/media/floor-plan.svg)
+
+Open [the interactive HTML page](../dashboard/docs/architecture.html) in a browser for the zone
+details, business-unit matrix and action paths. The page is in French.
+
 ## Overview
 
 ```text

@@ -23,6 +23,35 @@ configuration in plain YAML, runs without any API key in demo mode, and is MIT-l
 > is configured in `config/`. No fine-tuning, no retraining: the data loop only acts through
 > reindexing, evaluation-set updates or routing changes.
 
+## See the Factory in action
+
+**01 · Follow delegated work.** Open the portfolio from the 3D twin and unfold a task to see
+its sub-agents, progress and declared token usage.
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.png">
+  <img src="docs/media/ai-factory-pilotage.gif" width="760" alt="Fictional AI Factory dashboard with the team list and 3D workspace.">
+</picture>
+
+[GIF](docs/media/ai-factory-pilotage.gif) · [Still image](docs/media/ai-factory-pilotage.png) · [Open the live demo](https://alebgl77.github.io/ai-factory/)
+
+<details>
+<summary><strong>02 · Review a decision in the Decision Companion</strong></summary>
+
+Review a proposed ERP draft from a fictional CRM opportunity, enter a rationale and see the
+simulated decision and receipt in the history.
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.png">
+  <img src="docs/media/ai-factory-workbench.gif" width="760" alt="The Decision Companion’s fictional CRM and ERP walkthrough shows a simulated receipt and the reason recorded in the decision history.">
+</picture>
+
+[GIF](docs/media/ai-factory-workbench.gif) · [Still image](docs/media/ai-factory-workbench.png) · [Workbench guide](docs/WORKBENCH.md)
+
+</details>
+
+[Technical diagram](docs/ARCHITECTURE.md#deployment-and-approval-paths) · [Annotated floor plan](docs/ARCHITECTURE.md#2d-floor-plan)
+
 ## Try it
 
 | In 10 seconds | In 2 minutes | On your machine |

@@ -6,6 +6,27 @@ Virtual AI Factory, générique et publiable sous licence MIT. Toutes les donné
 démonstration sont fictives et chaque élément (profils, use cases, catalogue, tarifs, seuils,
 calendrier réglementaire) se configure dans `config/`.
 
+## Déploiement et circuit de décision
+
+La démo publique utilise un jeu de données embarqué. L’installation protégée s’appuie sur le
+proxy SSO et FastAPI pour limiter les actions aux BU autorisées, exécuter les sous-tâches
+éligibles sur le modèle local et rapprocher la décision Workbench de la révision exacte de la tâche.
+En mode portefeuille, le Workbench examine le travail soumis. Les actions des connecteurs CRM
+et ERP suivent leur propre circuit d’approbation.
+
+[![Flux public et privé, du navigateur à l’API, au portefeuille, au Workbench et au modèle local](../../dashboard/docs/media/architecture.svg)](../../dashboard/docs/media/architecture.svg)
+
+## Plan 2D
+
+Le plan situe les dix zones fictives de la Factory, dont les espaces de livraison, de revue
+technique, de supervision et de collaboration. Les droits de production se configurent dans les
+[groupes et rôles par BU](../BU_SECURITY.md).
+
+[![Plan annoté des dix zones de travail de la Factory](../../dashboard/docs/media/floor-plan.svg)](../../dashboard/docs/media/floor-plan.svg)
+
+Ouvrez [le plan interactif HTML](../../dashboard/docs/architecture.html) dans un navigateur
+pour consulter la fiche de chaque zone, la matrice BU et les circuits d’action.
+
 ## Vue d'ensemble
 
 ```text

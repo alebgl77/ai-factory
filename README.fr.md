@@ -25,6 +25,35 @@ configure en YAML, tourne sans aucune clé d'API en mode démo, et est sous lice
 > réentraînement : la boucle de données agit uniquement par réindexation, mise à jour des jeux
 > d'évaluation ou changement de routage.
 
+## Voir la Factory en action
+
+**01 · Suivre le travail délégué.** Depuis le jumeau 3D, ouvrez le portefeuille puis dépliez
+une tâche pour voir ses sous-agents, leur avancement et les tokens déclarés.
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.png">
+  <img src="docs/media/ai-factory-pilotage.gif" width="760" alt="Tableau de bord fictif de l’AI Factory, avec la liste de l’équipe et l’espace de travail en 3D.">
+</picture>
+
+[GIF](docs/media/ai-factory-pilotage.gif) · [Image fixe](docs/media/ai-factory-pilotage.png) · [Ouvrir la démo](https://alebgl77.github.io/ai-factory/?lang=fr)
+
+<details>
+<summary><strong>02 · Examiner un dossier dans le Compagnon de décision</strong></summary>
+
+Examinez une proposition de brouillon ERP issue d’une opportunité CRM fictive, saisissez un motif
+et retrouvez la décision et le reçu simulés dans l’historique.
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.png">
+  <img src="docs/media/ai-factory-workbench.gif" width="760" alt="Parcours CRM et ERP fictif dans le Compagnon de décision, avec un reçu simulé et le motif inscrit dans l’historique.">
+</picture>
+
+[GIF](docs/media/ai-factory-workbench.gif) · [Image fixe](docs/media/ai-factory-workbench.png) · [Guide Workbench](docs/fr/WORKBENCH.md)
+
+</details>
+
+[Schéma technique](docs/fr/ARCHITECTURE.md#déploiement-et-circuit-de-décision) · [Plan 2D annoté](docs/fr/ARCHITECTURE.md#plan-2d)
+
 ## Essayer
 
 | En 10 secondes | En 2 minutes | Sur votre machine |
