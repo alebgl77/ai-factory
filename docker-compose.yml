@@ -347,7 +347,7 @@ services:
   grafana:
     # grafana/grafana is the OSS (AGPLv3) image; grafana/grafana-oss stopped receiving
     # releases after 13.0.2 (Grafana documentation, "Run Grafana Docker image").
-    image: grafana/grafana:13.0.12
+    image: grafana/grafana:13.3.0
     <<: *hardening
     restart: unless-stopped
     read_only: true
