@@ -5,9 +5,11 @@ Every read endpoint accepts ``?lang=en|fr`` (CONTRACT section 9) and returns ful
 
 from __future__ import annotations
 
+import os
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 
 from ..i18n import LANGUAGES
 from ..service import FactoryService
@@ -35,6 +37,22 @@ def health(svc: FactoryService = Depends(service), lang: str = Depends(response_
             "sources": sources, "config_warnings": len(cfg.get("warnings") or []),
             "usecases": len(cfg.get("usecases") or []), "lang": lang, "languages": list(LANGUAGES),
             "default_lang": svc.settings.default_lang, "security": svc.security_posture()}
+
+
+@router.get("/ready", summary="Local API readiness (public, status only)",
+            responses={503: {"description": "Local API dependencies are unavailable"}})
+def readiness(svc: FactoryService = Depends(service)) -> JSONResponse:
+    config_file = svc.config.config_dir / "factory.yaml"
+    security = svc.guard.config
+    auth_ready = not security.enforced or (
+        security.configured_mode == "proxy" and security.trusted_networks
+        and (security.role_map or security.default_role is not None)
+    )
+    try:
+        ready = auth_ready and config_file.is_file() and os.access(config_file, os.R_OK) and svc.state.ready()
+    except OSError:
+        ready = False
+    return JSONResponse({"status": "ready" if ready else "not_ready"}, status_code=200 if ready else 503)
 
 
 @router.get("/snapshot", summary="Snapshot for the 3D dashboard")

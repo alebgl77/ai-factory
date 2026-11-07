@@ -139,11 +139,17 @@ Routes below are relative to `/api/v1/workbench`. Browser writes use same-origin
 |---|---|
 | `GET /cases` | Read the mode, caller capabilities and prioritized cases with their proposal versions. |
 | `GET /encounters` | Read the case IDs, revisions and statuses of up to 100 prioritized cases with protected Workbench read access. Add `?case_id=<id>` to follow one case even when it leaves the prioritized queue. |
+| `GET /recovery` | In `protected_demo`, a trusted proxy group must grant the caller the administrator role and, where configured, global BU scope. Read up to 100 cases by ID with `limit` (default 50) and `after` (the preceding response's `next_after`). Each item contains only `case_id`, `revision` and `recovery`. |
 | `POST /events` | Submit the supported CloudEvents 1.0 subset for `crm.opportunity.won` from `crm-sim`. |
 | `POST /cases/{id}/decisions` | Submit `approve`, `reject` or `request_changes` with revision, hash and rationale. |
 | `GET /cases/{id}/history` | Read the receipt, role-scoped decisions and feedback summary. |
 | `POST /cases/{id}/feedback` | Record or replace the caller's `helpful` or `needs_work` rating and optional comment. |
 | `POST /chat` | Send a message to `operations`, `finance` or `governance` with an optional `case_id`. |
+
+The recovery diagnostic reports `pending_execution` for a currently approved draft,
+`reconciliation_required` for a held case and `crm_conflict` for conflicting data at the
+current CRM revision. Opening the diagnostic leaves the database and external systems untouched.
+Use the trusted host's reconciliation procedure for the configured connector. [ERP adapter contract](ADAPTIVE_WORKBENCH.md#connect-a-draft-erp-adapter)
 
 In the connected local simulation, submit a fictional event and open the companion to review it.
 

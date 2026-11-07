@@ -10,7 +10,10 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from ai_factory_workbench import Actor, Workbench, WorkbenchError
+from ai_factory_workbench.crm import CRM_CONFLICT
 from app.main import create_app
+from app.routers.workbench import configure_workbench_surfaces
 from app.security import Principal
 from app.settings import Settings
 from app.workbench.adapters import AdapterError, Odoo19Adapter
@@ -48,6 +51,61 @@ def test_workbench_is_opt_in_and_protected_mode_needs_auth(make_client):
     client = make_client(workbench_mode="protected_demo")
     assert client.get(ROOT + "/cases").status_code == 401
     assert not client.app.state.workbench.store.path.exists()
+
+
+def test_recovery_queue_requires_admin_and_never_initializes_or_replays(tmp_path, monkeypatch):
+    client = protected(tmp_path, default_role="admin")
+    route = ROOT + "/recovery"
+    admin, approver = identity("operator", "both"), identity("reviewer", "approve")
+    engine = Workbench(client.app.state.workbench.store.path, "protected_demo", defer_execution=True,
+                       crm_sources=("salesforce/test",))
+    configure_workbench_surfaces(client.app, engine=engine)
+
+    assert client.get(route).status_code == 401
+    assert client.get(route, headers=approver).status_code == 403
+    assert client.get(route, headers=identity("default-admin", "unmapped")).status_code == 403
+    client.app.state.workbench_machine_actor_ids = frozenset({"relay@example.test"})
+    assert client.get(route, headers=identity("relay", "both")).status_code == 403
+    assert client.get(route, headers=admin).json() == {"cases": [], "next_after": None}
+    assert not engine.store.path.exists()
+
+    proposer = identity("proposer", "submit")
+    first = client.post(ROOT + "/events", headers=proposer, json=opportunity()).json()
+    second = client.post(ROOT + "/events", headers=proposer,
+                         json=opportunity("delivery-2", subject="opp-second")).json()
+    for case in (first, second):
+        response = client.post(f"{ROOT}/cases/{case['id']}/decisions", headers=approver, json=approval(case))
+        assert response.status_code == 200 and response.json()["status"] == "applying"
+
+    def conflict(*args, **kwargs):
+        raise WorkbenchError("draft_conflict", 409)
+
+    monkeypatch.setattr(engine.store, "create_draft", conflict)
+    with pytest.raises(WorkbenchError, match="^draft_conflict$"):
+        engine.reconcile_pending(first["id"])
+    engine._apply_crm_observation("salesforce/test", "private-subject", 2, CRM_CONFLICT,
+                                  Actor("crm-ingest", frozenset({"editor"})), profile=None)
+
+    def unexpected_execution(*args, **kwargs):
+        pytest.fail("Recovery diagnostics must never start execution or change workspace state")
+
+    monkeypatch.setattr(engine, "_apply", unexpected_execution)
+    monkeypatch.setattr(engine.store, "transaction", unexpected_execution)
+    result = client.get(route, headers=admin)
+    assert result.status_code == 200 and result.headers["cache-control"] == "no-store"
+    rows = result.json()["cases"]
+    assert all(set(row) == {"case_id", "revision", "recovery"} for row in rows)
+    by_id = {row["case_id"]: row["recovery"] for row in rows}
+    assert set(by_id.values()) == {"reconciliation_required", "pending_execution", "crm_conflict"}
+    assert by_id[first["id"]] == "reconciliation_required"
+    assert by_id[second["id"]] == "pending_execution"
+    assert client.get(route, headers=admin, params={"limit": 101}).status_code == 422
+    assert client.get(route, headers=admin, params={"after": "private-input"}).json() == {"detail": "invalid_request"}
+    first_page = client.get(route, headers=admin, params={"limit": 1}).json()
+    assert first_page == {"cases": rows[:1], "next_after": rows[0]["case_id"]}
+    assert client.get(route, headers=admin, params={"after": first_page["next_after"]}).json() == {
+        "cases": rows[1:], "next_after": None,
+    }
 
 
 def test_seed_and_unknown_customer_do_not_execute(make_client):

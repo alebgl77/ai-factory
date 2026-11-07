@@ -292,6 +292,7 @@ mappings (with a primary source), code. Read [CONTRIBUTING.md](CONTRIBUTING.md) 
 ## Documentation
 
 - [Interactive operations guide](https://alebgl77.github.io/ai-factory/docs/#production) and [portfolio integration reference](docs/fr/PORTFOLIO.md) (in French)
+- [Private deployment and support matrix](docs/DEPLOYMENT.md#périmètre-de-prise-en-charge) (in French)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): diagram, flows, technical choices
 - [docs/CONTRACT.md](docs/CONTRACT.md): interface contract (schemas, API, metrics, services, i18n)
 - [docs/GOVERNANCE.md](docs/GOVERNANCE.md): register, risk tiers, reassessment, crosswalk, regulatory calendar and sources

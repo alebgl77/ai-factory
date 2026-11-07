@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+import tracemalloc
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,7 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from app.audit import GENESIS, AuditContext, record_hash, scan
+from app.audit import GENESIS, AuditContext, AuditLog, record_hash, scan
 from app.main import SWAGGER_UI_VERSION, create_app
 from app.seclog import reference
 from app.security import (ASSESSMENT, AUDIT_READ, AUTHENTICATED, MODEL_VERSION, PLACEMENT_DECIDE, READ, ROLES,
@@ -123,13 +124,12 @@ def _route_permissions(app) -> dict[tuple[str, str], str | None]:
 def test_every_api_route_declares_exactly_one_permission(tmp_path):
     client = build(tmp_path)
     perms = _route_permissions(client.app)
-    unprotected = sorted(k for k, v in perms.items() if v is None and k[1] != "/api/v1/health")
-    assert not unprotected, f"routes without a permission: {unprotected}"
-    assert perms[("GET", "/api/v1/health")] is None  # public liveness probe
+    public_probes = {("GET", "/api/v1/health"), ("GET", "/api/v1/ready")}
+    assert {k for k, v in perms.items() if v is None} == public_probes
     assert "AMBIGUOUS" not in perms.values()
     expected = {(m, re.sub(r"uc-0\d", "{uc_id}", p).replace("gpu_util", "{name}")): perm
                 for (m, p), perm in EXPECTED_PERMISSIONS.items()}
-    assert {k: v for k, v in perms.items() if k[1] != "/api/v1/health"} == expected
+    assert {k: v for k, v in perms.items() if k not in public_probes} == expected
 
 
 def test_role_permission_table_keeps_duties_separate():
@@ -173,6 +173,38 @@ def test_proxy_mode_unknown_api_path_is_denied_by_default(tmp_path):
 def test_proxy_mode_health_stays_public(tmp_path):
     r = proxy(tmp_path, peer=UNTRUSTED_PEER).get("/api/v1/health")
     assert r.status_code == 200 and r.json()["security"]["status"] == "enforced"
+
+
+def test_readiness_is_public_local_and_does_not_initialize_state(tmp_path, monkeypatch):
+    client = proxy(tmp_path, peer=UNTRUSTED_PEER)
+    service = client.app.state.service
+
+    def unexpected_io():
+        pytest.fail("readiness must avoid connector probes and audit scans")
+
+    monkeypatch.setattr(service, "sources", unexpected_io)
+    monkeypatch.setattr(service.state.audit, "verify", unexpected_io)
+    response = client.get("/api/v1/ready")
+    assert response.status_code == 200 and response.json() == {"status": "ready"}
+    assert response.headers["cache-control"] == "no-store"
+    assert not (tmp_path / "state").exists()
+
+
+@pytest.mark.parametrize("cause", ["config", "state", "audit", "auth"])
+def test_readiness_sanitizes_failures_without_changing_liveness(tmp_path, cause):
+    options = {}
+    if cause == "config":
+        options["config_dir"] = str(tmp_path / "private-config-sentinel")
+    elif cause == "state":
+        (tmp_path / "state").touch()
+    elif cause == "audit":
+        (tmp_path / "state" / "audit.jsonl").mkdir(parents=True)
+    else:
+        options["trusted_proxies"] = ()
+    client = proxy(tmp_path, peer=UNTRUSTED_PEER, **options)
+    response = client.get("/api/v1/ready")
+    assert response.status_code == 503 and response.json() == {"status": "not_ready"}
+    assert client.get("/api/v1/health").status_code == 200
 
 
 @pytest.mark.parametrize("role", [*ROLES, None])
@@ -422,6 +454,59 @@ def test_audit_listing_is_paginated_newest_first(tmp_path):
     assert only["total"] == 1 and only["records"][0]["action"] == "spaces.put"
     assert client.get("/api/v1/audit", params={"limit": 501}, headers=a).status_code == 422
     assert client.get("/api/v1/audit", params={"action": "rm -rf"}, headers=a).status_code == 422
+
+
+def test_audit_deep_page_counts_filtered_matches_and_bounds_memory(tmp_path):
+    log = AuditLog(tmp_path)
+    with log.path.open("wb") as fh:
+        for seq in range(1, 5001):
+            action = "spaces.put" if seq % 2 else "placement.decide"
+            fh.write(json.dumps({"seq": seq, "action": action, "details": "x" * 1024}).encode() + b"\n")
+
+    tracemalloc.start()
+    try:
+        total, records = log.page(offset=2497, limit=5, action="spaces.put")
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert total == 2500
+    assert [(record["seq"], record["line"]) for record in records] == [(5, 5), (3, 3), (1, 1)]
+    assert peak < 1024 * 1024  # more than 5 MiB on disk, with fewer than 5 KiB of page data
+    assert log.page(offset=2500, limit=5, action="spaces.put") == (2500, [])
+    assert log.page(offset=0, limit=5, action="registry.assessment") == (0, [])
+
+
+def test_audit_listing_keeps_parse_and_chain_verification_separate(tmp_path):
+    client = proxy(tmp_path)
+    admin = who("admin", "grp-admin")
+    audit_path = tmp_path / "state" / "audit.jsonl"
+    audit_path.parent.mkdir(exist_ok=True)
+    audit_path.write_bytes(
+        b'{"seq":1,"action":"spaces.put"}\r\n\n{invalid\n[3]\n\xff\n'
+        b'{"seq":6,"action":"spaces.put","line":99}\n{"seq":7,"action":"placement.decide"}'
+    )
+    assert client.get("/api/v1/audit").status_code == 401
+    assert client.get("/api/v1/audit", headers=who("eli", "grp-editor")).status_code == 403
+    listed = client.get("/api/v1/audit", params={"offset": 1, "limit": 10}, headers=admin)
+    assert listed.status_code == 200
+    assert listed.json() == {"total": 3, "offset": 1, "limit": 10, "order": "desc", "records": [
+        {"seq": 6, "action": "spaces.put", "line": 99}, {"seq": 1, "action": "spaces.put", "line": 1},
+    ]}
+    newest = client.get("/api/v1/audit", params={"limit": 1}, headers=admin).json()["records"]
+    assert newest == [{"seq": 7, "action": "placement.decide", "line": 7}]
+    verified = client.get("/api/v1/audit/verify", headers=admin).json()
+    assert verified["records"] == 7
+    assert verified["first_broken"] == {"line": 1, "seq": 1, "reason": "malformed"}
+
+
+def test_audit_listing_preserves_valid_object_without_trailing_newline(tmp_path):
+    client, path = _three_records(tmp_path)
+    path.write_bytes(path.read_bytes().removesuffix(b"\n"))
+    newest = client.get("/api/v1/audit", params={"limit": 1}).json()["records"]
+    assert [record["seq"] for record in newest] == [3]
+    verified = client.get("/api/v1/audit/verify").json()
+    assert verified["first_broken"] == {"line": 3, "seq": 3, "reason": "truncated"}
 
 
 def _three_records(tmp_path: Path) -> tuple[TestClient, Path]:

@@ -795,6 +795,51 @@ class Workbench:
                    ORDER BY id LIMIT ?""", (self._connector is None, _SIMULATED_CRM_SOURCE, limit),
             )]
 
+    def recovery_queue(self, actor: WorkActor, *, limit: int = 50,
+                       after: str | None = None) -> dict[str, Any]:
+        """Read the protected workspace's recovery metadata without executing or initializing it."""
+        if self.mode != "protected_demo":
+            raise WorkbenchError("workbench_surface_disabled", 404)
+        self.check_access(actor)
+        if "admin" not in actor.roles:
+            raise WorkbenchError("forbidden", 403)
+        if type(limit) is not int or not 1 <= limit <= 100 or (
+            after is not None and (not isinstance(after, str) or not re.fullmatch(r"[0-9a-f]{32}", after))
+        ):
+            raise WorkbenchError("invalid_request", 422)
+        with self.store.read_existing() as connection:
+            if connection is None:
+                return {"cases": [], "next_after": None}
+            rows = connection.execute(f"""
+                SELECT id AS case_id, revision, recovery FROM (
+                    SELECT id, json_extract(record, '$.revision') AS revision,
+                           CASE
+                             WHEN json_extract(record, '$.crm_reconciliation_required') = 1
+                               THEN 'reconciliation_required'
+                             WHEN status = 'waiting_review' AND EXISTS (
+                                 SELECT 1 FROM crm_revisions AS crm
+                                 WHERE crm.source = cases.source AND crm.subject = cases.subject
+                                   AND crm.record_version = json_extract(record, '$.record_version')
+                                   AND crm.fingerprint = ?
+                             ) THEN 'crm_conflict'
+                             WHEN status = 'applying' AND (? OR source <> ?)
+                               AND json_type(record, '$.action') = 'object' AND EXISTS (
+                                 SELECT 1 FROM decisions AS d WHERE d.case_id = cases.id
+                                   AND d.revision = json_extract(record, '$.revision') AND d.decision = 'approve'
+                                   AND d.proposal_hash = json_extract(record, '$.proposal_hash')
+                             ) THEN 'pending_execution'
+                           END AS recovery
+                    FROM cases WHERE {self._visible_cases()} AND id > ?
+                      AND status IN ('waiting_review', 'applying', 'executed')
+                      AND length(id) = 32 AND id NOT GLOB '*[^0-9a-f]*'
+                      AND json_type(record, '$.revision') = 'integer'
+                ) WHERE recovery IS NOT NULL AND revision BETWEEN 1 AND 9007199254740991
+                ORDER BY id LIMIT ?
+            """, (digest({"blocked": CRM_CONFLICT.code}), self._connector is None, _SIMULATED_CRM_SOURCE,
+                  actor.authenticated, after or "", limit + 1)).fetchall()
+        cases = [dict(row) for row in rows[:limit]]
+        return {"cases": cases, "next_after": cases[-1]["case_id"] if len(rows) > limit else None}
+
     def reconcile_pending(self, case_id: str) -> dict[str, Any]:
         """Trusted host recovery. Resume only a stored, exact, previously approved draft."""
         self._exclude_portfolio_mode()

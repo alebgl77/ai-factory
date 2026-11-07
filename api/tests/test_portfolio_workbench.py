@@ -102,6 +102,14 @@ def test_handoff_preserves_bu_scope_and_four_eyes(tmp_path):
     assert snapshot(api, OPS_LEAD)["tasks"] == []
 
 
+def test_recovery_requires_a_single_global_admin_grant(tmp_path):
+    api = client(tmp_path, mode="protected_demo")
+    route = f"{WORKBENCH}/recovery"
+    assert api.get(route, headers=REVIEWER).status_code == 403
+    assert api.get(route, headers=who("mixed", "portfolio-approver", "finance-admin")).status_code == 403
+    assert api.get(route, headers=GLOBAL).json() == {"cases": [], "next_after": None}
+
+
 def test_restart_between_case_creation_binding_and_decision(tmp_path, monkeypatch):
     api = client(tmp_path)
     row = submit_sensitive(api)

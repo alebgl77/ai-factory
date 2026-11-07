@@ -37,8 +37,9 @@ import sys
 import threading
 from collections import Counter
 from dataclasses import dataclass, field
+from itertools import islice
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Iterator
 
 from . import seclog
 
@@ -190,19 +191,40 @@ class AuditLog:
             return cached[1]
         return self.verify()
 
-    def records(self) -> list[dict[str, Any]]:
-        out: list[dict[str, Any]] = []
-        for number, raw in enumerate(self._read_bytes().split(b"\n"), start=1):
-            if not raw:
+    @staticmethod
+    def _records(lines: Iterable[bytes], action: str | None = None) -> Iterator[dict[str, Any]]:
+        for number, raw in enumerate(lines, start=1):
+            if raw == b"\n":
                 continue
             try:
                 rec = json.loads(raw.decode("utf-8"))
             except (UnicodeDecodeError, ValueError):
                 continue
-            if isinstance(rec, dict):
+            if isinstance(rec, dict) and (action is None or rec.get("action") == action):
                 rec.setdefault("line", number)
-                out.append(rec)
-        return out
+                yield rec
+
+    def records(self) -> list[dict[str, Any]]:
+        try:
+            with self.path.open("rb") as fh:
+                return list(self._records(fh))
+        except FileNotFoundError:
+            return []
+
+    def page(self, *, offset: int, limit: int, action: str | None) -> tuple[int, list[dict[str, Any]]]:
+        """Count matches and read only the requested page; the caller holds the state lock."""
+        try:
+            with self.path.open("rb") as fh:
+                total = sum(1 for _ in self._records(fh, action))
+                stop = total - offset
+                if stop <= 0:
+                    return total, []
+                fh.seek(0)
+                records = list(islice(self._records(fh, action), max(0, stop - limit), stop))
+                records.reverse()
+                return total, records
+        except FileNotFoundError:
+            return 0, []
 
     # ------------------------------------------------------------------ writing
     def append(self, ctx: AuditContext, *, action: str, target: str, before: Any = None, after: Any = None,

@@ -22,7 +22,7 @@ from ai_factory_workbench.interface_models import CASE_ID_PATTERN, ReviewInput, 
 from ai_factory_workbench.profiles import WorkProfile, get_profile, list_profiles
 
 from ..activity import record_workbench_activity
-from ..security import READ, Access, require
+from ..security import AUDIT_READ, READ, Access, require
 
 CaseID = Annotated[str, Path(pattern=CASE_ID_PATTERN)]
 Comment = Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)]
@@ -234,6 +234,25 @@ def encounters(request: Request, access: Reader,
                 and type(revision) is int and 1 <= revision <= 2**53 - 1):
             projected.append({"case_id": encounter_id, "revision": revision, "status": status})
     return {"encounters": projected}
+
+
+@router.get("/recovery", summary="Read recovery metadata in a protected Workbench workspace")
+def recovery(request: Request, access: Annotated[Access, Depends(require(AUDIT_READ))],
+             limit: Annotated[int, Query(ge=1, le=100)] = 50,
+             after: Annotated[str | None, Query(pattern=CASE_ID_PATTERN)] = None):
+    engine = _workbench(request)
+    if engine.mode != "protected_demo":
+        raise HTTPException(404, detail="workbench_surface_disabled")
+    principal = access.principal
+    svc = request.app.state.service
+    scope = svc.business_scope(access)
+    global_admin = scope.global_admin if scope is not None else any(
+        role == "admin" and group in principal.groups for group, role in svc.guard.config.role_map
+    )
+    if (not principal.authenticated or principal.auth_mode != "proxy" or not global_admin
+            or _signed_service_only(request, access)):
+        raise HTTPException(403, detail="forbidden")
+    return engine.recovery_queue(principal, limit=limit, after=after)
 
 
 @router.post("/events")
