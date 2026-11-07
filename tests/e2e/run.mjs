@@ -1032,6 +1032,11 @@ if (!process.env.E2E_BASE_URL) {
         avatar.head.visible && avatar.body.getObjectByName('neck')?.visible && !avatar.releasePortraitNeck &&
         avatar.body.getObjectByName('neck').material === avatar.skinMat && avatar.body.getObjectByName('neck').scale.y === 1 &&
         '#' + avatar.skinMat.color.getHexString() === (window.__twin.Store.emp('p02').skin || '#e8c4a0').toLowerCase()))));
+  await staticPage.locator('#tabFactory').click();
+  await staticPage.locator('#factoryPanel [data-csec="skills"]').click();
+  await staticPage.getByRole('link', { name: /Open the Flow Lab|Ouvrir le laboratoire de flux/ }).click();
+  await staticPage.waitForURL(url => url.pathname.endsWith('/docs/flow-lab.html'));
+  check('the R&D Lab opens the Flow Lab from the dashboard', /Laboratoire de flux IA|AI Flow Lab/i.test(await staticPage.title()));
   await staticPage.close();
 
   const mobile = await ctx.newPage();
@@ -1092,12 +1097,6 @@ if (!process.env.E2E_BASE_URL) {
     await mobileIdeas.getByRole('heading', { name: 'Automatisation du relais 42' }).isVisible() &&
     await mobileIdeas.evaluate(el => el.scrollWidth <= el.clientWidth && el.parentElement.scrollWidth <= el.parentElement.clientWidth));
   if (visualDir) await mobile.screenshot({ path: path.join(visualDir, 'ai-factory-coffee-mobile.png'), animations: 'disabled' });
-  await mobile.keyboard.press('Escape');
-  await mobile.locator('#tabFactory').click();
-  await mobile.locator('#factoryPanel [data-csec="skills"]').click();
-  await mobile.getByRole('link', { name: 'Ouvrir le laboratoire de flux' }).click();
-  await mobile.waitForURL(url => url.pathname.endsWith('/docs/flow-lab.html'));
-  check('the R&D Lab opens the Flow Lab from the mobile dashboard', /Laboratoire de flux IA/.test(await mobile.title()));
   await mobile.close();
 }
 
