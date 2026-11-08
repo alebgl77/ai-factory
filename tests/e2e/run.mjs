@@ -620,8 +620,8 @@ if (!process.env.E2E_BASE_URL) {
   check('scoped booking response revalidates the snapshot, purges browser caches and does not reseed', buWrites === 0 &&
     await scoped.evaluate(() => window.__twin.SNAP.meta.business_scope === true) &&
     await scoped.evaluate(() => localStorage.getItem('aiFactoryRef.v2') === null && localStorage.getItem('aiFactoryRef.v2.backup') === null));
-  check('protected boot stays live and hides the public shortcuts', await scoped.evaluate(() => window.__twin.S.live) &&
-    !(await scoped.locator('#demoEntry').isVisible()));
+  check('protected boot stays live without the public shortcuts or artwork', await scoped.evaluate(() => window.__twin.S.live) &&
+    !(await scoped.locator('#demoEntry').isVisible()) && (await scoped.locator('#demoEntryArt').count()) === 0);
   await scoped.evaluate(() => { window.__twin.renderer.render = () => {}; });
   await scoped.locator('#encounterOpen').click();
   check('Workbench projection requires explicit activation and exposes no demo control',
@@ -1318,6 +1318,28 @@ if (!process.env.E2E_BASE_URL) {
         const projects = demo.locator('#demoProjects');
         const roadmapLink = demo.locator('#demoRoadmap');
         await projects.waitFor();
+        const artwork = await demo.locator('#demoEntryArt').evaluate(async img => {
+          await img.decode();
+          return { width: img.naturalWidth, height: img.naturalHeight, url: img.currentSrc,
+            decorative: img.alt === '', visible: img.getBoundingClientRect().width > 0 };
+        });
+        const firstInLayout = await entry.evaluate(hero => {
+          const controls = document.querySelector('.top');
+          return Boolean(hero.compareDocumentPosition(controls) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+            hero.getBoundingClientRect().bottom <= controls.getBoundingClientRect().top;
+        });
+        await projects.focus();
+        await demo.keyboard.press('Tab');
+        const focusFollows = await demo.locator('#demoDecision').evaluate(link => document.activeElement === link);
+        const entryLanguage = isMobile ? 'en' : 'fr';
+        check(`${mode}: the public entry shows localized content and loads its own artwork at the Pages subpath`,
+          firstInLayout && focusFollows && artwork.width === 2172 && artwork.height === 724 &&
+          artwork.decorative && artwork.visible &&
+          artwork.url === `${pagesRoot}docs/media/ai-factory-control-floor.webp` &&
+          await demo.locator('#demoEntryTitle').textContent() ===
+            (entryLanguage === 'en' ? 'The AI operations floor' : 'Le poste de pilotage de l’IA') &&
+          await demo.locator('#demoTech').getAttribute('href') ===
+            `https://github.com/alebgl77/ai-factory/blob/main/${entryLanguage === 'en' ? 'README.md' : 'README.fr.md'}#technologies`);
         const sample = await demo.evaluate(() => ({
           day: window.__twin.S.date, time: window.__twin.S.t, live: window.__twin.S.live,
           busy: Object.values(window.__twin.snap.res).some(resource => resource.state === 'busy'),

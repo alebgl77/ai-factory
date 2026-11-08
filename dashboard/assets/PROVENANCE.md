@@ -63,3 +63,17 @@ Merge the seven generated material entries into `dashboard/assets/assets.js`, pr
 `avatar-p01` through `avatar-p12` and `camille-turnaround` entries. Keep this provenance record
 with the bundle. The builder's automatic date is the source file's modification date. The
 dashboard loads the WebP bundles locally in both the Pages and Docker builds.
+
+## Control-floor banner
+
+ChatGPT Image generated the original 2172 × 724 image without reference inputs. The prompt
+described a panoramic architectural model of an AI operations floor in graphite, with smoked
+glass, brushed aluminum, scale figures and a chartreuse data line. It reserved dark space on
+the left and excluded text and marks.
+
+The distributed [banner](../docs/media/ai-factory-control-floor.webp) is a 2172 × 724 WebP
+encoded at quality 89, 154,764 bytes. Its SHA-256 is
+`68b58626c1fb749ee25e8be4adca6b19b50dd94b2fd357a8e1f23892c359e42f`.
+The project distributes the banner under its [MIT license](../../LICENSE) to the extent
+applicable rights exist. Third-party marks are covered by the separate
+[logo credits and terms](../docs/media/tech/README.md).
