@@ -142,6 +142,29 @@ that require them. Restart the Pod after rotation. The optional Portfolio runner
 `https://litellm:<port>` with a certificate valid for the `litellm` Service name and an operator
 Secret referenced by `api.portfolioRunner.existingSecret`.
 
+### Enable the private Observatory
+
+The Observatory is disabled by default. Opt in with the private profile and
+explicitly map each authorized IdP group in `api.roleMap` and the business-unit
+policy. The OAuth group gate still applies. The `shadow_teams` mapping limits
+readers to their own teams. Importing or proposing policies requires a global
+grant and the appropriate role from the same authorized group. Use a separate
+global approver group to decide proposals.
+
+```yaml
+api:
+  shadowAI:
+    enabled: true
+    groups: [factory-ops]
+    privacyThreshold: 7
+```
+
+The threshold accepts integers from 5 through 100. Changing it affects future
+aggregate imports. Treat the threshold as part of your data collection policy
+and verify visibility with synthetic fixtures before admitting real data.
+See [Business-unit security](BU_SECURITY.md) and
+[audit evidence](CYBER_SECURITY.md#seal-and-verify-a-journal).
+
 ## Preserve state through upgrades and reinstalls
 
 Record the Helm values, source release and name of the claim mounted at `/data`. Stop writes and

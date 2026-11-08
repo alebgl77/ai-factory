@@ -28,10 +28,15 @@ from typing import Any, Callable, Iterator
 
 from .audit import AuditContext, AuditLog, canonical, digest
 
-try:  # POSIX only; on other platforms the in-process lock is the only guard.
+try:  # POSIX
     import fcntl
 except ImportError:  # pragma: no cover
     fcntl = None  # type: ignore[assignment]
+
+try:  # Windows
+    import msvcrt
+except ImportError:  # pragma: no cover
+    msvcrt = None  # type: ignore[assignment]
 
 REGISTRY_FILE = "registry_overrides.json"
 SPACES_FILE = "spaces_state.json"
@@ -130,18 +135,30 @@ class StateStore:
             self._ensure_dir()
             lock_path = self.dir / ".state.lock"
             try:
-                fh = open(lock_path, "a+")
+                fh = lock_path.open("a+b", buffering=0)
             except OSError as exc:
                 raise StateError("state lock unavailable") from exc
-            try:
-                if fcntl is not None:
-                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-                yield
-            finally:
-                if fcntl is not None:
+            with fh:
+                try:
+                    if fcntl is not None:
+                        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+                    elif msvcrt is not None:
+                        # Every process locks byte zero, including on an empty file.
+                        fh.seek(0)
+                        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+                    else:
+                        raise StateError("state lock unavailable")
+                except OSError as exc:
+                    raise StateError("state lock unavailable") from exc
+                try:
+                    yield
+                finally:
                     with contextlib.suppress(OSError):
-                        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-                fh.close()
+                        if fcntl is not None:
+                            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+                        elif msvcrt is not None:
+                            fh.seek(0)
+                            msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
 
     def _read(self, name: str, default: Any) -> Any:
         path = self.dir / name

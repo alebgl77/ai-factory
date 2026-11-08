@@ -215,10 +215,37 @@ if (!process.env.E2E_BASE_URL) {
   }));
   check('offline EN switch updates the header, source badge and rendered registry immediately',
     switched.lang === 'en' && switched.payload === 'en' && switched.source === 'Offline demo' && switched.registry && switched.name !== frenchName && switched.workshop === 'exercise/index.html?lang=en');
-  await page.evaluate(() => window.__twin.openConsole('shadow'));
-  check('Observatory label and console are translated after switching to English',
+  await page.keyboard.press('Escape');
+  await shadowMap.focus();
+  await page.keyboard.press('Enter');
+  check('English map label opens the localized Observatory',
     await shadowMap.textContent() === 'AI Usage Observatory' && await page.locator('#cTitle').textContent() === 'AI Usage Observatory' &&
     await page.getByRole('table', { name: 'Measured adoption' }).count() === 1);
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: 'Factory', exact: true }).click();
+  const factoryPanel = page.locator('#factoryPanel');
+  check('the English Factory panel localizes the console heading and summaries',
+    (await factoryPanel.locator('.grp-h').textContent()).includes('Factory console') &&
+    (await factoryPanel.locator('[data-csec="skills"]').textContent()).includes('R&D experiments') &&
+    await factoryPanel.getByRole('button', { name: /Self-service catalog/ }).count() === 1);
+  await factoryPanel.getByRole('button', { name: /AI Usage Observatory/ }).click();
+  const tabs = page.getByRole('tablist', { name: 'Console sections' });
+  check('the English Factory entry opens the Observatory with localized navigation',
+    await page.locator('#cTitle').textContent() === 'AI Usage Observatory' &&
+    await page.locator('#console').getByRole('button', { name: 'Close console' }).count() === 1 &&
+    await tabs.getByRole('tab', { name: 'Observatory', selected: true }).count() === 1 &&
+    await tabs.getByRole('tab', { name: 'Registry', exact: true }).count() === 1 &&
+    await tabs.getByRole('tab', { name: 'Data loop', exact: true }).count() === 1);
+  await tabs.getByRole('tab', { name: 'Agent Ops', exact: true }).click();
+  check('Agent Ops shows English token and latency metrics', await page.getByRole('heading', { name: 'By agent' }).count() === 1 &&
+    await page.getByRole('columnheader', { name: 'Tokens/task p95' }).count() === 1);
+  await tabs.getByRole('tab', { name: 'Hybrid placement', exact: true }).click();
+  check('placement distinguishes the recommendation from direct gateway behavior',
+    (await page.locator('#cBody .cnote').textContent()).includes('Direct C3, C4 requests require the local GPU') &&
+    (await page.locator('#cBody .cnote').textContent()).includes('does not enqueue work'));
+  await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: 'Planning', exact: true }).click();
+  check('the weekly export is labelled in English', await page.getByText('Weekly export', { exact: true }).count() === 1);
   await page.reload();
   await page.waitForFunction(() => window.__twin?.SNAP.meta.lang === 'en');
   check('saved locale survives a reload', await page.locator('#languageSelect').inputValue() === 'en');

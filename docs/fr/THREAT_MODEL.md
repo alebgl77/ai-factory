@@ -220,7 +220,7 @@ Prometheus, Loki, Grafana, Langfuse (avec Postgres, ClickHouse, SeaweedFS, Valke
 | S | C3/C4 envoyés à un faux point d'accès GPU | `LOCAL_API_BASE` réglé par l'exploitant ; vLLM exige une clé d'API (`--api-key`) ; WireGuard recommandé pour un GPU distant | **Moyen** : la clé vLLM passe sur la ligne de commande (visible par `docker inspect`) ; le tunnel est à la charge de l'exploitant |
 | T | Poids de modèle altérés | téléchargements depuis le hub de modèles vers un volume de cache | **Moyen** : épinglage des révisions de modèles et vérification des empreintes en **Feuille de route** |
 | I | Données C3/C4 au repos sur l'hôte GPU | statistiques d'usage vLLM désactivées ; les données restent sur l'hôte | **Moyen** : chiffrez le disque ; restreignez l'accès à l'hôte |
-| D | GPU indisponible | charges C3/C4 mises en file ou refusées (échec fermé) ; alerte `FactorySensitiveRouteDown`. Smoke « local GPU down: chat-sensitive fails closed » | accepté : la disponibilité est sacrifiée à la confidentialité |
+| D | GPU indisponible | Les requêtes directes C3/C4 échouent en mode fermé. Le simulateur recommande d’attendre, sans mettre les charges en file. Alerte `FactorySensitiveRouteDown`. Smoke « local GPU down: chat-sensitive fails closed » | accepté : la disponibilité est sacrifiée à la confidentialité |
 | E | Évasion depuis les conteneurs GPU | `no-new-privileges`, toutes les capacités retirées (vLLM, Ollama), limites de PID, `/dev/shm` dimensionné au lieu de `ipc: host` | **Moyen** : exécution en root sans système de fichiers racine en lecture seule ; dcgm-exporter garde ses capacités par défaut ; non testé en exécution ici (pas de GPU) |
 
 ### 4.8 Environnement d'exécution des conteneurs et hôte Docker

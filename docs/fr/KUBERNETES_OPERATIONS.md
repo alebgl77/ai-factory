@@ -10,6 +10,32 @@ Pour une sauvegarde à froid, suspendez tout contrôleur susceptible de relancer
 
 Restaurez vers un nouveau PVC dans un espace de noms isolé. Affectez le nom du PVC restauré à `persistence.existingClaim` et démarrez avec les versions du chart et des images relevées à la sauvegarde. Pour une archive de fichiers, préservez les droits et le propriétaire du volume de destination lors de l’extraction, par exemple avec `--no-same-owner --no-same-permissions` de GNU tar sous l’UID de la charge. Vérifiez la santé de la Factory, relisez un élément connu de l’état restauré et, si le journal est présent, lancez `python -m app.audit verify /data/audit.jsonl` dans le conteneur API. Relevez la durée de restauration et la fenêtre de perte de données. Terminez la mise à niveau éventuelle avant de basculer le trafic. Restaurez et vérifiez les services externes selon leurs propres procédures.
 
+### Vérifier les décisions Portfolio restaurées
+
+Pour une release privée utilisant `api.workbenchMode: portfolio`, scellez le journal Workbench à partir d’une copie en lecture seule du volume source, arrêté au point de sauvegarde. Lancez les commandes suivantes dans un environnement de vérification séparé où la même version de l’API est installée. Faites pointer `BACKUP_STATE` vers la copie source et `RESTORED_STATE` vers une copie cohérente en lecture seule du volume restauré. Utilisez le nom de flux existant dans `WORKBENCH_STREAM`. Renseignez `CYBER_KEY_FILE`, `CYBER_KEY_ID` et `CHECKPOINT` avec le fichier HMAC à accès restreint, son identifiant et un nouveau chemin de point de contrôle. Conservez le point de contrôle et la clé dans un stockage administré séparément, à l’écart des sauvegardes et du Pod API. Pour les scellements ultérieurs, renseignez `PREVIOUS_CHECKPOINT` avec le dernier point de contrôle de confiance pour le même flux et la même clé. Si la clé a changé, appliquez la procédure de rotation. [Journal Cyber et rotation des clés](CYBER_SECURITY.md)
+
+```bash
+previous=()
+if [[ -n ${PREVIOUS_CHECKPOINT:-} ]]; then
+  previous=(--previous "$PREVIOUS_CHECKPOINT")
+fi
+python -m app.cyber seal --kind workbench \
+  --path "$BACKUP_STATE/workbench-portfolio.sqlite3" --stream "$WORKBENCH_STREAM" \
+  --key-file "$CYBER_KEY_FILE" --key-id "$CYBER_KEY_ID" --output "$CHECKPOINT" "${previous[@]}"
+```
+
+Avant toute écriture sur la restauration isolée, vérifiez le journal à partir de ce point de contrôle conservé séparément. Pour ce contrôle, utilisez toujours celui qui provient de la source de sauvegarde.
+
+```bash
+python -m app.cyber verify --kind workbench \
+  --path "$RESTORED_STATE/workbench-portfolio.sqlite3" --stream "$WORKBENCH_STREAM" \
+  --key-file "$CYBER_KEY_FILE" --checkpoint "$CHECKPOINT"
+```
+
+Exigez `status: verified` et `unsigned_tail: 0` pour cette sauvegarde à froid appariée. Relevez la séquence vérifiée et le hachage de tête. Analysez tout échec ou toute entrée non scellée inattendue avant de basculer le trafic.
+
+Lors d’une répétition de reprise, laissez une tâche sensible synthétique en attente de décision au point de sauvegarde. Sur la restauration isolée, faites approuver le même dossier dans le Compagnon de décision par un approbateur habilité et indépendant. Vérifiez que la tâche Portfolio est terminée, que son historique enregistre l’approbation Workbench et qu’un compte d’une BU extérieure ne peut pas lire le détail de la tâche. Utilisez des données synthétiques et laissez les connecteurs d’exécution externes désactivés pendant l’essai. [Rôles Portfolio et circuit de décision](PORTFOLIO.md#décisions-workbench)
+
 ## Télémétrie externe et stockage objet
 
 Quand ils sont configurés, le chart utilise les services Prometheus, Grafana, Langfuse, LiteLLM et Qdrant fournis par l’exploitant. Provisionnez, mettez à jour et sauvegardez ces services séparément. Pour restaurer Langfuse, vérifiez que sa base, les données ClickHouse, le stockage objet et les identifiants correspondent au même déploiement et au même point de reprise. Appliquez les règles de rétention et de résidence des environnements destinataires aux métriques, traces et journaux.

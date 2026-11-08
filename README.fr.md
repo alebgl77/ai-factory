@@ -119,7 +119,7 @@ et affiche le badge « Démo hors ligne ».
 | P0 | Coûts tokens et GPU par use case, showback / chargeback, 8 règles d'alerte de gaspillage | `config/factory.yaml`, `engines/costs.py`, console « FinOps » |
 | P1 | Pipeline LLMOps / RAG avec ingestion, indexation, versionnage, contrôles d’évaluation et preuves de déploiement et de retour arrière publiées par les producteurs autorisés. La démo simule ces étapes. | [Preuves d’exploitation](docs/OPERATING_EVIDENCE.md), console « Pipeline » |
 | P1 | Boucle de données sur dérive : réindexation, mise à jour des jeux d'évaluation, changement de routage, revue humaine. Pas de réentraînement | `engines/dataloop.py`, console « Boucle de données » |
-| P1 | Placement hybride cloud → VPS → GPU local. Les classes C3/C4 vont uniquement sur le GPU local ; s'il est indisponible, la charge est mise en file d'attente, jamais envoyée ailleurs | `engines/placement.py`, `compose/litellm/config.yaml`, console « Placement » |
+| P1 | Placement hybride cloud → VPS → GPU local. Les requêtes directes C3/C4 nécessitent un GPU local et échouent en cas d’indisponibilité. Le simulateur de placement recommande alors d’attendre, sans mettre la charge en file | `engines/placement.py`, `compose/litellm/config.yaml`, console « Placement » |
 | P2 | Salle Agent Ops : TTFT, tokens par tâche, latence vectorielle, SLO | `engines/agentops.py`, consoles O1/O2, dashboard Grafana `agent-ops` |
 | P2 | Catalogue en libre-service des modèles, agents, outils MCP et dépôts GitHub intégrés | `config/catalog/`, console « Catalogue » |
 | P2 | Skills Lab et R&D Lab en 3D, rattachés aux rôles et à l'art. 4 de l'AI Act (maîtrise de l'IA, tel que réécrit en 2026) | `config/skills.yaml`, salles S1, X1–X3 |
@@ -141,10 +141,10 @@ Navigateur (dashboard 3D, aucun jeton) ──HTTPS──► edge (Caddy : TLS, a
                  └─ passerelle LiteLLM ──► cloud │ VPS (Ollama) │ GPU local (vLLM)
 ```
 
-L'API agrège `config/`, son état modifiable et les sources live ; une source injoignable bascule
-sur un générateur de démo déterministe (`meta.mode` : `demo`, `mixed`, `live`). Détails, flux et
-alternatives écartées : [docs/fr/ARCHITECTURE.md](docs/fr/ARCHITECTURE.md). Contrat d'interface
-(schémas, API, métriques, services, en anglais) : [docs/CONTRACT.md](docs/CONTRACT.md).
+L’API agrège `config/`, son état modifiable et les sources réelles. En mode `auto`, une vue
+sans périmètre peut utiliser des données simulées si une source est indisponible. Les vues par
+BU omettent toujours ces données et limitent la télémétrie à leur périmètre. Les pilotes privés
+utilisent `FACTORY_DEMO_MODE=never`. [Architecture](docs/fr/ARCHITECTURE.md) · [Contrat d’interface (EN)](docs/CONTRACT.md)
 
 <a id="déploiement-réel--cloud-dabord-puis-vps-puis-matériel-local"></a>
 

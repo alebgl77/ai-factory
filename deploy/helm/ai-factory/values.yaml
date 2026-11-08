@@ -52,6 +52,10 @@ api:
   workbenchMode: ""
   workbenchCyberAudit: false
   assistEnabled: false
+  shadowAI:
+    enabled: false
+    groups: []
+    privacyThreshold: 5
   portfolioRunner:
     existingSecret: ""
     key: portfolio-runner.json

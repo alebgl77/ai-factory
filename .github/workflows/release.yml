@@ -304,19 +304,16 @@ jobs:
           bundle="$(mktemp -d)"
           staging="$(mktemp -d)"
           trap 'rm -rf "$bundle" "$staging"' EXIT
-          git archive "$release_sha" -- \
-            .env.example docker-compose.yml docker-compose.release.yml docker-compose.portfolio.yml \
-            compose config scripts/check_production.py .github/scripts/verify_image.sh \
-            docs/DEPLOYMENT.md docs/DEPLOYMENT.en.md docs/GATEWAY_SECURITY.md docs/SECURITY.md \
-            docs/PORTFOLIO.md docs/fr/PORTFOLIO.md docs/BU_SECURITY.md docs/ENTERPRISE_SECURITY_REVIEW.md \
-            docs/KUBERNETES.md docs/KUBERNETES_OPERATIONS.md docs/fr/KUBERNETES.md docs/fr/KUBERNETES_OPERATIONS.md \
-            deploy/helm/ai-factory/values-logging.example.yaml LICENSE SECURITY.md licenses | tar -x -C "$bundle"
+          mapfile -t archive_paths < .github/scripts/release_bundle.paths
+          test "${#archive_paths[@]}" -gt 0
+          git archive "$release_sha" -- "${archive_paths[@]}" | tar -x -C "$bundle"
           python3 .github/scripts/create_release_bundle.py "$bundle" "$RUNNER_TEMP/release" "$TAG" "$release_sha" "$REGISTRY"
           mkdir -p "$bundle/deploy/helm"
           python3 .github/scripts/create_release_bundle.py --helm-values "$bundle"
           python3 scripts/package_helm.py "$staging"
           helm lint --strict "$staging/ai-factory" -f "$bundle/deploy/helm/values.release.json"
           helm package "$staging/ai-factory" --version "${TAG#v}" --app-version "$TAG" --destination "$bundle/deploy/helm"
+          python3 .github/scripts/create_release_bundle.py --check-docs "$bundle"
           tar -C "$bundle" -czf "$RUNNER_TEMP/release/ai-factory-deploy-$TAG.tar.gz" .
       - name: Image list and signed checksums
         working-directory: ${{ runner.temp }}/release

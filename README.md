@@ -116,7 +116,7 @@ operator-managed services. [Install Kubernetes](docs/KUBERNETES.md) · [Operate 
 | P0 | Token and GPU costs per use case, showback / chargeback, 8 waste alert rules | `config/factory.yaml`, `engines/costs.py`, "FinOps" console |
 | P1 | LLMOps / RAG pipeline: ingestion → indexing → versioning → evaluation gates → deployment and rollback receipts from authorized producers. The demo simulates the sequence. | [Operating evidence](docs/OPERATING_EVIDENCE.md), "Pipeline" console |
 | P1 | Data loop on drift: reindexing, evaluation-set updates, routing changes, human review. No retraining | `engines/dataloop.py`, "Data loop" console |
-| P1 | Hybrid placement cloud → VPS → local GPU. Classes C3/C4 only go to the local GPU; if it is unavailable, the workload is queued, never sent elsewhere | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
+| P1 | Hybrid placement cloud → VPS → local GPU. Direct C3/C4 requests require a local GPU and fail if it is unavailable. The placement simulator recommends waiting in that case and does not enqueue work | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
 | P2 | Agent Ops room: TTFT, tokens per task, vector latency, SLOs | `engines/agentops.py`, consoles O1/O2, Grafana dashboard `agent-ops` |
 | P2 | Self-service catalog of models, agents, MCP tools and integrated GitHub repositories | `config/catalog/`, "Catalog" console |
 | P2 | Skills Lab and R&D Lab in 3D, tied to roles and to AI Act Art. 4 (AI literacy, as rewritten in 2026) | `config/skills.yaml`, rooms S1, X1–X3 |
@@ -139,8 +139,9 @@ Browser (3D dashboard, no token) ──HTTPS──► edge (Caddy: TLS, optional
 ```
 
 The API aggregates `config/`, its mutable state and live sources. In `auto` mode, unavailable
-sources can fall back to simulated data. Private pilots use `FACTORY_DEMO_MODE=never` and omit
-unavailable data. [Architecture](docs/ARCHITECTURE.md) · [Interface contract](docs/CONTRACT.md)
+sources can fall back to simulated data for an unscoped view. Business-unit views always omit
+unavailable data and keep telemetry within their scope. Private pilots use
+`FACTORY_DEMO_MODE=never`. [Architecture](docs/ARCHITECTURE.md) · [Interface contract](docs/CONTRACT.md)
 
 <a id="real-deployment-cloud-first-then-vps-then-local-hardware"></a>
 

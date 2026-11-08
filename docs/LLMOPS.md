@@ -85,8 +85,9 @@ model changes its version: it triggers the risk reassessment ([GOVERNANCE.md](GO
 
 Engine rules (`POST /api/v1/placement/decide` for a dry run):
 
-1. Class C3 or C4 ⇒ local GPU only, alias `chat-sensitive`, no external fallback; GPU
-   unavailable ⇒ the workload is **queued**, never sent to the cloud or the VPS.
+1. Class C3 or C4 ⇒ local GPU only, alias `chat-sensitive`. If the GPU is unavailable,
+   the dry run returns `queued` as a recommendation to wait. Direct requests fail
+   without an external fallback or automatic retry.
 2. Otherwise, order `cloud > vps > local`, skipping unavailable targets, and skipping the VPS if
    the required model exceeds 8 B (size inferred from the catalog or the task type); a degraded
    target is only chosen as a last resort.

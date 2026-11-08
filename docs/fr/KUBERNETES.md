@@ -94,6 +94,20 @@ Sur l’Ingress cible, vérifiez le refus d’accès anonyme à l’API, une aut
 
 Si une source de télémétrie de l’API utilise une CA privée, renseignez `telemetry.caBundle.existingSecret` et placez le bundle PEM complet sous `ca-bundle.crt`, avec les racines publiques nécessaires aux autres sources. Redémarrez le Pod après rotation. Le moteur Portfolio facultatif attend `https://litellm:<port>`, un certificat valable pour le nom de Service `litellm` et un Secret opérateur référencé par `api.portfolioRunner.existingSecret`.
 
+### Activer l’Observatoire privé
+
+L’Observatoire est désactivé par défaut. Activez-le avec le profil privé et associez explicitement chaque groupe autorisé du fournisseur d’identité à `api.roleMap` et à la politique de BU. Le filtre de groupes OAuth reste applicable. La clé `shadow_teams` limite les lecteurs à leurs équipes. L’import et les propositions de politique exigent un périmètre global et le rôle adapté issus du même groupe autorisé. Confiez les décisions à un groupe global distinct d’approbateurs.
+
+```yaml
+api:
+  shadowAI:
+    enabled: true
+    groups: [factory-ops]
+    privacyThreshold: 7
+```
+
+Le seuil accepte les entiers de 5 à 100. Toute modification s’applique aux imports agrégés futurs. Intégrez le seuil à votre politique de collecte et vérifiez les règles de visibilité avec des données synthétiques avant d’importer des données réelles. Consultez la [sécurité par BU](../BU_SECURITY.md) et les [preuves d’audit](CYBER_SECURITY.md).
+
 ## Préserver l’état lors des mises à niveau et réinstallations
 
 Relevez les valeurs Helm, la release source et le nom du PVC monté sur `/data`. Arrêtez les écritures et sauvegardez tout le répertoire avant un changement de version. Conservez ensemble les fichiers cachés, l’état, le journal d’audit et les bases SQLite. Testez la restauration sur un nouveau PVC avant de basculer le Deployment. Réutilisez le même profil avec un PVC donné. Pour changer de profil, créez un déploiement distinct et planifiez une migration de données explicite. [Sauvegarde, restauration et logs Alloy](KUBERNETES_OPERATIONS.md)

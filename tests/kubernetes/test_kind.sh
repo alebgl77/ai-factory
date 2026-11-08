@@ -120,33 +120,43 @@ python3 "$fixtures/demo_client.py" after-pod-replacement "$work/demo.json"
 stop_forward
 
 # Quiesce the writer, take an archive, and restore to a different claim. Read back via the API.
-kc scale deployment/demo-ai-factory --replicas=0
-kc wait --for=delete "pod/$pod" --timeout=120s
-kc create -f - <<'PVC'
+backup_claim() {
+  local release=$1 target=$2 writer=$3 archive=$4 source_claim
+  kc scale "deployment/$release-ai-factory" --replicas=0
+  kc wait --for=delete "pod/$writer" --timeout=120s
+  kc create -f - <<PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: restored-state
+  name: $target
 spec:
   accessModes: [ReadWriteOnce]
   resources:
     requests:
       storage: 1Gi
 PVC
-source_claim="$(kc get pvc -l app.kubernetes.io/instance=demo -o jsonpath='{.items[0].metadata.name}')"
-[[ -n "$source_claim" && "$source_claim" != restored-state ]]
-python3 "$fixtures/fixtures.py" restore "$source_claim" restored-state | kc create -f -
-kc wait --for=condition=Ready pod/restore --timeout=120s
-# Archive all entries, including hidden state, while preserving the destination mount root.
-kc exec restore -- python -c '
+  source_claim="$(kc get pvc -l "app.kubernetes.io/instance=$release" -o jsonpath='{.items[0].metadata.name}')"
+  [[ -n "$source_claim" && "$source_claim" != "$target" ]]
+  python3 "$fixtures/fixtures.py" restore "$source_claim" "$target" | kc create -f -
+  kc wait --for=condition=Ready pod/restore --timeout=120s
+  # Archive all entries, including hidden state, while preserving the destination mount root.
+  kc exec restore -- python -c '
 import sys, tarfile
 from pathlib import Path
 with tarfile.open(fileobj=sys.stdout.buffer, mode="w|") as archive:
     for entry in sorted(Path("/source").iterdir()):
         archive.add(entry, arcname=entry.name)
-' > "$work/state.tar"
-kc exec -i restore -- tar --no-same-owner --no-same-permissions --no-overwrite-dir -C /target -xf - < "$work/state.tar"
-kc delete pod restore --timeout=120s
+' > "$archive"
+}
+
+restore_claim() {
+  local archive=$1
+  kc exec -i restore -- tar --no-same-owner --no-same-permissions --no-overwrite-dir -C /target -xf - < "$archive"
+  kc delete pod restore --timeout=120s
+}
+
+backup_claim demo restored-state "$pod" "$work/state.tar"
+restore_claim "$work/state.tar"
 deploy restored --set persistence.existingClaim=restored-state
 forward service/restored-ai-factory 18080:8080
 python3 "$fixtures/demo_client.py" from-restored-pvc "$work/demo.json"
@@ -204,4 +214,42 @@ for address in sys.argv[1:]:
 forward pod/ingress 18443:8443
 forward pod/dex 15556:5556
 python3 "$fixtures/private_client.py" "$work/factory.crt" "$work/dex.crt"
+
+# Seal a copy of the quiescent journal outside the workload, then resume the exact
+# pending synthetic decision against the new claim. Neither pod receives the HMAC key.
+kc exec -i "$pod" -c api -- python - submit < "$fixtures/restore_workbench.py" > "$work/pending.txt"
+backup_claim private restored-private-state "$pod" "$work/private-state.tar"
+mkdir "$work/collector"
+db=workbench-portfolio.sqlite3
+tar -xOf "$work/private-state.tar" "$db" > "$work/collector/$db"
+openssl rand -out "$work/collector/key" 32
+cyber=(env PYTHONPATH=api python3 -m app.cyber)
+journal=(--kind workbench --path "$work/collector/$db" --stream kind-workbench --key-file "$work/collector/key")
+"${cyber[@]}" seal "${journal[@]}" --key-id kind-rehearsal --output "$work/collector/checkpoint.json"
+restore_claim "$work/private-state.tar"
+helm uninstall private --namespace "$namespace" --wait --timeout 120s
+deploy private -f "$fixtures/private-values.yaml" --set persistence.existingClaim=restored-private-state
+pod="$(factory_pod private)"
+kc exec "$pod" -c api -- python -c '
+import sqlite3, sys, tempfile
+from contextlib import closing
+from pathlib import Path
+
+with tempfile.TemporaryDirectory() as directory:
+    copy = Path(directory) / "restored.sqlite3"
+    with closing(sqlite3.connect("file:/data/workbench-portfolio.sqlite3?mode=ro", uri=True)) as source:
+        with closing(sqlite3.connect(copy)) as target:
+            source.backup(target)
+    sys.stdout.buffer.write(copy.read_bytes())
+' > "$work/collector/restored.sqlite3"
+"${cyber[@]}" verify --kind workbench --path "$work/collector/restored.sqlite3" --stream kind-workbench \
+  --key-file "$work/collector/key" --checkpoint "$work/collector/checkpoint.json" | python3 -c '
+import json, sys
+result = json.load(sys.stdin)
+assert result["status"] == "verified" and result["sealed_through"] >= 2 and result["unsigned_tail"] == 0, result
+print("PASS restored Workbench journal matches the independently held checkpoint")
+'
+read -r task_id case_id revision proposal_hash < "$work/pending.txt"
+kc exec -i "$pod" -c api -- python - approve "$task_id" "$case_id" "$revision" "$proposal_hash" \
+  < "$fixtures/restore_workbench.py"
 timeout --kill-after=20s 180s bash "$fixtures/test_logging_kind.sh" "$chart" "$namespace"

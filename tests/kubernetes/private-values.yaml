@@ -13,12 +13,18 @@ sso:
   providerCA:
     existingSecret: factory-test-ca
   allowedEmailDomains: [factory.test]
-  allowedGroups: [ops, finance]
+  allowedGroups: [ops, finance, admins]
   scope: openid email profile groups
 businessUnits:
   existingSecret: factory-test-bu
 api:
-  roleMap: ["ops:maintainer", "finance:maintainer", "admins:admin"]
+  roleMap: ["ops:maintainer", "ops-agents:viewer", "finance:maintainer", "admins:admin"]
+  workbenchMode: portfolio
+  workbenchCyberAudit: true
+  shadowAI:
+    enabled: true
+    groups: [ops, admins]
+    privacyThreshold: 7
 networkPolicy:
   ingressPeers:
     - podSelector:

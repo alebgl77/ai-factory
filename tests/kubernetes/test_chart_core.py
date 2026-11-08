@@ -52,6 +52,11 @@ def test_staging_keeps_existing_output_intact(chart):
      "HTTP requires telemetry.allowInsecureClusterHTTP and an in-cluster Service FQDN"),
     ({"telemetry": {"allowInsecureClusterHTTP": True, "grafanaPublicURL": "http://grafana.tools.svc"}},
      "grafanaPublicURL must use HTTPS"),
+    ({"api": {"shadowAI": {"enabled": True, "groups": []}}}, "requires api.shadowAI.groups"),
+    ({"api": {"shadowAI": {"enabled": True, "groups": ["unmapped"]}}}, "explicit api.roleMap mapping"),
+    ({"api": {"shadowAI": {"enabled": True, "groups": ["ops,admins"]}}}, "does not match pattern"),
+    ({"api": {"shadowAI": {"enabled": True, "groups": ["ops"], "privacyThreshold": 4}}}, "minimum"),
+    ({"api": {"shadowAI": {"enabled": True, "groups": ["ops"], "privacyThreshold": 101}}}, "maximum"),
 ])
 def test_private_guard_rejects_insecure_values(chart, tmp_path: Path, override, reason):
     values = tmp_path / "override.yaml"
@@ -59,6 +64,39 @@ def test_private_guard_rejects_insecure_values(chart, tmp_path: Path, override, 
     result = helm("template", "factory", chart, "-f", HERE / "private-values.yaml", "-f", values, check=False)
     assert result.returncode != 0
     assert reason in result.stderr
+
+
+def test_observatory_is_private_and_opt_in(chart):
+    def api_env(*values):
+        result = helm("template", "factory", chart, *values, "--show-only", "templates/deployment.yaml")
+        containers = yaml.safe_load(result.stdout)["spec"]["template"]["spec"]["containers"]
+        api = next(container for container in containers if container["name"] == "api")
+        return {entry["name"]: entry.get("value") for entry in api["env"]}
+
+    private = ("-f", HERE / "private-values.yaml")
+    disabled = ("--set", "api.shadowAI.enabled=false")
+    for env in (api_env(), api_env(*private, *disabled)):
+        assert env["FACTORY_SHADOW_AI_ENABLED"] == "off"
+        assert "FACTORY_SHADOW_AI_GROUPS" not in env
+    env = api_env(*private)
+    assert env["FACTORY_SHADOW_AI_ENABLED"] == "on"
+    assert env["FACTORY_SHADOW_AI_GROUPS"] == "ops,admins"
+    assert env["FACTORY_SHADOW_AI_PRIVACY_THRESHOLD"] == "7"
+    result = helm("template", "factory", chart, "--set", "api.shadowAI.enabled=true", check=False)
+    assert result.returncode != 0 and "demo cannot use private runtime settings" in result.stderr
+
+
+@pytest.mark.parametrize("group", ["realm:ops", "realm"])
+def test_observatory_group_must_match_the_complete_role_map_group(chart, tmp_path, group):
+    values = tmp_path / "groups.yaml"
+    values.write_text(yaml.safe_dump({
+        "api": {"roleMap": ["realm:ops:viewer"], "shadowAI": {"enabled": True, "groups": [group]}},
+    }), encoding="utf-8")
+    result = helm("template", "factory", chart, "-f", HERE / "private-values.yaml", "-f", values, check=False)
+    if group == "realm:ops":
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode != 0 and "explicit api.roleMap mapping" in result.stderr
 
 
 def test_private_runner_mounts_only_key_references(chart, tmp_path: Path):

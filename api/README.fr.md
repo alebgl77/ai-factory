@@ -233,7 +233,7 @@ paragraphe 3, réévaluation à chaque version de modèle), `costs` (showback/ch
 plateforme, 8 règles de gaspillage avec économies estimées), `pipeline` (7 étapes, seuils
 d'évaluation par niveau de risque, déploiement bloqué tant qu'une réévaluation est requise,
 retour arrière automatique), `dataloop` (signal → action, tout réentraînement est refusé),
-`placement` (sensible ⇒ local uniquement, mise en file d'attente si le GPU local est
+`placement` (données sensibles en local, recommandation d’attendre si le GPU local est
 indisponible), `agentops`, `skills` (art. 4, maîtrise de l'IA), `catalog`.
 
 ## Instantanés hors ligne du tableau de bord
