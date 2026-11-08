@@ -706,7 +706,7 @@ services:
   # ============================================================================ storage
   postgres:
     # This image major and its data directory are a pair. See docs/DEPLOYMENT.md.
-    image: postgres:17.11-alpine
+    image: postgres:18.4-alpine
     <<: *hardening
     restart: unless-stopped
     # Runs directly as the postgres user (uid 70 of the Alpine image): the entrypoint never
