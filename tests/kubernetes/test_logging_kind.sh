@@ -133,10 +133,13 @@ for _ in {1..5}; do
   if kc logs pod/producer-outside | grep -Fq "$marker"; then break; fi
   sleep 1
 done
-kc logs pod/producer-outside | grep -Fq "$marker"
+if ! kc logs pod/producer-outside | grep -Fq "$marker"; then
+  echo 'The excluded producer emitted no canary lines' >&2
+  exit 1
+fi
 query() {
   "${curl_tls[@]}" --fail --user "probe:$password" --get "https://$loki_host:13100/loki/api/v1/query_range" \
-    --data-urlencode "query={service=\"log-probe\"} |= \"$marker\""
+    --data-urlencode "query={factory=\"ai-factory-reference\"} |= \"$marker\""
 }
 for _ in {1..15}; do
   if query > "$work/query.json" &&
@@ -148,11 +151,22 @@ for _ in {1..15}; do
   sleep 2
 done
 query > "$work/query.json"
-jq -e --arg release "$release" --arg marker "$marker" '
-  (.data.result | length == 1) and
-  all(.data.result[];
-    .stream.project == $release and .stream.service == "log-probe" and .stream.level == "info" and
-    (.values | length >= 3) and
-    all(.values[]; .[1] == ("level=INFO " + $marker + " release=" + $release + " ***")))
-' "$work/query.json" > /dev/null
+# The Kubernetes API log tailer can preserve the line-ending newline.
+jq --arg release "$release" --arg marker "$marker" '
+  [.data.result[].values[][1] | sub("\r?\n$"; "")] as $lines |
+  {
+    streams: (.data.result | length),
+    entries: ($lines | length),
+    labels_ok: all(.data.result[];
+      .stream.project == $release and .stream.service == "log-probe" and .stream.level == "info"),
+    content_ok: all($lines[]; . == ("level=INFO " + $marker + " release=" + $release + " ***")),
+    raw_canary_absent: all($lines[]; contains("sk-syntheticprobe123") | not),
+    outside_absent: all($lines[]; contains("release=outside") | not)
+  }
+' "$work/query.json" > "$work/result.json"
+if ! jq -e '.entries >= 3 and .labels_ok and .content_ok and .raw_canary_absent and .outside_absent' \
+    "$work/result.json" > /dev/null; then
+  jq -c . "$work/result.json" >&2
+  exit 1
+fi
 echo 'PASS Alloy sends only the selected release, with service/project labels and redacted content, to TLS/Basic Auth Loki'
