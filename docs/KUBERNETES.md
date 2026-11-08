@@ -1,5 +1,7 @@
 # Deploy AI Factory on Kubernetes
 
+**English** · [Français](fr/KUBERNETES.md) · [Documentation on GitHub](https://github.com/alebgl77/ai-factory/blob/main/docs/README.md)
+
 The Helm chart runs the dashboard, API and Caddy in one Pod. The private profile adds oauth2-proxy.
 The edge is the sole Service endpoint. The other containers listen on loopback and share the
 Pod's trust boundary. Use one release per namespace and one private release per organization.
@@ -9,7 +11,7 @@ Pod's trust boundary. Use one release per namespace and one private release per 
 | `demo` | Local `kubectl port-forward`, no authentication | Fictional snapshot, demo Workbench and local API state |
 | `private` | HTTPS Ingress, OIDC and a required business-unit policy | Private pilot with operator-managed telemetry and model services, enabled individually |
 
-Use the [Compose deployment guide](DEPLOYMENT.md) for the full simulated stack and its bundled
+Use the [Compose deployment guide](DEPLOYMENT.en.md) for the full simulated stack and its bundled
 dependencies. Kubernetes operators provide the Ingress controller, identity provider, CSI storage,
 network policy enforcement and any external integrations. The single API writer and its PVC
 imply planned downtime for a Pod replacement or release upgrade.
@@ -43,10 +45,10 @@ Ingress boundary. Limit these Kubernetes permissions to operators trusted with r
 ## Install a private pilot
 
 1. Verify the release bundle and images. If the bundle includes the Helm assets, use
-   `deploy/helm/ai-factory-${TAG#v}.tgz` and `deploy/helm/values.release.json`. The values lock
+   `deploy/helm/ai-factory-${TAG#v}.tgz` and `deploy/helm/values.release.json` from the same verified bundle. The values lock
    the API, dashboard, Caddy, oauth2-proxy and optional Alloy to the digests in `release-stack.json`. Use
    Linux amd64 nodes for released application images. For a source build, stage the chart and
-   supply compatible digest-pinned image references. [Release verification](DEPLOYMENT.md#vérifier-et-installer-une-release)
+   supply compatible digest-pinned image references. [Release verification](DEPLOYMENT.en.md#verify-and-install-a-release)
 2. Create a dedicated namespace with Restricted Pod Security admission and a NetworkPolicy-enforcing
    CNI. Provision a writable, single-writer PVC through the cluster's CSI driver. Test file
    ownership with UID and GID 10001. Confirm the driver supports the selected access mode and
@@ -69,6 +71,8 @@ Ingress boundary. Limit these Kubernetes permissions to operators trusted with r
    [Example policy](../config/business-units.example.yaml) · [Business-unit security](BU_SECURITY.md)
 
 Create an operator values file with real Secret names and narrow selectors for your environment.
+Leave `images` and `logging.alloy.image` out of that file for signed installations. Load the
+matching `values.release.json` last so its verified image digests take precedence.
 The example assumes the issuer is served by an in-cluster endpoint reachable through the same
 DNS name from browser and Pod. For an issuer outside the cluster, use the authorized CIDRs or
 your network's controlled egress gateway on TCP 443.
@@ -114,9 +118,15 @@ networkPolicy:
 
 ```bash
 helm upgrade --install factory "deploy/helm/ai-factory-${TAG#v}.tgz" -n factory \
-  -f deploy/helm/values.release.json -f /secure/factory-private.yaml --wait --timeout 5m
+  -f /secure/factory-private.yaml -f deploy/helm/values.release.json --wait --timeout 5m
 kubectl -n factory rollout status deploy/factory-ai-factory
 ```
+
+Before a matching bundle ships, qualify the exact audited source commit. The demonstrated
+baseline is `27800aa798d7bf21e7bec4ab57ffa4461e0465c3`. Stage the chart from that checkout
+as for the local demo and use `"$chart_dir/ai-factory"` in place of the packaged chart.
+Replace `values.release.json` with an operator file containing digest-pinned images from
+that build and its approved edge images. Keep this image values file last. [Source qualification](DEPLOYMENT.en.md#qualify-from-source)
 
 Verify anonymous API denial, a real user login and cross-BU read and write denial with synthetic
 accounts on the target Ingress. Qualify the controller's TLS policy, client IP handling, request
@@ -167,3 +177,4 @@ for the pilot's qualification.
 
 The job also exercises optional Alloy delivery to a disposable TLS and Basic Auth Loki endpoint.
 It checks release-scoped collection, log labels, redaction and the collector's Kubernetes permissions.
+[CI evidence and scope](https://github.com/alebgl77/ai-factory/blob/main/docs/README.md#choose-an-environment)

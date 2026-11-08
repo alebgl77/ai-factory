@@ -57,6 +57,15 @@ h3 { margin-bottom: .6rem; font-size: 1.12rem; }
 .brand { display: inline-flex; align-items: center; gap: .65rem; color: var(--ink); font-weight: 700; text-decoration: none; }
 .mark { display: inline-grid; width: 2.3rem; height: 2.3rem; place-items: center; border: 1px solid var(--line); color: var(--mint); font: 700 .85rem Consolas, monospace; }
 .back { font-size: .9rem; }
+.masthead-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; }
+.masthead-actions a { display: inline-flex; align-items: center; min-height: 44px; }
+.locale-switch {
+  padding: .35rem .65rem;
+  border: 1px solid var(--line);
+  font: 700 .75rem/1 Consolas, monospace;
+  text-decoration: none;
+}
+.locale-switch:hover { background: var(--surface); }
 .hero { padding: clamp(2.8rem, 7vw, 6rem) 0 2.1rem; }
 .eyebrow { color: var(--mint); font: 700 .78rem/1.4 Consolas, "Courier New", monospace; letter-spacing: .13em; text-transform: uppercase; }
 .lead { max-width: 53ch; margin-bottom: 1.8rem; font-size: clamp(1.12rem, 2.25vw, 1.38rem); color: var(--muted); }
@@ -124,6 +133,7 @@ footer { color: var(--muted); font-size: .88rem; }
 @media (max-width: 30rem) {
   .masthead, main, footer { width: calc(100% - 1.5rem); }
   .masthead, footer { gap: .65rem; }
+  .masthead { flex-wrap: wrap; }
   .brand { gap: .4rem; }
   .hero-stats { gap: .35rem; }
   .hero-stats div { padding: .6rem .45rem; }

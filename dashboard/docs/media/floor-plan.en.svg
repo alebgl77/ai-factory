@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<svg xml:lang="en" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1066 903" role="img" aria-labelledby="title description">
+  <title id="title">Wayfinding plan for the Factory’s ten zones</title>
+  <desc id="description">Overhead view to the proportions of the 3D model. The War Room, Secure Lab, Coffee corner and Observatory are at the top. The R&amp;D Lab is on the left, Delivery floor in the center, Skills Lab and Agent Ops at the bottom, and Focus pods and entrance with lockers on the right.</desc>
+  <defs>
+    <pattern id="grid" width="37" height="37" x="52" y="124" patternUnits="userSpaceOnUse"><path d="M37 0H0V37" fill="none" stroke="#23465b" stroke-width="1"/></pattern>
+    <style>
+      .label{font:700 16px Consolas,monospace;letter-spacing:1.7px;fill:#7ee8d5}.title{font:700 42px Georgia,serif;fill:#f1faf9}.room{font:700 23px 'Trebuchet MS',sans-serif;fill:#f1faf9}.narrow{font-size:20px}.small{font:17px 'Trebuchet MS',sans-serif;fill:#c1d6e4}.note{font:700 14px Consolas,monospace;fill:#bed4e0}.number{font:700 15px Consolas,monospace;fill:#d6f7f1}.unit{stroke-width:2}.decision{fill:#302d2c;stroke:#d7a163}.delivery{fill:#103a43;stroke:#63b9b1}.shared{fill:#182e43;stroke:#668fa8}.stamp{fill:#14394b;stroke:#4d748a}.tick{stroke:#7795a8;stroke-width:1.5;fill:none}
+    </style>
+  </defs>
+  <rect width="1066" height="903" rx="20" fill="#081b2a"/>
+  <text class="label" x="52" y="43">AI FACTORY / 02 · WAYFINDING</text>
+  <text class="title" x="50" y="91">2D floor plan</text>
+  <g transform="translate(962 50)">
+    <path d="M0 32V0M-5 6L0 0L5 6" class="tick"/>
+    <text class="note" x="14" y="12">−Z</text>
+    <text class="note" x="14" y="30">TOP</text>
+  </g>
+
+  <rect x="52" y="124" width="962" height="666" fill="url(#grid)" stroke="#7795a8" stroke-width="2"/>
+  <g id="war-room">
+    <rect class="unit decision" x="52" y="124" width="277.5" height="240.5"/>
+    <rect class="stamp" x="68" y="143" width="34" height="24" rx="5"/>
+    <text class="number" x="77" y="160">01</text>
+    <text class="room" x="68" y="203">War Room</text>
+    <text class="small" x="68" y="233">Review · resolution</text>
+    <text class="note" x="68" y="265">R1 · 6 SEATS + VIDEO</text>
+  </g>
+  <g id="lab-securise">
+    <rect class="unit decision" x="329.5" y="124" width="222" height="203.5"/>
+    <rect class="stamp" x="345.5" y="143" width="34" height="24" rx="5"/>
+    <text class="number" x="354.5" y="160">02</text>
+    <text class="room" x="345.5" y="203">Secure Lab</text>
+    <text class="small" x="345.5" y="233">Sensitive data</text>
+    <text class="note" x="345.5" y="265">B1 / B2 · C3/C4</text>
+  </g>
+  <g id="coin-cafe">
+    <rect class="unit shared" x="551.5" y="124" width="240.5" height="166.5"/>
+    <rect class="stamp" x="567.5" y="143" width="34" height="24" rx="5"/>
+    <text class="number" x="576.5" y="160">03</text>
+    <text class="room" x="567.5" y="203">Coffee corner</text>
+    <text class="small" x="567.5" y="233">Informal discussion</text>
+  </g>
+  <g id="observatoire">
+    <rect class="unit decision" x="792" y="124" width="222" height="185"/>
+    <rect class="stamp" x="808" y="143" width="34" height="24" rx="5"/>
+    <text class="number" x="817" y="160">04</text>
+    <text class="room" x="808" y="203">Observatory</text>
+    <text class="small" x="808" y="233">AI usage</text>
+    <text class="note" x="808" y="265">FACTORY · OBSERVATORY</text>
+  </g>
+  <g id="rnd-lab">
+    <rect class="unit delivery" x="52" y="364.5" width="162.8" height="425.5"/>
+    <rect class="stamp" x="68" y="383.5" width="34" height="24" rx="5"/>
+    <text class="number" x="77" y="400.5">05</text>
+    <text class="room narrow" x="68" y="443.5">R&amp;D Lab</text>
+    <text class="small" x="68" y="474">Exploration</text>
+    <text class="note" x="68" y="506">X1 / X2 / X3</text>
+  </g>
+  <g id="skills-lab">
+    <rect class="unit delivery" x="214.8" y="664.2" width="303.4" height="125.8"/>
+    <rect class="stamp" x="230.8" y="681" width="34" height="24" rx="5"/>
+    <text class="number" x="239.8" y="698">06</text>
+    <text class="room" x="230.8" y="738">Skills Lab</text>
+    <text class="small" x="230.8" y="768">Training · S1 · 8 seats</text>
+  </g>
+  <g id="agent-ops">
+    <rect class="unit delivery" x="518.2" y="664.2" width="247.9" height="125.8"/>
+    <rect class="stamp" x="534.2" y="681" width="34" height="24" rx="5"/>
+    <text class="number" x="543.2" y="698">07</text>
+    <text class="room" x="534.2" y="738">Agent Ops room</text>
+    <text class="small" x="534.2" y="768">Monitoring · O1 / O2</text>
+  </g>
+  <g id="delivery-floor">
+    <rect class="unit delivery" x="214.8" y="479.2" width="336.7" height="185"/>
+    <rect class="stamp" x="230.8" y="498.2" width="34" height="24" rx="5"/>
+    <text class="number" x="239.8" y="515.2">08</text>
+    <text class="room" x="230.8" y="558.2">Delivery floor</text>
+    <text class="small" x="230.8" y="588.2">Squads · projects · tasks</text>
+    <text class="note" x="230.8" y="620.2">D1 TO D6</text>
+  </g>
+  <g id="focus-pods">
+    <rect class="unit shared" x="873.4" y="309" width="140.6" height="192.4"/>
+    <rect class="stamp" x="889.4" y="328" width="34" height="24" rx="5"/>
+    <text class="number" x="898.4" y="345">09</text>
+    <text class="room narrow" x="889.4" y="389">Focus pods</text>
+    <text class="small" x="889.4" y="419">Calls</text>
+    <text class="note" x="889.4" y="451">C1 / C2</text>
+  </g>
+  <g id="entree">
+    <rect class="unit shared" x="792" y="501.4" width="222" height="288.6"/>
+    <rect class="stamp" x="808" y="520.4" width="34" height="24" rx="5"/>
+    <text class="number" x="817" y="537.4">10</text>
+    <text class="room" x="808" y="580.4">Entry · lockers</text>
+    <text class="small" x="808" y="610.4">Start of walkthrough</text>
+    <circle cx="903" cy="741.9" r="9" fill="#7ee8d5" stroke="#081b2a" stroke-width="3"/>
+  </g>
+
+  <text class="note" x="669" y="425" text-anchor="middle">WALKWAY</text>
+  <path class="tick" stroke-dasharray="5 7" d="M561 443H777"/>
+  <path class="tick" d="M52 806V817H1014V806M533 817V825"/>
+  <text class="note" x="533" y="845" text-anchor="middle">26 SCENE UNITS · X-AXIS</text>
+  <path d="M56 871H80" stroke="#d7a163" stroke-width="6"/><text class="small" x="89" y="877">Decisions and data</text>
+  <path d="M316 871H340" stroke="#63b9b1" stroke-width="6"/><text class="small" x="349" y="877">Delivery and monitoring</text>
+  <path d="M626 871H650" stroke="#668fa8" stroke-width="6"/><text class="small" x="659" y="877">Shared spaces</text>
+  <text class="note" x="1014" y="875" text-anchor="end">SOURCE · POV_ZONES</text>
+</svg>

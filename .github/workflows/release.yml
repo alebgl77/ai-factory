@@ -307,8 +307,9 @@ jobs:
           git archive "$release_sha" -- \
             .env.example docker-compose.yml docker-compose.release.yml docker-compose.portfolio.yml \
             compose config scripts/check_production.py .github/scripts/verify_image.sh \
-            docs/DEPLOYMENT.md docs/GATEWAY_SECURITY.md docs/SECURITY.md docs/fr/PORTFOLIO.md \
-            docs/KUBERNETES.md docs/KUBERNETES_OPERATIONS.md docs/BU_SECURITY.md \
+            docs/DEPLOYMENT.md docs/DEPLOYMENT.en.md docs/GATEWAY_SECURITY.md docs/SECURITY.md \
+            docs/PORTFOLIO.md docs/fr/PORTFOLIO.md docs/BU_SECURITY.md docs/ENTERPRISE_SECURITY_REVIEW.md \
+            docs/KUBERNETES.md docs/KUBERNETES_OPERATIONS.md docs/fr/KUBERNETES.md docs/fr/KUBERNETES_OPERATIONS.md \
             deploy/helm/ai-factory/values-logging.example.yaml LICENSE SECURITY.md licenses | tar -x -C "$bundle"
           python3 .github/scripts/create_release_bundle.py "$bundle" "$RUNNER_TEMP/release" "$TAG" "$release_sha" "$REGISTRY"
           mkdir -p "$bundle/deploy/helm"

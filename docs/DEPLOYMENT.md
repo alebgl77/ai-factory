@@ -1,7 +1,10 @@
 # Exploiter AI Factory sur une infrastructure privée
 
+[English](DEPLOYMENT.en.md) · **Français** · [Documentation sur GitHub](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/README.md)
+
 - [Périmètre de prise en charge](#périmètre-de-prise-en-charge)
 - [Vérifier et installer une release](#vérifier-et-installer-une-release)
+- [Qualifier depuis les sources](#qualifier-depuis-les-sources)
 - [Qualifier l'environnement de production](#qualifier-lenvironnement-de-production)
 - [Identifier l'état de la pile et protéger les volumes](#identifier-létat-de-la-pile-et-protéger-les-volumes)
 - [Répéter la migration PostgreSQL 18](#répéter-la-migration-postgresql-18)
@@ -12,18 +15,20 @@
 
 | Parcours | Périmètre |
 |---|---|
-| Démo publique | Tableau de bord et Decision Companion sur données synthétiques. La simulation de décisions reste dans le navigateur. [Workbench](WORKBENCH.md#open-the-mobile-companion) |
-| Flow Lab | Simulations et réglages dans le navigateur. [Flow Lab](../dashboard/docs/flow-lab.html) |
+| Démo publique | Tableau de bord et Compagnon de décision sur données synthétiques. La simulation de décisions reste dans le navigateur. [Workbench](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/WORKBENCH.md) |
+| Laboratoire de flux | Simulations et réglages dans le navigateur. [Laboratoire de flux](https://alebgl77.github.io/ai-factory/docs/flow-lab.html?lang=fr) |
 | Déploiement privé | Une organisation, authentification SSO et périmètres par unité métier. Les profils optionnels sont activés par l'exploitant selon leurs prérequis. [Périmètres BU](BU_SECURITY.md) |
-| Aide locale facultative | Les suggestions passent par le modèle interne avec les droits de l'unité métier. Pour un cadrage à partir de sources publiques, préparez un brief de marché à partir de faits fournis par l'utilisateur. [Portfolio](fr/PORTFOLIO.md) |
-| Intégrations Workbench | Le SDK fournit l'ingestion CRM et le serveur MCP local prépare des dossiers. Un ERP externe exige un connecteur de brouillons propre à la cible, une clé d'idempotence appliquée par l'ERP et une relecture indépendante. [Contrat d'intégration](ADAPTIVE_WORKBENCH.md) |
+| Aide locale facultative | Les suggestions passent par le modèle interne avec les droits de l'unité métier. Le brief de marché prépare la recherche à partir des éléments fournis par l'utilisateur. [Guide de l’assistance](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/ASSISTANCE_ET_LABORATOIRE.md) |
+| Intégrations Workbench | Le SDK fournit l'ingestion CRM et le serveur MCP local prépare des dossiers. Un ERP externe exige un connecteur de brouillons propre à la cible, une clé d'idempotence appliquée par l'ERP et une relecture indépendante. [Contrat d'intégration](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/ADAPTIVE_WORKBENCH.md) |
 | Mise en service | Répétez sur la cible une restauration, un passage en file puis une reprise et la réception au SIEM. Conservez les résultats dans le dossier de changement. [Qualification](#qualifier-lenvironnement-de-production) |
+
+Pour la pile simulée, suivez le [démarrage rapide Compose](https://github.com/alebgl77/ai-factory/blob/main/README.fr.md#démarrage-local-sans-aucune-clé). Pour Helm, suivez le [guide Kubernetes](fr/KUBERNETES.md).
 
 ## Vérifier et installer une release
 
 Lorsqu'une release fournit le fichier **ai-factory-deploy-${TAG}.tar.gz**, récupérez tous ses fichiers d'actifs dans un même répertoire. Le bundle contient les fichiers Compose et les configurations du commit de la release, ainsi que **release-stack.json** et **docker-compose.release-lock.yml**. L'inventaire indique le commit source, le tag, la plateforme et l'image exacte de chaque service, y compris dans les profils optionnels. L'overlay verrouillé utilise les six images AI Factory signées et les digests de manifeste résolus pour les images des éditeurs tiers. La signature du bundle engage cet inventaire. Les signatures et attestations propres aux images AI Factory se vérifient séparément.
 
-Définissez **TAG** à la version téléchargée. Exécutez ces commandes avec Bash, Cosign v3 et GNU Coreutils.
+Définissez **TAG** à la version téléchargée. Utilisez Bash, Cosign v3, GNU Coreutils et la CLI GitHub avec `gh attestation`. Connectez-vous avec `gh auth login` ou fournissez `GH_TOKEN` au script de vérification d’images via votre gestionnaire de secrets.
 
 ```sh
 set -euo pipefail
@@ -41,27 +46,46 @@ done < ../images.txt
 
 Les images du bundle sont publiées pour **linux/amd64**. Vérifiez l'architecture du moteur cible avec **docker version --format '{{.Server.Os}}/{{.Server.Arch}}'** avant de qualifier l'installation.
 
-Préparez **production.env** hors du répertoire d'installation, avec des droits **0600**. Utilisez **docker-compose.release-lock.yml** comme overlay d'images. La configuration de l'exploitant peut ajouter un overlay de politiques montées en lecture seule. Ajoutez **docker-compose.portfolio.yml** seulement si vous avez configuré le moteur de sous-agents et le fichier privé de son identité. Utilisez les mêmes overlays, profils, nom de projet et variables pour le précontrôle, le démarrage et le diagnostic. Pour une installation existante, relevez le nom exact du projet actif avec **docker compose ls --all**. Confirmez-le au besoin sur le conteneur API actif avec le label **com.docker.compose.project**. Affectez ce nom à **FACTORY_COMPOSE_PROJECT** pour conserver les volumes. Pour une première installation, choisissez un nom stable, par exemple **ai-factory**.
+Préparez **production.env** hors du répertoire d'installation, avec des droits **0600**. La configuration de l'exploitant peut ajouter un overlay de politiques montées en lecture seule. Ajoutez **docker-compose.portfolio.yml** seulement si vous avez configuré le moteur de sous-agents et le fichier privé de son identité. Placez tous les overlays de politiques et du Portefeuille avant **docker-compose.release-lock.yml**. Chargez ce dernier avec l’ultime option **-f** pour donner la priorité aux références d’images signées. Utilisez les mêmes overlays, profils, nom de projet et variables pour le précontrôle, le démarrage et le diagnostic. Pour une installation existante, relevez le nom exact du projet actif avec **docker compose ls --all**. Confirmez-le au besoin sur le conteneur API actif avec le label **com.docker.compose.project**. Affectez ce nom à **FACTORY_COMPOSE_PROJECT** pour conserver les volumes. Pour une première installation, choisissez un nom stable, par exemple **ai-factory**.
 
 ```sh
-# Ajoutez vos overlays privés et profils à la liste avant de poursuivre.
 : "${FACTORY_COMPOSE_PROJECT:?Définissez le nom stable du projet Compose}"
 factory=(docker compose --project-name "$FACTORY_COMPOSE_PROJECT"
   --env-file /secure/ai-factory/production.env --profile sso
-  -f docker-compose.yml -f docker-compose.release-lock.yml)
+  -f docker-compose.yml
+  # Insérez ici les options -f des overlays de politiques et du Portefeuille.
+  -f docker-compose.release-lock.yml)
 "${factory[@]}" config --format json | python3 scripts/check_production.py
 "${factory[@]}" pull
 "${factory[@]}" up -d --no-build --wait
 "${factory[@]}" ps -a
 ```
 
-Consignez le résultat du précontrôle sans le JSON de Compose, qui peut contenir des secrets. Si vous changez une image pour un miroir d'entreprise, vérifiez le digest correspondant et documentez l'écart de référence. Pour une release antérieure qui fournit uniquement **images.txt**, prenez le commit indiqué par son tag et appliquez [l'overlay historique](fr/PORTFOLIO.md#exploitation).
+Consignez le résultat du précontrôle sans le JSON de Compose, qui peut contenir des secrets. Si vous changez une image pour un miroir d'entreprise, vérifiez le digest correspondant et documentez l'écart de référence. Les [artefacts publiés de la v1.1.1](https://github.com/alebgl77/ai-factory/releases/tag/v1.1.1) servent de référence historique. Ils précèdent les contrôles actuels de disponibilité et de sortie réseau et ne contiennent pas le bundle de déploiement actuel.
+
+## Qualifier depuis les sources
+
+Avant la publication du bundle signé correspondant, qualifiez le commit source exact dans un environnement isolé. Le commit `27800aa798d7bf21e7bec4ab57ffa4461e0465c3` est le socle testé pour Compose et Kubernetes. Pour un candidat plus récent, épinglez le clone au commit exact à qualifier. Conservez le commit et les références d’images dans le dossier de preuves. Construisez les images depuis ce clone et appliquez les mêmes politiques en lecture seule et le même précontrôle que sur la cible. [CI du socle](https://github.com/alebgl77/ai-factory/actions/runs/42431505134)
+
+```sh
+set -euo pipefail
+git switch --detach 27800aa798d7bf21e7bec4ab57ffa4461e0465c3
+: "${FACTORY_COMPOSE_PROJECT:?Définissez le nom stable du projet Compose}"
+factory=(docker compose --project-name "$FACTORY_COMPOSE_PROJECT"
+  --env-file /secure/ai-factory/production.env --profile sso
+  -f docker-compose.yml)
+"${factory[@]}" config --format json | python3 scripts/check_production.py
+"${factory[@]}" up -d --build --wait
+"${factory[@]}" ps -a
+```
+
+Partez d’un clone dédié. Ajoutez vos overlays d’exploitation et vos profils au tableau `factory` avant le précontrôle et le démarrage. Pour installer depuis une release signée, utilisez [le bundle correspondant](#vérifier-et-installer-une-release) une fois la release publiée.
 
 ## Qualifier l'environnement de production
 
 Utilisez une VM ou un moteur Docker dédié à une seule frontière de confiance. Alloy découvre les journaux via le proxy Docker. Le proxy autorise certaines lectures par route et le filtre de projet s'exécute dans Alloy. Un Alloy compromis peut demander les métadonnées ou journaux d'autres conteneurs que le moteur expose par ces routes. Sur la cible, inspectez **docker ps -a** et vérifiez que tous les conteneurs appartiennent à la même frontière de confiance. Conservez cette vérification dans les contrôles de capacité et de mise en service. Une installation sur un moteur Docker partagé exige un collecteur ou une frontière de journalisation qui applique l'isolation hors d'Alloy. [Guide de durcissement](SECURITY.md#14-production-hardening-guide)
 
-Le précontrôle vérifie les URL des fournisseurs cloud et VPS, ainsi que les destinations privées pour les modèles sensibles. Utilisez HTTPS pour le cloud et le VPS. L'exception VPS interne concerne le service Compose **ollama-vps** actif sur le réseau interne. Qualifiez la résolution DNS, le filtrage sortant et les identités de service sur votre propre infrastructure. [Contrôles de la passerelle](GATEWAY_SECURITY.md)
+Le précontrôle vérifie les URL des fournisseurs cloud et VPS, ainsi que les destinations privées pour les modèles sensibles. Utilisez HTTPS pour le cloud et le VPS. L'exception VPS interne concerne le service Compose **ollama-vps** actif sur le réseau interne. Pour un nom DNS externe de GPU privé explicitement approuvé, ajoutez `--private-gpu-host HOST` à `scripts/check_production.py` pour chaque nom autorisé. Qualifiez la résolution DNS, le filtrage sortant et les identités de service sur votre propre infrastructure. [Contrôles de la passerelle](GATEWAY_SECURITY.md)
 
 Dans un environnement de qualification avec des données synthétiques, vérifiez le SSO et le refus d'une identité inter-BU, les chemins de décision et les journaux, les alertes et la réception au SIEM. Vérifiez les routes modèle privées et leurs restrictions réseau sur la cible. Enregistrez les digests déployés, le commit, l'état des services, le résultat du précontrôle, le point de sauvegarde et les mesures RPO/RTO issues d'une restauration. Les jobs CI jetables utilisent un fournisseur OIDC de test et des volumes neufs. La vérification du montage PostgreSQL force une recréation du conteneur, relit une marque synthétique, puis la supprime. Cette preuve couvre la persistance du volume du test.
 
@@ -72,7 +96,7 @@ Contrôlez la disponibilité locale de l'API depuis le conteneur. La sonde véri
   "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=3).read().decode())"
 ```
 
-Quand le moteur Portfolio est activé, vérifiez la jauge interne **factory_portfolio_runner_oldest_queue_age_seconds** sur une tâche synthétique éligible. L'âge augmente à partir de la dernière mise à jour de la tâche. La jauge revient à zéro quand la file éligible se vide. Une série absente indique que le moteur est désactivé ou que sa file n'a pas pu être lue. Pour le Workbench en mode **protected_demo**, un administrateur global peut consulter le diagnostic en lecture seule **GET /api/v1/workbench/recovery**. Une réconciliation ERP requise se traite selon le contrat du connecteur. [Diagnostic Workbench](WORKBENCH.md#api-and-integration-contract)
+Quand le moteur Portfolio est activé, vérifiez la jauge interne **factory_portfolio_runner_oldest_queue_age_seconds** sur une tâche synthétique éligible. L'âge augmente à partir de la dernière mise à jour de la tâche. La jauge revient à zéro quand la file éligible se vide. Une série absente indique que le moteur est désactivé ou que sa file n'a pas pu être lue. Pour le Workbench en mode **protected_demo**, un administrateur global peut consulter le diagnostic en lecture seule **GET /api/v1/workbench/recovery**. Une réconciliation ERP requise se traite selon le contrat du connecteur. [Diagnostic Workbench](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/WORKBENCH.md)
 
 ## Identifier l'état de la pile et protéger les volumes
 

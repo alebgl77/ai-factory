@@ -1278,6 +1278,7 @@ if (!process.env.E2E_BASE_URL) {
         await demo.goto(pagesRoot + (isMobile ? '?lang=en' : '?lang=fr'), { waitUntil: 'commit' });
         const entry = demo.locator('#demoEntry');
         const projects = demo.locator('#demoProjects');
+        const roadmapLink = demo.locator('#demoRoadmap');
         await projects.waitFor();
         const sample = await demo.evaluate(() => ({
           day: window.__twin.S.date, time: window.__twin.S.t, live: window.__twin.S.live,
@@ -1291,7 +1292,28 @@ if (!process.env.E2E_BASE_URL) {
         check(`${mode}: public landing has a populated Monday at 10:00 and three visible 44px shortcuts`,
           sample.day === '2026-11-09' && sample.time === 600 && !sample.live && sample.busy && !sample.overflow && targetsInView,
           JSON.stringify(sample));
+        const phaseLabels = isMobile ? ['Identity & testing', 'Skills & ERP', 'Cost & browser agents']
+          : ['Identités & tests', 'Compétences & ERP', 'Coûts & navigateur'];
+        const roadmapInView = () => roadmapLink.evaluate((link, labels) => {
+          const rect = link.getBoundingClientRect();
+          const phases = [...link.querySelectorAll('.demo-roadmap-phases span span')];
+          return rect.height >= 44 && rect.top >= 0 && rect.bottom <= innerHeight &&
+            document.documentElement.scrollWidth <= innerWidth && phases.length === labels.length &&
+            phases.every((phase, index) => phase.textContent === labels[index]);
+        }, phaseLabels);
+        check(`${mode}: the public homepage shows three roadmap horizons and a 44px link`,
+          await roadmapInView());
         if (isMobile) {
+          await demo.setViewportSize({ width: 320, height: 740 });
+          const compactFit = await roadmapLink.evaluate(link => {
+            const rect = link.getBoundingClientRect();
+            return innerWidth === 320 && document.documentElement.scrollWidth <= innerWidth &&
+              rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44;
+          });
+          await roadmapLink.scrollIntoViewIfNeeded();
+          check('the 320px mobile homepage roadmap fits horizontally and scrolls into view', compactFit && await roadmapInView());
+          await demo.setViewportSize({ width: 390, height: 844 });
+          await demo.evaluate(() => window.scrollTo(0, 0));
           await projects.tap();
           await demo.locator('.portfolio[data-portfolio-state="demo"]').waitFor();
           check('mobile project shortcut opens the portfolio while the Three.js request is held',
@@ -1387,6 +1409,18 @@ if (!process.env.E2E_BASE_URL) {
         await demo.locator('#outcome').waitFor();
         check(`${mode}: Flow Lab opens in ${targetLocale} and renders the example`, await demo.locator('html').getAttribute('lang') === targetLocale &&
           await demo.locator('#outcome').getAttribute('data-outcome') === 'delivered');
+        await demo.goBack();
+        await roadmapLink.waitFor();
+        if (isMobile) await demo.setViewportSize({ width: 320, height: 740 });
+        await roadmapLink.focus();
+        await demo.keyboard.press('Enter');
+        await demo.waitForURL(`${pagesRoot}docs/roadmap.html?lang=${targetLocale}`);
+        const roadmapHeading = targetLocale === 'en' ? 'Roadmap' : 'Feuille de route';
+        await demo.getByRole('heading', { name: roadmapHeading, exact: true }).waitFor();
+        check(`${mode}: the keyboard opens the six-workstream roadmap in ${targetLocale} at the Pages subpath`,
+          await demo.locator('html').getAttribute('lang') === targetLocale && await demo.locator('.workstreams article').count() === 6 &&
+          await demo.locator('#roadmap-home').getAttribute('href') === `../index.html?lang=${targetLocale}` &&
+          await demo.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
         check(`${mode}: public shortcuts need no API and raise no JavaScript error`,
           !requests.some(url => new URL(url).pathname.includes('/api/')) && failures.length === 0, failures.join(' | '));
       } finally {
@@ -1397,7 +1431,36 @@ if (!process.env.E2E_BASE_URL) {
   }
 }
 
+const roadmap = await ctx.newPage();
+await roadmap.setViewportSize({ width: 320, height: 740 });
+await roadmap.goto(new URL('docs/roadmap.html?lang=fr#crm-erp', base).href);
+await roadmap.getByRole('heading', { name: 'Transactions CRM–ERP supervisées' }).waitFor();
+const roadmapNoOverflow = await roadmap.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+const englishRoadmap = roadmap.getByRole('link', { name: 'English' });
+const languageTarget = new URL(await englishRoadmap.getAttribute('href'), roadmap.url());
+await englishRoadmap.click();
+await roadmap.getByRole('heading', { name: 'Supervised CRM–ERP transactions' }).waitFor();
+const sourceLinks = await roadmap.locator('.signal a').evaluateAll(links => links.length > 0 && links.every(link => {
+  const source = document.getElementById(link.hash.slice(1));
+  return source?.querySelector('a')?.href.startsWith('https://');
+}));
+check('roadmap keeps a workstream deep link across languages and fits a 320px viewport',
+  roadmapNoOverflow && await roadmap.evaluate(() => document.documentElement.scrollWidth <= innerWidth) &&
+  languageTarget.searchParams.get('lang') === 'en' && languageTarget.hash === '#crm-erp' && roadmap.url() === languageTarget.href && sourceLinks &&
+  await roadmap.locator('#roadmap-guide').getAttribute('href') === './index.en.html');
+await roadmap.close();
+
+const staticRoadmapContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 320, height: 740 } });
+const staticRoadmap = await staticRoadmapContext.newPage();
+await staticRoadmap.goto(new URL('docs/roadmap.html#agent-identity', base).href);
+check('roadmap anchors and both translations remain readable with JavaScript disabled',
+  await staticRoadmap.locator('#agent-identity-title [lang="fr"]').isVisible() &&
+  await staticRoadmap.locator('#agent-identity-title [lang="en"]').isVisible() &&
+  await staticRoadmap.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+await staticRoadmapContext.close();
+
 const guide = await ctx.newPage();
+await guide.setViewportSize({ width: 390, height: 844 });
 await guide.goto(new URL('docs/index.html#sous-agents', base).href);
 const guideNav = guide.getByRole('navigation', { name: 'Sommaire' });
 const anchorsMatch = await guideNav.getByRole('link').evaluateAll(links => links.length > 0 && links.every(link =>
@@ -1408,7 +1471,50 @@ await guide.locator('#guide-results').getByRole('link', { name: 'Supervision et 
 check('operations guide deep links and accent-insensitive search open the relevant runbook',
   anchorsMatch && engineCurrent === 'location' && new URL(guide.url()).hash === '#supervision' &&
   await guide.locator('#supervision details[open]').getByText('Une exécution se bloque ou expire').isVisible());
+
+const guideSectionIds = await guideNav.getByRole('link').evaluateAll(links => links.map(link => link.hash));
+await guide.getByRole('link', { name: 'Read in English' }).click();
+await guide.waitForURL('**/index.en.html#supervision');
+const englishNav = guide.getByRole('navigation', { name: 'Contents' });
+const englishIds = await englishNav.getByRole('link').evaluateAll(links => links.map(link => link.hash));
+const englishSearch = guide.getByRole('searchbox', { name: 'Search the guide' });
+await englishSearch.fill('unmatched-search-term');
+const localizedEmpty = await guide.getByRole('status').textContent();
+await guide.getByRole('button', { name: 'Clear' }).click();
+const resetFocused = await englishSearch.evaluate(input => input === document.activeElement && !input.value);
+await englishSearch.fill('execution stalls');
+await englishSearch.press('Enter');
+const result = guide.locator('#guide-results').getByRole('link', { name: 'Monitoring and incidents' });
+const keyboardResult = await result.evaluate(link => link === document.activeElement);
+await guide.keyboard.press('Enter');
+check('English operations guide preserves French anchors and supports keyboard search',
+  (await guide.locator('html').getAttribute('lang')) === 'en' &&
+  JSON.stringify(guideSectionIds) === JSON.stringify(englishIds) &&
+  localizedEmpty === 'No sections found. Try another term.' && resetFocused && keyboardResult &&
+  await guide.locator('#supervision details[open]').getByText('An execution stalls or times out').isVisible() &&
+  await guide.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth));
+
+await guide.goto(new URL('docs/architecture.en.html#zone-observatoire', base).href);
+const englishRoomOpen = await guide.locator('#zone-observatoire').evaluate(room => room.open);
+await guide.getByRole('link', { name: 'Lire en français' }).click();
+await guide.waitForURL('**/architecture.html#zone-observatoire');
+check('architecture atlas switches language while keeping the room open on mobile',
+  englishRoomOpen &&
+  await guide.locator('#zone-observatoire details, #zone-observatoire').evaluate(room => room.open) &&
+  await guide.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth));
 await guide.close();
+
+const staticGuideContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+try {
+  const staticGuide = await staticGuideContext.newPage();
+  await staticGuide.goto(new URL('docs/index.en.html', base).href);
+  await staticGuide.getByRole('navigation', { name: 'Contents' }).getByRole('link', { name: 'Kubernetes pilot' }).click();
+  check('operations guide keeps native navigation and content without JavaScript',
+    new URL(staticGuide.url()).hash === '#kubernetes' &&
+    await staticGuide.getByRole('heading', { name: 'Kubernetes pilot' }).isVisible());
+} finally {
+  await staticGuideContext.close();
+}
 
 await browser.close();
 const failed = results.filter(r => !r.ok);

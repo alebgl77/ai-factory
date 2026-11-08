@@ -1,5 +1,7 @@
 # Kubernetes operations
 
+**English** · [Français](fr/KUBERNETES_OPERATIONS.md) · [Installation](KUBERNETES.md)
+
 ## Factory state and recovery
 
 The Factory PVC holds the API state directory, including SQLite databases and the

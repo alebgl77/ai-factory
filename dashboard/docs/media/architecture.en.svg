@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT -->
+<svg xml:lang="en" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1088 848" role="img" aria-labelledby="title description">
+  <title id="title">AI Factory portfolio architecture</title>
+  <desc id="description">GitHub Pages serves a fictional demo. In a private deployment, Caddy and the OIDC proxy protect the interface and FastAPI on one origin. The API applies business-unit policy and maintains two stores for this workflow. The built-in runner reaches the local model through LiteLLM. Workbench reconciles the exact decision with the portfolio.</desc>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#163144" stroke-width="1"/></pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8Z" fill="#7ee8d5"/></marker>
+    <marker id="review" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#ffcb86"/></marker>
+    <style>
+      .label{font:700 16px Consolas,monospace;letter-spacing:2px;fill:#7ee8d5}.title{font:700 45px Georgia,serif;fill:#f2faf8}.sub{font:17px 'Trebuchet MS',sans-serif;fill:#bbd0dc}.name{font:700 21px 'Trebuchet MS',sans-serif;fill:#f2faf8}.small{font:16px 'Trebuchet MS',sans-serif;fill:#c6d9e4}.tag{font:700 14px Consolas,monospace;letter-spacing:.7px;fill:#b3d4e1}.wire{fill:none;stroke:#7ee8d5;stroke-width:2.5;marker-end:url(#arrow)}.pair{marker-start:url(#arrow)}.amber{fill:none;stroke:#ffcb86;stroke-width:2.5;stroke-dasharray:6 5;marker-end:url(#review)}.box{fill:#112d40;stroke:#42687f;stroke-width:1.5}.accent{stroke:#579d98}.approval{stroke:#aa835a}.public{fill:#172d41;stroke:#58758b}.boundary{fill:#0a2334;fill-opacity:.8;stroke:#50948f;stroke-width:1.5;stroke-dasharray:7 6}
+    </style>
+  </defs>
+  <rect width="1088" height="848" rx="20" fill="#081b2a"/>
+  <rect width="1088" height="848" rx="20" fill="url(#grid)" opacity=".6"/>
+  <path d="M36 112H1052" stroke="#42687f"/>
+  <text class="label" x="46" y="40">AI FACTORY / 01 · LOGICAL ARCHITECTURE</text>
+  <text class="title" x="44" y="91">From browser to decision</text>
+  <text class="tag" x="1043" y="39" text-anchor="end">TRUST BOUNDARIES</text>
+
+  <rect class="box public" x="44" y="136" width="310" height="100" rx="10"/>
+  <text class="tag" x="62" y="161">PUBLIC · GITHUB PAGES</text>
+  <text class="name" x="62" y="192">Static demo</text>
+  <text class="small" x="62" y="217">Three.js · embedded fictional data</text>
+  <rect class="box accent" x="390" y="136" width="308" height="100" rx="10"/>
+  <text class="tag" x="408" y="161">PRIVATE ACCESS</text>
+  <text class="name" x="408" y="192">Browser</text>
+  <text class="small" x="408" y="217">Employees, managers, approvers</text>
+  <rect class="box" x="734" y="136" width="310" height="100" rx="10"/>
+  <text class="tag" x="752" y="161">FEDERATED IDENTITY</text>
+  <text class="name" x="752" y="192">OIDC provider</text>
+  <text class="small" x="752" y="217">Stable subject and verified groups</text>
+
+  <rect class="boundary" x="35" y="272" width="1018" height="500" rx="14"/>
+  <text class="label" x="60" y="304">PRIVATE DEPLOYMENT</text>
+  <path class="wire" d="M544 236V324"/>
+  <path class="wire pair" d="M889 236V265H725V366H698"/>
+  <path class="wire" d="M390 372H322"/>
+  <path class="wire" d="M544 422V468"/>
+  <path class="wire" stroke-dasharray="5 5" d="M698 502H724V372H766"/>
+  <path class="wire pair" d="M390 521H322"/>
+  <path class="wire pair" d="M698 521H766"/>
+  <path class="amber" d="M891 574V617H210V574"/>
+  <path class="wire pair" d="M137 574V655"/>
+  <path class="wire pair" d="M322 703H390"/>
+  <path class="wire pair" d="M698 703H766"/>
+
+  <rect class="box" x="60" y="325" width="262" height="97" rx="10"/>
+  <text class="name" x="77" y="356">Web interface</text>
+  <text class="small" x="77" y="384">3D map and Planning console</text>
+  <text class="small" x="77" y="407">Decision Companion</text>
+  <rect class="box accent" x="390" y="325" width="308" height="97" rx="10"/>
+  <text class="name" x="408" y="356">Caddy + SSO proxy</text>
+  <text class="small" x="408" y="384">TLS · identity from trusted proxy</text>
+  <text class="small" x="408" y="407">Same origin for interface and API</text>
+  <rect class="box" x="766" y="325" width="262" height="97" rx="10"/>
+  <text class="name" x="784" y="356">Business-unit policy</text>
+  <text class="small" x="784" y="384">One group grants</text>
+  <text class="small" x="784" y="407">both role and scope</text>
+
+  <rect class="box accent" x="60" y="469" width="262" height="105" rx="10"/>
+  <text class="tag" x="77" y="493">SQLITE · PRIVATE STORE</text>
+  <text class="name" x="77" y="523">Portfolio</text>
+  <text class="small" x="77" y="549">Tasks, evidence and attempts</text>
+  <rect class="box accent" x="390" y="469" width="308" height="105" rx="10"/>
+  <text class="tag" x="408" y="493">ACCESS CONTROL</text>
+  <text class="name" x="408" y="523">FastAPI</text>
+  <text class="small" x="408" y="549">Identity, permissions and revisions</text>
+  <rect class="box approval" x="766" y="469" width="262" height="105" rx="10"/>
+  <text class="tag" x="784" y="493">SQLITE · PRIVATE STORE</text>
+  <text class="name" x="784" y="523">Workbench</text>
+  <text class="small" x="784" y="549">Cases, decisions and audit</text>
+  <rect x="298" y="603" width="480" height="28" rx="14" fill="#302c29" stroke="#aa835a"/>
+  <text x="538" y="622" fill="#ffdcad" text-anchor="middle" font-family="'Trebuchet MS', sans-serif" font-size="15">Decision reconciliation · exact case + revision + digest</text>
+
+  <rect class="box accent" x="60" y="656" width="262" height="93" rx="10"/>
+  <text class="name" x="77" y="687">Built-in runner</text>
+  <text class="small" x="77" y="714">Read / prepare</text>
+  <text class="small" x="77" y="735">Result, duration and tokens</text>
+  <rect class="box accent" x="390" y="656" width="308" height="93" rx="10"/>
+  <text class="name" x="408" y="687">LiteLLM · strict routing</text>
+  <text class="small" x="408" y="714">Use-case virtual key</text>
+  <text class="small" x="408" y="735">chat-sensitive alias</text>
+  <rect class="box accent" x="766" y="656" width="262" height="93" rx="10"/>
+  <text class="name" x="784" y="687">Local model</text>
+  <text class="small" x="784" y="714">Private network</text>
+  <text class="small" x="784" y="735">Bounded text response</text>
+
+  <path d="M47 805H81" stroke="#7ee8d5" stroke-width="2.5"/>
+  <text class="small" x="92" y="810">Application flow</text>
+  <path d="M260 805H294" stroke="#ffcb86" stroke-dasharray="6 5" stroke-width="2.5"/>
+  <text class="small" x="306" y="810">Decision feedback</text>
+  <text class="tag" x="1042" y="810" text-anchor="end">SCOPE · PORTFOLIO</text>
+</svg>
