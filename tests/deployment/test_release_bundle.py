@@ -4,6 +4,8 @@
 import importlib.util
 import json
 import shutil
+import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,34 @@ SHA = "1" * 40
 DIGEST = "sha256:" + "2" * 64
 UPSTREAM_DIGEST = "sha256:" + "3" * 64
 REGISTRY = "ghcr.io/example"
+
+
+def test_exact_archive_paths_include_the_offline_documentation(tmp_path):
+    manifest = ROOT / ".github/scripts/release_bundle.paths"
+    paths = manifest.read_text(encoding="utf-8").splitlines()
+    archive = tmp_path / "deploy.tar"
+    with archive.open("wb") as output:
+        subprocess.run(["git", "archive", "HEAD", "--", *paths], cwd=ROOT,
+                       stdout=output, check=True, timeout=30)
+    staged = tmp_path / "staged"
+    with tarfile.open(archive) as source:
+        source.extractall(staged, filter="data")
+    # Use edited guides from this checkout too so the check works before commit.
+    for document in staged.rglob("*.md"):
+        document.write_bytes((ROOT / document.relative_to(staged)).read_bytes())
+    bundle.validate_markdown_links(staged)
+
+
+def test_documentation_checker_rejects_a_missing_file(tmp_path):
+    (tmp_path / "operator.md").write_text(
+        "[existing](operator.md#details)\n[anchor](#details)\n[external](https://example.org)\n"
+        "~~~markdown\n[example](illustration-only.md)\n~~~\n"
+        "[French guide](fr/guide.md)\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=r"operator.md -> fr/guide.md") as error:
+        bundle.validate_markdown_links(tmp_path)
+    assert "illustration-only.md" not in str(error.value)
 
 
 def test_inventory_reuses_the_same_digest_for_identical_upstream_images():
@@ -55,6 +85,34 @@ def test_missing_extra_swapped_or_invalid_release_artifacts_fail(refs):
 def test_unresolved_or_invalid_upstream_digest_fails():
     with pytest.raises(ValueError, match="did not resolve"):
         bundle.deployment_inventory({"edge": {"image": "caddy:2.11.7-alpine"}}, {}, REGISTRY, lambda _: "bad")
+
+
+def test_helm_values_reuse_the_same_release_inventory(tmp_path):
+    chart_assets = tmp_path / "deploy" / "helm"
+    chart_assets.mkdir(parents=True)
+    evidence = {"services": {
+        "api": {"image": f"{REGISTRY}/api@{DIGEST}", "origin": "release"},
+        "dashboard": {"image": f"{REGISTRY}/dashboard@{DIGEST}", "origin": "release"},
+        "edge": {"image": f"caddy:2.11.7-alpine@{UPSTREAM_DIGEST}", "origin": "upstream"},
+        "oauth2-proxy": {"image": f"quay.io/oauth2-proxy/oauth2-proxy:v7.15.6@{UPSTREAM_DIGEST}", "origin": "upstream"},
+        "alloy": {"image": f"grafana/alloy:v1.21.3@{UPSTREAM_DIGEST}", "origin": "upstream"},
+    }}
+    inventory = tmp_path / "release-stack.json"
+    inventory.write_text(json.dumps(evidence), encoding="utf-8")
+    bundle.create_helm_values(tmp_path)
+    assert json.loads((chart_assets / bundle.HELM_VALUES_NAME).read_text(encoding="utf-8")) == {
+        "images": {
+            "api": {"repository": f"{REGISTRY}/api", "digest": DIGEST},
+            "dashboard": {"repository": f"{REGISTRY}/dashboard", "digest": DIGEST},
+            "caddy": {"repository": "caddy", "digest": UPSTREAM_DIGEST},
+            "oauth2Proxy": {"repository": "quay.io/oauth2-proxy/oauth2-proxy", "digest": UPSTREAM_DIGEST},
+        },
+        "logging": {"alloy": {"image": {"repository": "grafana/alloy", "digest": UPSTREAM_DIGEST}}},
+    }
+    evidence["services"]["dashboard"]["image"] = f"{REGISTRY}/api@{DIGEST}"
+    inventory.write_text(json.dumps(evidence), encoding="utf-8")
+    with pytest.raises(ValueError, match="dashboard"):
+        bundle.create_helm_values(tmp_path)
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose is required for real config rendering")

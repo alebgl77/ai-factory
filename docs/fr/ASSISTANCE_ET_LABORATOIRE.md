@@ -1,8 +1,10 @@
-# Cahier des charges · Assistance et laboratoire de flux IA
+# Assistance contextuelle et Laboratoire de flux IA
+
+[English](../ASSIST_AND_FLOW_LAB.md) · **Français** · [Documentation](README.md)
 
 ## 1. Périmètre de la première livraison
 
-L’assistance accompagne trois gestes dans Pilotage et le portefeuille. Elle propose un brouillon pendant la saisie, explique un processus par étapes et prépare une note de décision. Le laboratoire, accessible depuis le R&D Lab, permet de construire et tester une topologie fictive avec les mêmes concepts de routage, de contrôle et de mesure que la Factory.
+L’assistance accompagne trois gestes dans Pilotage et le portefeuille. Elle propose un brouillon pendant la saisie, explique un processus par étapes et prépare une note de décision. Le [Laboratoire de flux](https://alebgl77.github.io/ai-factory/docs/flow-lab.html?lang=fr), accessible depuis le R&D Lab, permet de construire et tester une topologie fictive avec les mêmes concepts de routage, de contrôle et de mesure que la Factory.
 
 | Besoin | Entrée | Résultat vérifiable |
 | --- | --- | --- |
@@ -20,13 +22,11 @@ L’assistance accompagne trois gestes dans Pilotage et le portefeuille. Elle pr
 
 La préparation d’une décision exige un groupe SSO qui porte à la fois le rôle d’administrateur et le périmètre global. L’API revérifie la politique et la liaison du modèle avant de rendre le texte. L’interface contrôle la session par une nouvelle requête avant affichage, puis pendant que l’aide privée reste ouverte.
 
+`GET /api/v1/assist` renvoie les périmètres disponibles. `POST /api/v1/assist` lance la suggestion sur demande. [Contrôles de la passerelle](../GATEWAY_SECURITY.md) · [Configuration du moteur](PORTFOLIO.md#moteur-intégré) · [Tests des droits et requêtes](../../api/tests/test_assist.py)
+
 ### Analyse de marché
 
-Chaque analyse demande un choix entre **Web public** et **sources internes**. La première livraison prépare la recherche et l’arbitrage. La collecte et la synthèse de résultats vérifiés constituent une intégration distincte.
-
-- Le parcours Web public utilisera une requête relue par l’utilisateur et un connecteur d’egress dédié. Les références devront indiquer la source, la date de consultation et les limites de l’élément relevé.
-- Le parcours interne utilisera des sources approuvées dans le périmètre vérifié de l’utilisateur. Le filtrage par BU précédera la récupération de contenu.
-- Les résultats publics et internes garderont leur provenance. Les documents serviront de preuves, avec leur contenu traité comme une entrée non fiable. La synthèse indiquera les faits vérifiés, les hypothèses et les points ouverts.
+Chaque analyse demande un choix entre **Web public** et **sources internes**. Fournissez les faits déjà établis avec le titre et la date de la source. L’assistance prépare les questions, les hypothèses et les critères de vérification à partir de ces éléments. La collecte, la vérification et la synthèse de résultats obtenus indépendamment nécessitent une intégration distincte. [Feuille de route](https://alebgl77.github.io/ai-factory/docs/roadmap.html?lang=fr)
 
 ## 3. Laboratoire de flux IA
 
@@ -66,8 +66,6 @@ flowchart LR
 
 L’inférence privée et le laboratoire suivent deux chemins séparés. La page du laboratoire bloque les connexions sortantes avec sa politique de contenu et utilise des ressources du site. Les modèles, serveurs et flux figurent dans le graphe comme composants simulés. [Directive CSP connect-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/connect-src)
 
-Une évolution vers des exécutions isolées côté serveur utilisera un processus dédié non privilégié, un réseau désactivé, une image par empreinte, des limites CPU et mémoire et un volume réservé aux résultats. Le moteur recevra seulement un scénario validé. L’API d’orchestration contrôlera les droits et la conservation des résultats par BU. [Réseau Docker none](https://docs.docker.com/engine/network/drivers/none/)
-
 ## 5. Recette
 
 | Test | Résultat attendu |
@@ -85,7 +83,4 @@ Une évolution vers des exécutions isolées côté serveur utilisera un process
 
 ## 6. Ordre de déploiement
 
-1. **Pilote.** Assistance à la rédaction et à la compréhension, préparation des décisions et simulation fictive.
-2. **Extension par interface.** Décrire pour chaque écran l’aide attendue, les données permises, le contrôle humain et la preuve du résultat. Prioriser le portefeuille, les décisions et l’administration. Étendre ensuite aux formulaires, à l’Observatoire et aux parcours de formation.
-3. **Recherche vérifiable.** Raccorder les sources publiques et internes avec deux circuits d’accès, une trace des sources et une synthèse auditable.
-4. **Exploitation du laboratoire.** Introduire, si le besoin est confirmé, des exécutions dédiées, un historique partagé et cloisonné, une politique de rétention et des tests de charge isolés.
+Les évolutions et leurs critères de qualification figurent dans la [feuille de route](https://alebgl77.github.io/ai-factory/docs/roadmap.html?lang=fr).

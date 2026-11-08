@@ -282,14 +282,53 @@ def test_no_published_ports_allowed_for_an_isolated_edge(valid_config):
     assert production_errors(valid_config) == []
 
 
-def test_rendered_gpu_profile_service_names_are_supported(valid_config):
+@pytest.fixture
+def gpu_profile(valid_config):
     services = valid_config["services"]
-    services["vllm-local"] = {}
-    services["vllm-embed"] = {}
+    valid_config["name"] = "factory-production"
+    valid_config["networks"].update(
+        factory={"name": "factory-production_factory", "internal": True},
+        egress={"name": "factory-production_egress"},
+    )
+    for name in ("litellm", "vllm-local", "vllm-embed"):
+        services.setdefault(name, {})["networks"] = {"factory": None, "egress": None}
     services["litellm"]["environment"].update(
         LOCAL_API_BASE="http://vllm-local:8000/v1", LOCAL_EMBED_API_BASE="http://vllm-embed:8000/v1",
     )
-    assert production_errors(valid_config) == []
+    return valid_config
+
+
+def test_rendered_gpu_profile_service_names_are_supported(gpu_profile):
+    assert production_errors(gpu_profile) == []
+
+
+@pytest.mark.parametrize("variable,service", [
+    ("LOCAL_API_BASE", "vllm-local"), ("LOCAL_EMBED_API_BASE", "vllm-embed"),
+])
+@pytest.mark.parametrize("change", [
+    "missing", "no_factory", "public_factory", "external_egress", "alias", "host_map", "host_list", "wrong_port",
+])
+def test_gpu_profile_rejects_unverified_compose_destinations(gpu_profile, variable, service, change):
+    services = gpu_profile["services"]
+    gateway = services["litellm"]
+    networks = gpu_profile["networks"]
+    if change == "missing":
+        del services[service]
+    elif change == "no_factory":
+        del services[service]["networks"]["factory"]
+    elif change == "public_factory":
+        networks["factory"]["internal"] = False
+    elif change == "external_egress":
+        networks["egress"]["external"] = True
+    elif change == "alias":
+        services["api"]["networks"]["factory"] = {"aliases": [service.upper()]}
+    elif change == "host_map":
+        gateway["extra_hosts"] = {service: "203.0.113.10"}
+    elif change == "host_list":
+        gateway["extra_hosts"] = [f"{service}=203.0.113.10"]
+    else:
+        gateway["environment"][variable] = f"http://{service}:8001/v1"
+    assert any(variable in error for error in production_errors(gpu_profile))
 
 
 def test_identity_network_rejects_a_dynamic_trusted_address_and_unintended_peers(valid_config):
@@ -316,6 +355,21 @@ def test_gpu_dns_requires_an_exact_explicit_operator_allowlist(valid_config):
     result = _preflight(config, "--private-gpu-host", "chat.gpu.company.internal",
                         "--private-gpu-host", "embedding.gpu.company.internal")
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("override", [
+    {"extra_hosts": {"gpu.company.internal": "10.40.20.99"}},
+    {"extra_hosts": ["gpu.company.internal=203.0.113.10"]},
+    {"dns": ["10.40.20.99"]},
+    {"dns_search": ["company.internal"]},
+])
+def test_approved_gpu_dns_does_not_allow_gateway_dns_overrides(valid_config, override):
+    gateway = valid_config["services"]["litellm"]
+    gateway["environment"]["LOCAL_API_BASE"] = "https://gpu.company.internal/v1"
+    gateway.update(override)
+    assert any("LOCAL_API_BASE" in error for error in production_errors(
+        valid_config, private_gpu_hosts=["gpu.company.internal"],
+    ))
 
 
 def test_cli_errors_never_reveal_configuration_values(valid_config):
@@ -363,10 +417,12 @@ def test_rendered_sample_is_loopback_only_and_not_production():
     assert "ENCRYPTION_KEY" in result.stderr and "FACTORY_AUTH_MODE" in result.stderr
 
 
-@pytest.mark.parametrize("profiles,vps_base", [
-    ((), "https://vps.provider.example/v1"), (("vps",), "http://ollama-vps:11434/v1"),
+@pytest.mark.parametrize("profiles,vps_base,chat_base,embed_base", [
+    ((), "https://vps.provider.example/v1", "http://10.40.20.15:8000/v1", "http://[fd00::20]:8000/v1"),
+    (("vps", "local-gpu"), "http://ollama-vps:11434/v1",
+     "http://vllm-local:8000/v1", "http://vllm-embed:8000/v1"),
 ])
-def test_rendered_production_fixture_passes(profiles, vps_base):
+def test_rendered_production_fixture_passes(profiles, vps_base, chat_base, embed_base):
     fixture_vars = (
         "SSO_CLIENT_ID", "SSO_CLIENT_SECRET", "SSO_COOKIE_SECRET", "LITELLM_MASTER_KEY", "LITELLM_SALT_KEY",
         "LANGFUSE_SALT", "LANGFUSE_NEXTAUTH_SECRET", "LANGFUSE_INIT_PROJECT_PUBLIC_KEY",
@@ -383,7 +439,7 @@ def test_rendered_production_fixture_passes(profiles, vps_base):
         "GRAFANA_PUBLIC_URL": f"https://grafana.{PRODUCTION_HOST}",
         "LANGFUSE_PUBLIC_URL": f"https://langfuse.{PRODUCTION_HOST}",
         "CLOUD_API_BASE": "https://cloud.provider.example/v1", "VPS_API_BASE": vps_base,
-        "LOCAL_API_BASE": "http://10.40.20.15:8000/v1", "LOCAL_EMBED_API_BASE": "http://[fd00::20]:8000/v1",
+        "LOCAL_API_BASE": chat_base, "LOCAL_EMBED_API_BASE": embed_base,
         "SSO_OIDC_ISSUER_URL": "https://idp.company.internal", "SSO_EMAIL_DOMAINS": "company.internal",
     }, *profiles)
     ports = json.loads(rendered)["services"]["edge"]["ports"]

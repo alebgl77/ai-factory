@@ -1,19 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: MIT -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1088 848" role="img" aria-labelledby="title description">
+<svg xml:lang="fr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1088 848" role="img" aria-labelledby="title description">
   <title id="title">Architecture du portefeuille AI Factory</title>
   <desc id="description">GitHub Pages sert une démonstration fictive. Dans l’installation privée, Caddy et le proxy OIDC protègent l’interface et FastAPI sur la même origine. L’API applique la politique de BU et conserve deux bases. Le moteur intégré utilise LiteLLM pour le modèle local. Le Workbench rapproche la décision exacte avec le portefeuille.</desc>
   <defs>
-    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#163144" stroke-width="1"/></pattern>
-    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8Z" fill="#7ee8d5"/></marker>
-    <marker id="review" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#ffcb86"/></marker>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#34382e" stroke-width="1"/></pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8Z" fill="#d7fa68"/></marker>
+    <marker id="review" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#e2dcd0"/></marker>
     <style>
-      .label{font:700 16px Consolas,monospace;letter-spacing:2px;fill:#7ee8d5}.title{font:700 45px Georgia,serif;fill:#f2faf8}.sub{font:17px 'Trebuchet MS',sans-serif;fill:#bbd0dc}.name{font:700 21px 'Trebuchet MS',sans-serif;fill:#f2faf8}.small{font:16px 'Trebuchet MS',sans-serif;fill:#c6d9e4}.tag{font:700 14px Consolas,monospace;letter-spacing:.7px;fill:#b3d4e1}.wire{fill:none;stroke:#7ee8d5;stroke-width:2.5;marker-end:url(#arrow)}.pair{marker-start:url(#arrow)}.amber{fill:none;stroke:#ffcb86;stroke-width:2.5;stroke-dasharray:6 5;marker-end:url(#review)}.box{fill:#112d40;stroke:#42687f;stroke-width:1.5}.accent{stroke:#579d98}.approval{stroke:#aa835a}.public{fill:#172d41;stroke:#58758b}.boundary{fill:#0a2334;fill-opacity:.8;stroke:#50948f;stroke-width:1.5;stroke-dasharray:7 6}
+      .label{font:700 16px Consolas,monospace;letter-spacing:2px;fill:#d7fa68}
+      .title{font:750 45px 'Segoe UI',system-ui,sans-serif;letter-spacing:-1.6px;fill:#f5f4e9}
+      .name{font:700 21px 'Segoe UI',system-ui,sans-serif;fill:#f5f4e9}
+      .small{font:16px 'Segoe UI',system-ui,sans-serif;fill:#c8c9ba}
+      .tag{font:700 14px Consolas,monospace;letter-spacing:.7px;fill:#c5c8b8}
+      .wire{fill:none;stroke:#d7fa68;stroke-width:2.5;marker-end:url(#arrow)}
+      .pair{marker-start:url(#arrow)}
+      .feedback{fill:none;stroke:#e2dcd0;stroke-width:2.5;stroke-dasharray:6 5;marker-end:url(#review)}
+      .box{fill:#232720;stroke:#616756;stroke-width:1.5}
+      .accent{stroke:#8e9c68}
+      .approval{stroke:#c0b8a8;stroke-dasharray:6 4}
+      .public{fill:#1b1e19;stroke:#616756}
+      .boundary{fill:#171b15;fill-opacity:.8;stroke:#8e9c68;stroke-width:1.5;stroke-dasharray:7 6}
     </style>
   </defs>
-  <rect width="1088" height="848" rx="20" fill="#081b2a"/>
+  <rect width="1088" height="848" rx="20" fill="#101211"/>
   <rect width="1088" height="848" rx="20" fill="url(#grid)" opacity=".6"/>
-  <path d="M36 112H1052" stroke="#42687f"/>
+  <path d="M36 112H1052" stroke="#616756"/>
   <text class="label" x="46" y="40">AI FACTORY / 01 · ARCHITECTURE LOGIQUE</text>
   <text class="title" x="44" y="91">Du navigateur à la décision</text>
   <text class="tag" x="1043" y="39" text-anchor="end">VUE DE CONFIANCE</text>
@@ -40,7 +52,7 @@
   <path class="wire" stroke-dasharray="5 5" d="M698 502H724V372H766"/>
   <path class="wire pair" d="M390 521H322"/>
   <path class="wire pair" d="M698 521H766"/>
-  <path class="amber" d="M891 574V617H210V574"/>
+  <path class="feedback" d="M891 574V617H210V574"/>
   <path class="wire pair" d="M137 574V655"/>
   <path class="wire pair" d="M322 703H390"/>
   <path class="wire pair" d="M698 703H766"/>
@@ -70,8 +82,8 @@
   <text class="tag" x="784" y="493">SQLITE · BASE PRIVÉE</text>
   <text class="name" x="784" y="523">Workbench</text>
   <text class="small" x="784" y="549">Dossiers, décisions et audit</text>
-  <rect x="298" y="603" width="480" height="28" rx="14" fill="#302c29" stroke="#aa835a"/>
-  <text x="538" y="622" fill="#ffdcad" text-anchor="middle" font-family="'Trebuchet MS', sans-serif" font-size="15">Décision rapprochée · dossier + révision + empreinte exacts</text>
+  <rect x="298" y="603" width="480" height="28" rx="14" fill="#2d2c26" stroke="#a69f90"/>
+  <text x="538" y="622" fill="#f1ebe0" text-anchor="middle" font-family="'Segoe UI', system-ui, sans-serif" font-size="15">Décision rapprochée · dossier + révision + empreinte exacts</text>
 
   <rect class="box accent" x="60" y="656" width="262" height="93" rx="10"/>
   <text class="name" x="77" y="687">Moteur intégré</text>
@@ -86,9 +98,9 @@
   <text class="small" x="784" y="714">Réseau privé</text>
   <text class="small" x="784" y="735">Réponse texte bornée</text>
 
-  <path d="M47 805H81" stroke="#7ee8d5" stroke-width="2.5"/>
+  <path d="M47 805H81" stroke="#d7fa68" stroke-width="2.5"/>
   <text class="small" x="92" y="810">Flux applicatif</text>
-  <path d="M260 805H294" stroke="#ffcb86" stroke-dasharray="6 5" stroke-width="2.5"/>
+  <path d="M260 805H294" stroke="#e2dcd0" stroke-dasharray="6 5" stroke-width="2.5"/>
   <text class="small" x="306" y="810">Retour de décision</text>
   <text class="tag" x="1042" y="810" text-anchor="end">PÉRIMÈTRE · PORTEFEUILLE</text>
 </svg>

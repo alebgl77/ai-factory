@@ -55,6 +55,7 @@ import json
 import math
 import os
 import re
+import socket
 import ssl
 import sys
 import threading
@@ -65,7 +66,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 from litellm.integrations.custom_logger import CustomLogger
 from prometheus_client import CollectorRegistry, Counter, Histogram, start_http_server
@@ -130,6 +131,11 @@ _OPENAI_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A
 _KEY_DIGEST = re.compile(r"[0-9a-f]{64}")
 _AUTH_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _VPS_HTTP_BASE = "http://ollama-vps:11434/v1"
+_COMPOSE_GPU_BASES = {"LOCAL_API_BASE": "http://vllm-local:8000/v1",
+                      "LOCAL_EMBED_API_BASE": "http://vllm-embed:8000/v1"}
+_PRIVATE_GPU_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7",
+))
 _SIM_PROVIDER_BASES = {"CLOUD_API_BASE": "http://mock-llm:8080/cloud/v1",
                        "VPS_API_BASE": "http://mock-llm:8080/vps/v1"}
 _OVERRIDES = frozenset({
@@ -254,30 +260,131 @@ def _gateway_policy() -> dict | None:
     return None
 
 
-def _https_provider_base(value: str) -> bool:
+def _provider_url(value: str) -> SplitResult | None:
     if any(char.isspace() or ord(char) < 32 or char in "\\?#" for char in value):
-        return False
+        return None
     try:
         url = urlsplit(value)
         port = url.port
     except ValueError:
-        return False
+        return None
     host = url.hostname
-    if url.scheme != "https" or not host or port == 0:
-        return False
+    if url.scheme not in {"http", "https"} or not host or "%" in host or port == 0:
+        return None
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
         if len(host) > 253 or not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
                                       for label in host.split(".")):
-            return False
+            return None
         authority = host
     else:
         authority = f"[{host}]" if address.version == 6 else host
-    return url.netloc.lower() == (authority if port is None else f"{authority}:{port}")
+    expected = authority if port is None else f"{authority}:{port}"
+    return url if url.netloc.lower() == expected else None
 
 
-def _install_strict_http_client():
+def _https_provider_base(value: str) -> bool:
+    url = _provider_url(value)
+    return url is not None and url.scheme == "https"
+
+
+def _private_gpu_ip(address: str) -> bool:
+    if "%" in address:
+        return False
+    ip = ipaddress.ip_address(address)
+    return any(ip in network for network in _PRIVATE_GPU_NETWORKS)
+
+
+def _private_gpu_addresses(records) -> tuple[str, ...]:
+    addresses = tuple(dict.fromkeys(record[4][0] for record in records))
+    try:
+        return addresses if all(_private_gpu_ip(address) for address in addresses) else ()
+    except ValueError:
+        return ()
+
+
+def _strict_gpu_dns_hosts() -> set[str]:
+    hosts = set()
+    for name, compose_base in _COMPOSE_GPU_BASES.items():
+        value = os.environ.get(name, "")
+        url = _provider_url(value)
+        error = f"Invalid {name} for the private Factory GPU transport."
+        if url is None:
+            raise ValueError(error)
+        host = url.hostname
+        try:
+            private = _private_gpu_ip(host)
+        except ValueError:
+            labels = host.split(".")
+            if value != compose_base and (len(labels) < 2
+                    or labels[0] in {"localhost", "mock-llm", "traffic", "gpu-sim"}
+                    or labels[-1] in {"test", "example", "invalid", "localhost"}
+                    or re.fullmatch(r"[0-9]+|0x[0-9a-f]+", labels[-1])
+                    or any(host == suffix or host.endswith("." + suffix)
+                           for suffix in ("example.com", "example.net", "example.org"))):
+                raise ValueError(error) from None
+            try:
+                records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+            except socket.gaierror:
+                # Docker can start the proxy before vLLM. A missing record leaves
+                # cloud/VPS available, and the local transport still fails closed.
+                pass
+            else:
+                if not _private_gpu_addresses(records):
+                    raise ValueError(error) from None
+            hosts.add(host)
+        else:
+            if not private:
+                raise ValueError(error)
+    return hosts
+
+
+def _private_gpu_mounts(hosts: set[str], context: ssl.SSLContext):
+    import httpx
+
+    class PrivateGPUTransport(httpx.AsyncHTTPTransport):
+        async def handle_async_request(self, request):
+            host = request.url.host
+            timeout = request.extensions.get("timeout", {}).get("connect")
+            loop = asyncio.get_running_loop()
+            deadline = None if timeout is None else loop.time() + timeout
+            try:
+                records = await asyncio.wait_for(
+                    loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=timeout,
+                )
+                addresses = _private_gpu_addresses(records)
+            except TimeoutError:
+                raise httpx.ConnectTimeout("Private GPU name resolution timed out.", request=request) from None
+            except OSError:
+                addresses = ()
+            if not addresses:
+                raise httpx.ConnectError("Private GPU requires a private DNS answer.", request=request)
+            for index, address in enumerate(addresses):
+                remaining = None if deadline is None else deadline - loop.time()
+                if remaining is not None and remaining <= 0:
+                    raise httpx.ConnectTimeout("Private GPU connection timed out.", request=request)
+                # Connect by numeric address so no second DNS lookup can change
+                # the destination. Preserve Host, SNI and the original byte stream.
+                pinned = httpx.Request(
+                    request.method, request.url.copy_with(host=address), headers=request.headers,
+                    stream=request.stream, extensions=request.extensions | {
+                        "sni_hostname": host,
+                        "timeout": request.extensions.get("timeout", {}) | {"connect": remaining},
+                    },
+                )
+                try:
+                    return await super().handle_async_request(pinned)
+                except httpx.ConnectError:
+                    if index + 1 == len(addresses):
+                        raise
+            raise AssertionError("private GPU address list was empty")  # unreachable
+
+    # A separate pool per name preserves TLS identity if two names resolve to the same IP.
+    return {f"all://{host}": PrivateGPUTransport(verify=context, trust_env=False) for host in hosts}
+
+
+def _install_strict_http_client(gpu_dns_hosts: set[str]):
     import httpx
     import litellm
 
@@ -289,7 +396,9 @@ def _install_strict_http_client():
         return owned
     if current is not None or owned is not None:
         raise ValueError("Strict gateway cannot use a preconfigured HTTP client.")
-    client = httpx.AsyncClient(follow_redirects=False, trust_env=False, verify=ssl.create_default_context())
+    context = ssl.create_default_context()
+    client = httpx.AsyncClient(follow_redirects=False, trust_env=False, verify=context,
+                               mounts=_private_gpu_mounts(gpu_dns_hosts, context))
     litellm.aclient_session = client
     litellm._factory_strict_http_client = client
     return client
@@ -1061,7 +1170,7 @@ class FactoryMetrics(CustomLogger):
             # including for failed calls. Strict deployments never log message text.
             import litellm
             litellm.turn_off_message_logging = True
-            self._strict_http_client = _install_strict_http_client()
+            self._strict_http_client = _install_strict_http_client(_strict_gpu_dns_hosts())
         self.rt = _runtime()
 
     # ---- proxy hook: placement rule, masking and guardrails -----------------------------

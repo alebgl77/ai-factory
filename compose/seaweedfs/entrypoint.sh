@@ -19,16 +19,24 @@ case "$S3_ACCESS_KEY$S3_SECRET_KEY$S3_BUCKET" in
 esac
 
 out_dir=/run/seaweedfs
+umask 077
 mkdir -p "$out_dir"
+# The mount is private to SeaweedFS. Restore owner write access if an earlier
+# version left the directory at 0500, then replace the identity file atomically.
+chmod 0700 "$out_dir"
+temp_file=$(mktemp "$out_dir/.s3.json.XXXXXX")
+trap 'rm -f "$temp_file"' EXIT
+trap 'exit 1' HUP INT TERM
 sed -e "s|\${S3_ACCESS_KEY}|${S3_ACCESS_KEY}|g" \
     -e "s|\${S3_SECRET_KEY}|${S3_SECRET_KEY}|g" \
     -e "s|\${S3_BUCKET}|${S3_BUCKET}|g" \
-    /etc/seaweedfs/s3.json.tmpl > "$out_dir/s3.json"
+    /etc/seaweedfs/s3.json.tmpl > "$temp_file"
 if [ "$(id -u)" = "0" ]; then
-  chown -R seaweed:seaweed "$out_dir"
+  chown seaweed:seaweed "$out_dir" "$temp_file"
 fi
-chmod 0500 "$out_dir"
-chmod 0400 "$out_dir/s3.json"
+chmod 0400 "$temp_file"
+mv -fT "$temp_file" "$out_dir/s3.json"
+trap - EXIT HUP INT TERM
 
 # The only identity is scoped to its bucket (Admin:<bucket>, Read:<bucket>...), which lets
 # it create that bucket on first write (-s3.autoCreateBucket) and nothing else.

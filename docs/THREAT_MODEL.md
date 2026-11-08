@@ -217,7 +217,7 @@ Prometheus, Loki, Grafana, Langfuse (with Postgres, ClickHouse, SeaweedFS, Valke
 | S | C3/C4 sent to a fake GPU endpoint | `LOCAL_API_BASE` set by the operator; vLLM requires an API key (`--api-key`); WireGuard recommended for a remote GPU | **Medium**: the vLLM key is passed on the command line (visible to `docker inspect`); the tunnel is the operator's |
 | T | Tampered model weights | downloads from the model hub into a cache volume | **Medium**: pinning model revisions and verifying hashes is **Roadmap** |
 | I | C3/C4 data at rest on the GPU host | vLLM usage statistics off; data stays on the host | **Medium**: encrypt the disk; restrict host access |
-| D | GPU unavailable | C3/C4 workloads queued or refused (fail closed); alert `FactorySensitiveRouteDown`. Smoke "local GPU down: chat-sensitive fails closed" | accepted: availability is traded for confidentiality |
+| D | GPU unavailable | Direct C3/C4 requests fail closed. The planner recommends waiting without enqueuing work. Alert `FactorySensitiveRouteDown`. Smoke "local GPU down: chat-sensitive fails closed" | accepted: availability is traded for confidentiality |
 | E | Container escape from GPU containers | `no-new-privileges`, all capabilities dropped (vLLM, Ollama), PID limits, sized `/dev/shm` instead of `ipc: host` | **Medium**: run as root without a read-only root filesystem; dcgm-exporter keeps its default capabilities; not runtime-tested here (no GPU) |
 
 ### 4.8 Container runtime and Docker host

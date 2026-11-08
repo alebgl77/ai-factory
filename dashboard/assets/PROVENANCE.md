@@ -63,3 +63,69 @@ Merge the seven generated material entries into `dashboard/assets/assets.js`, pr
 `avatar-p01` through `avatar-p12` and `camille-turnaround` entries. Keep this provenance record
 with the bundle. The builder's automatic date is the source file's modification date. The
 dashboard loads the WebP bundles locally in both the Pages and Docker builds.
+
+## Control-floor banner
+
+ChatGPT Image generated the original 2172 × 724 image without reference inputs. The prompt
+described a panoramic architectural model of an AI operations floor in graphite, with smoked
+glass, brushed aluminum, scale figures and a chartreuse data line. It reserved dark space on
+the left and excluded text and marks.
+
+The distributed [banner](../docs/media/ai-factory-control-floor.webp) is a 2172 × 724 WebP
+encoded at quality 89, 154,764 bytes. Its SHA-256 is
+`68b58626c1fb749ee25e8be4adca6b19b50dd94b2fd357a8e1f23892c359e42f`.
+The project distributes the banner under its [MIT license](../../LICENSE) to the extent
+applicable rights exist. Third-party marks are covered by the separate
+[logo credits and terms](../docs/media/tech/README.md).
+
+## Localized editorial covers
+
+ChatGPT Image used the original control-floor banner as a visual reference for the English
+cover. The refinement kept the graphite architectural model on the right and set a clear
+title hierarchy on the left. The French generation used the English cover as a reference
+to preserve that composition while localizing the subtitle and labels. The original WebP
+remains the artwork used in the dashboard.
+
+Both covers contain the title **AI FACTORY**. The English cover reads **The AI operations
+workspace** with **AGENTS · DECISIONS · MODELS**. The French cover reads **Le poste de
+pilotage de l’IA** with **AGENTS · DÉCISIONS · MODÈLES**. The corresponding README retains
+its text heading and links to the three demo paths. The project distributes the covers
+under its [MIT license](../../LICENSE) to the extent applicable rights exist.
+
+The 1774 × 887 originals were encoded as progressive JPEGs at quality 89, keeping the
+full dimensions and composition.
+
+| Cover | Bytes | SHA-256 |
+| --- | --- | --- |
+| [English](../docs/media/ai-factory-cover.en.jpg) | 162,088 | `df68206e18854497abb25f660c3e4c56f214a35418e6243bb56b25a95e870cf4` |
+| [French](../docs/media/ai-factory-cover.fr.jpg) | 163,331 | `2099d94769c26034924a9c499af2753cbeb52016f7bd88e6da8464c3dcb5cc79` |
+
+## Visual guide illustrations
+
+ChatGPT Image used the control-floor banner as a material reference for five architectural
+close-ups. The prompts specified graphite, smoked glass, warm lamps and a chartreuse data
+circuit against a matte charcoal background. The illustrations contain no text or logos.
+Both language guides use these images with localized descriptions and captions.
+
+Each image is a 1448 × 1086 WebP encoded at quality 86. The project distributes them
+under its [MIT license](../../LICENSE) to the extent applicable rights exist.
+
+| Illustration | Bytes | SHA-256 |
+| --- | --- | --- |
+| [Agents](../docs/media/editorial-agents.webp) | 123,772 | `24ff6c8e2c198142ea562f59fff22a2822c81b077ea4ae85adc5ef22c74b3c5c` |
+| [Decisions](../docs/media/editorial-decisions.webp) | 109,224 | `5060588d8f926bd8d54f480bca04261197c6c5a89c7b93476434d18508dc401c` |
+| [Models](../docs/media/editorial-models.webp) | 188,474 | `3eaf9a33a801b3ed53620d2bc2db122746e0404a1a4613b37808eed654920989` |
+| [Observatory](../docs/media/editorial-observatory.webp) | 109,640 | `8bd673aa83d01ca6c199a7d6be48406e9d0f523dae56fefbecb399ad5ddc7ba2` |
+| [Security](../docs/media/editorial-security.webp) | 134,398 | `a41062b7f5997a4649a999d50317e7c817e106bbf1ec3377058809944bd9b99f` |
+
+## README demo recordings
+
+The English sequences use Chromium screenshots of the browser-only demo. The French
+sequences reframe the existing demo captures. Both use a graphite and lime editorial
+frame at 960 × 640, with four stages over 8.4 seconds and a static PNG for reduced motion.
+English controls and captions are localized. Some decorative signs in the 3D scene may
+still be in French.
+
+The portfolio uses fictional tasks and token records. The Decision Companion records a
+sample draft receipt in the simulated decision history. Neither flow uses a production API.
+[English portfolio](../../docs/media/ai-factory-pilotage.en.gif) · [French portfolio](../../docs/media/ai-factory-pilotage.gif) · [English decision](../../docs/media/ai-factory-workbench.en.gif) · [French decision](../../docs/media/ai-factory-workbench.gif)

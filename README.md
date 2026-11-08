@@ -1,52 +1,80 @@
 # Virtual AI Factory
 
-**English** · [Français](README.fr.md)
+**English** · [Français](README.fr.md) · [MIT license](LICENSE) · [CI status](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml)
 
-**Virtual AI Factory — the open-source digital twin of an enterprise AI factory**
+**An open-source digital twin for operating enterprise AI.**
 
-[![CI](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-6D28D9.svg)](https://alebgl77.github.io/ai-factory/)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/alebgl77/ai-factory)
+Follow work by people and agents, review decisions with their evidence, and inspect model
+routing and token costs from a 3D workspace. The repository includes a browser demo and a
+self-hosted stack for private pilots.
 
-Virtual AI Factory is a generic, deployable model of how an enterprise runs AI in production,
-rendered as a 3D twin of the office where it happens. Behind the 3D scene sits a working stack:
-**governance** (EU AI Act, including the 2026 Digital Omnibus, NIST AI RMF and ISO/IEC 42001,
-with a risk reassessment on every model version), **FinOps** (token and GPU costs, showback and
-chargeback, 8 waste rules), an **LLMOps & RAG pipeline** with evaluation gates and automatic
-rollback, a **data loop that never retrains**, **hybrid placement** (cloud, then VPS, then
-local GPU for sensitive data), an **Agent Ops** room, a **self-service catalog**, **Skills and
-R&D labs**, and a **first-person visit mode** to walk through the twin. Everything is
-configuration in plain YAML, runs without any API key in demo mode, and is MIT-licensed.
+**[Open the 3D demo](https://alebgl77.github.io/ai-factory/?lang=en)** · [Documentation](docs/README.md) · [Install](#local-quick-start-no-key-at-all) · [Architecture](docs/ARCHITECTURE.md) · [Technologies](#technology-stack)
 
-> All data is **fictional**: people, use cases, cost centers, costs and demo metrics. Everything
-> is configured in `config/`. No fine-tuning, no retraining: the data loop only acts through
-> reindexing, evaluation-set updates or routing changes.
+<img src="dashboard/docs/media/ai-factory-cover.en.jpg" width="1200" alt="AI Factory. The AI operations workspace. An isometric operations floor connects agents, decisions and models.">
+
+| Explore the public demo | What to try |
+|---|---|
+| **Agents** | Open **Projects and tasks** in the [3D demo](https://alebgl77.github.io/ai-factory/?lang=en). Expand a task to see delegated work and its token usage. |
+| **Decisions** | Review a fictional ERP draft in the [Decision Companion](https://alebgl77.github.io/ai-factory/companion/index.html?lang=en&demo_case=DEMO-104&demo_revision=1). Record a rationale and find the simulated receipt in the history. |
+| **Models** | Run a routing scenario in the [AI Flow Lab](https://alebgl77.github.io/ai-factory/docs/flow-lab.html?lang=en) and inspect the token and latency estimates. |
+
+The demo runs in the browser with fictional data and needs no provider keys. [Visual guide to the five workflows](https://alebgl77.github.io/ai-factory/docs/index.en.html#visual-tour)
+
+**Private pilot.** Configure SSO and business-unit policies, connect approved model targets and collect operating evidence from authorized producers. [Compose](docs/DEPLOYMENT.en.md) · [Kubernetes](docs/KUBERNETES.md)
+
+<a id="technologies"></a>
+
+## Technology stack
+
+### Reference stack
+
+| Layer | Technologies and roles |
+|---|---|
+| **Interface and API** | <img src="dashboard/docs/media/tech/threejs.svg" width="24" height="24" alt=""> **Three.js** for the 3D twin · <img src="dashboard/docs/media/tech/fastapi.svg" width="24" height="24" alt=""> **FastAPI** for the aggregation API |
+| **Deployment and routing** | **Docker Compose** for the reference stack · <img src="dashboard/docs/media/tech/kubernetes.svg" width="24" height="24" alt=""> **Kubernetes** and <img src="dashboard/docs/media/tech/helm.svg" width="24" height="24" alt=""> **Helm** for an alternative deployment · <img src="dashboard/docs/media/tech/caddy.svg" width="24" height="24" alt=""> **Caddy** for the edge · **LiteLLM** for model routing |
+| **Observability** | <img src="dashboard/docs/media/tech/prometheus.svg" width="24" height="24" alt=""> **Prometheus** for metrics · **Grafana** for dashboards · **Loki** for logs · <img src="dashboard/docs/media/tech/langfuse.svg" width="24" height="24" alt=""> **Langfuse** for model traces |
+| **Retrieval** | <img src="dashboard/docs/media/tech/qdrant.svg" width="24" height="24" alt=""> **Qdrant** for vector storage and collection telemetry in the Compose reference stack |
+
+The Helm deployment uses operator-managed model and telemetry services. See the [environment comparison](docs/README.md#choose-an-environment) for what each deployment includes.
+
+### Optional integrations
+
+| Integration | Scope |
+|---|---|
+| **Model serving** | <img src="dashboard/docs/media/tech/vllm.svg" width="24" height="24" alt=""> **vLLM** for local GPU inference · <img src="dashboard/docs/media/tech/ollama.svg" width="24" height="24" alt=""> **Ollama** for the VPS CPU profile. [Model placement](#compose-model-placement) |
+| **Agent tools** | <img src="dashboard/docs/media/tech/mcp.svg" width="24" height="24" alt=""> **MCP** over local stdio for the adaptive Workbench. [MCP setup](docs/ADAPTIVE_WORKBENCH.md#connect-an-mcp-client) |
+| **CRM** | **Salesforce**, **HubSpot** and <img src="dashboard/docs/media/tech/twenty.svg" width="24" height="24" alt=""> **Twenty** for read-only opportunity and company data. [CRM setup](docs/ADAPTIVE_WORKBENCH.md#connect-salesforce-hubspot-or-twenty) |
+| **ERP** | **Odoo** via a read-only probe. Live draft creation requires an operator-supplied adapter and its own approval flow. [ERP adapter](docs/ADAPTIVE_WORKBENCH.md#connect-a-draft-erp-adapter) |
+| **Usage governance** | **Open Shadow AI** runs separately. The operator bridge imports aggregate evidence into the Observatory. [Observatory setup](docs/SHADOW_AI.md#connect-open-shadow-ai) |
+
+[Logo credits and usage terms](dashboard/docs/media/tech/README.md)
 
 ## See the Factory in action
 
-**01 · Follow delegated work.** Open the portfolio from the 3D twin and unfold a task to see
-its sub-agents, progress and declared token usage.
+These recordings show the browser demo with fictional tasks and decisions.
+
+**01 · From the 3D floor to the portfolio.** Open Planning, see how objectives connect to
+projects, then expand a task to inspect its sub-agents and reported tokens.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.png">
-  <img src="docs/media/ai-factory-pilotage.gif" width="760" alt="Fictional AI Factory dashboard with the team list and 3D workspace.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.en.png">
+  <img src="docs/media/ai-factory-pilotage.en.gif" width="760" alt="The demo opens Planning from the 3D floor, shows objectives in the portfolio and expands a task with delegated work.">
 </picture>
 
-[GIF](docs/media/ai-factory-pilotage.gif) · [Still image](docs/media/ai-factory-pilotage.png) · [Open the live demo](https://alebgl77.github.io/ai-factory/)
+[GIF](docs/media/ai-factory-pilotage.en.gif) · [Still image](docs/media/ai-factory-pilotage.en.png) · [Open the live demo](https://alebgl77.github.io/ai-factory/?lang=en)
 
 <details>
 <summary><strong>02 · Review a decision in the Decision Companion</strong></summary>
 
-Review a proposed ERP draft from a fictional CRM opportunity, enter a rationale and see the
-simulated decision and receipt in the history.
+Compare the fictional ERP draft with its CRM evidence, enter a rationale and open the
+history to find the recorded decision and simulated receipt.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.png">
-  <img src="docs/media/ai-factory-workbench.gif" width="760" alt="The Decision Companion’s fictional CRM and ERP walkthrough shows a simulated receipt and the reason recorded in the decision history.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.en.png">
+  <img src="docs/media/ai-factory-workbench.en.gif" width="760" alt="The Decision Companion’s fictional CRM and ERP walkthrough shows a simulated receipt and the reason recorded in the decision history.">
 </picture>
 
-[GIF](docs/media/ai-factory-workbench.gif) · [Still image](docs/media/ai-factory-workbench.png) · [Workbench guide](docs/WORKBENCH.md)
+[GIF](docs/media/ai-factory-workbench.en.gif) · [Still image](docs/media/ai-factory-workbench.en.png) · [Workbench guide](docs/WORKBENCH.md)
 
 </details>
 
@@ -54,9 +82,9 @@ simulated decision and receipt in the history.
 
 ## Try it
 
-| In 10 seconds | In 2 minutes | On your machine |
+| In your browser | In GitHub Codespaces | On your machine |
 |---|---|---|
-| **[Live demo](https://alebgl77.github.io/ai-factory/)**: the 3D dashboard with the embedded demo snapshot (static, no backend) | **[Open in GitHub Codespaces](https://codespaces.new/alebgl77/ai-factory)**: the full stack starts with the `sim` profile, secrets are generated for you | `docker compose --profile sim up -d --build` (see below) |
+| **[Open the live demo](https://alebgl77.github.io/ai-factory/?lang=en)** with the embedded fictional dataset. | **[Launch Codespaces](https://codespaces.new/alebgl77/ai-factory)**. The dev container generates local secrets and starts the `sim` profile. | **[Start the Compose demo](#local-quick-start-no-key-at-all)** with simulated model providers and GPU telemetry. |
 
 Then, in the dashboard: press `M` (or the **Visit** button) to walk through the factory in first
 person, `U` to open the factory console (register, FinOps, pipeline, data loop, placement,
@@ -77,7 +105,7 @@ Requirements: Docker 24+ with Compose v2, 4 vCPUs, 8 GB of free RAM, ports 80 an
 
 ```bash
 git clone --recurse-submodules https://github.com/alebgl77/ai-factory.git
-cd virtual-ai-factory
+cd ai-factory
 cp .env.example .env
 # Replace every "change-me" value with a secret of its own, for example:
 #   for v in $(grep -o '^[A-Z_]*=.*change-me[^ ]*' .env | cut -d= -f1); do
@@ -104,23 +132,28 @@ Prometheus → Grafana → API → 3D dashboard.
 **Offline version**: open `dashboard/index.html` directly in a browser. The dashboard then uses
 the embedded demo snapshots (one in English, one in French) and shows an *Offline demo* badge.
 
+The Helm chart supports a local Kubernetes demo and an authenticated private pilot with
+operator-managed services. [Install Kubernetes](docs/KUBERNETES.md) · [Operate Kubernetes](docs/KUBERNETES_OPERATIONS.md) · [Deploy with Compose](docs/DEPLOYMENT.en.md)
+
 ## What the factory does
 
 | Priority | Capability | Where |
 |---|---|---|
 | P0 | Use-case register, AI Act risk tiers (prohibited, high risk under Annex III / Annex I, limited under Art. 50, minimal), NIST AI RMF cycle (GOVERN, MAP, MEASURE, MANAGE) crosswalked with the AI Act and ISO/IEC 42001, **risk reassessment on every model version change** | `config/usecases/`, `config/frameworks/`, `api/app/engines/risk.py`, "Register" console |
 | P0 | Token and GPU costs per use case, showback / chargeback, 8 waste alert rules | `config/factory.yaml`, `engines/costs.py`, "FinOps" console |
-| P1 | LLMOps / RAG pipeline: ingestion → chunking and indexing → versioning of prompts and agents → evaluation gates (RAGAS, LLM-as-a-judge, red teaming) → deployment → usage feedback → automatic rollback | `engines/pipeline.py`, "Pipeline" console |
-| P1 | Data loop on drift: reindexing, evaluation-set updates, routing changes, human review. No retraining | `engines/dataloop.py`, "Data loop" console |
-| P1 | Hybrid placement cloud → VPS → local GPU. Classes C3/C4 only go to the local GPU; if it is unavailable, the workload is queued, never sent elsewhere | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
+| P1 | LLMOps / RAG pipeline: ingestion → indexing → versioning → evaluation gates → deployment and rollback receipts from authorized producers. The demo simulates the sequence. | [Operating evidence](docs/OPERATING_EVIDENCE.md), "Pipeline" console |
+| P1 | Data loop on drift: reindexing, evaluation-set updates, routing changes, human review. No fine-tuning or retraining | `engines/dataloop.py`, "Data loop" console |
+| P1 | Hybrid placement cloud → VPS → local GPU. Direct C3/C4 requests require a local GPU and fail if it is unavailable. The placement simulator recommends waiting in that case and does not enqueue work | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
 | P2 | Agent Ops room: TTFT, tokens per task, vector latency, SLOs | `engines/agentops.py`, consoles O1/O2, Grafana dashboard `agent-ops` |
 | P2 | Self-service catalog of models, agents, MCP tools and integrated GitHub repositories | `config/catalog/`, "Catalog" console |
 | P2 | Skills Lab and R&D Lab in 3D, tied to roles and to AI Act Art. 4 (AI literacy, as rewritten in 2026) | `config/skills.yaml`, rooms S1, X1–X3 |
 | + | **Visit mode**, Street View style: drag the character onto the floor, walk in first person (keyboard, click on the floor, touchpad), interact with desks, rooms, people, screens and the rack; minimap with the status of each space | **Visit** button or `M` key |
-| + | **English and French** everywhere: API (`?lang=en\|fr`), configuration (`{en, fr}` mappings), dashboard, docs | [docs/CONTRACT.md](docs/CONTRACT.md), section 9 |
+| + | **English and French** dashboard, localizable API data (`?lang=en\|fr`), configuration (`{en, fr}` mappings) and operator guides | [Interface contract](docs/CONTRACT.md), section 9 |
 | + | Optional visual pack generated in ChatGPT (textures, decor, portraits, mascot) with a procedural fallback | [docs/ASSETS.md](docs/ASSETS.md) |
 
 ## Architecture
+
+[![Open the interactive architecture atlas. Diagram of the public demo, the private edge, business-unit access, local inference and the Workbench decision flow.](dashboard/docs/media/architecture.en.svg)](https://alebgl77.github.io/ai-factory/docs/architecture.en.html)
 
 ```text
 Browser (3D dashboard, no token) ──HTTPS──► edge (Caddy: TLS, optional auth)
@@ -134,12 +167,19 @@ Browser (3D dashboard, no token) ──HTTPS──► edge (Caddy: TLS, optional
                  └─ LiteLLM gateway ──► cloud │ VPS (Ollama) │ local GPU (vLLM)
 ```
 
-The API aggregates `config/`, its mutable state and the live sources; any unreachable source
-falls back to a deterministic demo generator (`meta.mode`: `demo`, `mixed`, `live`). Details,
-flows and rejected alternatives: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Interface contract
-(schemas, API, metrics, services): [docs/CONTRACT.md](docs/CONTRACT.md).
+The API aggregates `config/`, its mutable state and live sources. In `auto` mode, unavailable
+sources can fall back to simulated data for an unscoped view. Business-unit views always omit
+unavailable data and keep telemetry within their scope. Private pilots use
+`FACTORY_DEMO_MODE=never`. [Architecture](docs/ARCHITECTURE.md) · [Interface contract](docs/CONTRACT.md)
 
-## Real deployment: cloud first, then VPS, then local hardware
+<a id="real-deployment-cloud-first-then-vps-then-local-hardware"></a>
+
+## Compose model placement
+
+Use the [private deployment guide](docs/DEPLOYMENT.en.md) for installation, SSO, release
+verification, migration rehearsal and recovery. Before a matching signed bundle ships,
+[qualify from the exact source checkout](docs/DEPLOYMENT.en.md#qualify-from-source).
+The steps below configure the model routes.
 
 1. **Cloud**: in `.env`, replace `CLOUD_API_BASE`, `CLOUD_API_KEY`, `CLOUD_CHAT_MODEL` and
    `CLOUD_SMALL_MODEL` (default: simulated LLM) with those of your OpenAI-compatible provider,
@@ -193,10 +233,7 @@ unset). After a change: `python scripts/validate_config.py`, then
 
 ### Security & trust at a glance
 
-[![CodeQL](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alebgl77/ai-factory/badge)](https://scorecard.dev/viewer/?uri=github.com/alebgl77/ai-factory)
-[![Supply chain: Trivy, pip-audit, SBOM](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml)
-[![Signed images: cosign, SLSA provenance, SBOM](https://img.shields.io/badge/images-cosign%20%C2%B7%20SLSA%20provenance%20%C2%B7%20SBOM-2ea44f)](SECURITY.md#verify-a-release)
+[CodeQL](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml) · [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/alebgl77/ai-factory) · [Supply-chain checks](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml) · [Verify a signed release](SECURITY.md#verify-a-release)
 
 Every line below is backed by a test, a CI job or a command you can run yourself.
 
@@ -265,22 +302,13 @@ npm i --no-save playwright three@0.186.1 && THREE_VENDOR_DIR=node_modules/three 
 E2E_BASE_URL=http://localhost node tests/e2e/run.mjs                 # e2e against the deployed stack
 ```
 
-CI (`.github/workflows/ci.yml`) runs these checks on every push, plus a full smoke test of the
-`sim` stack.
+CI runs the core checks on pushes and pull requests. The Compose smoke and Kubernetes jobs run
+on relevant changes or by manual dispatch. [Workflow](.github/workflows/ci.yml) · [Verified scope](docs/README.md#choose-an-environment)
 
 ## Roadmap
 
-Ideas, not commitments; feedback is welcome in the issues.
-
-- A reference MIT repository for RAG ingestion and RAGAS evaluation sets, and a LangGraph
-  multi-agent example (the two gaps identified in
-  [docs/GITHUB_INTEGRATION.md](docs/GITHUB_INTEGRATION.md)).
-- Generated visual pack published with its provenance.
-- Per-application gateway keys with budgets, secret files instead of environment variables,
-  keyed audit chain (see [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md), section 3).
-- Confirmation in the Official Journal of the regulatory points flagged "to verify" in
-  [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
-- More languages: the message catalog and the `{en, fr}` mappings are designed to grow.
+Follow the [enterprise roadmap](https://alebgl77.github.io/ai-factory/docs/roadmap.html?lang=en)
+for delivery stages, prerequisites and validation criteria.
 
 ## Contributing
 
@@ -291,15 +319,9 @@ mappings (with a primary source), code. Read [CONTRIBUTING.md](CONTRIBUTING.md) 
 
 ## Documentation
 
-- [Interactive operations guide](https://alebgl77.github.io/ai-factory/docs/#production) and [portfolio integration reference](docs/fr/PORTFOLIO.md) (in French)
-- [Private deployment and support matrix](docs/DEPLOYMENT.md#périmètre-de-prise-en-charge) (in French)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): diagram, flows, technical choices
-- [docs/CONTRACT.md](docs/CONTRACT.md): interface contract (schemas, API, metrics, services, i18n)
-- [docs/GOVERNANCE.md](docs/GOVERNANCE.md): register, risk tiers, reassessment, crosswalk, regulatory calendar and sources
-- [docs/FINOPS.md](docs/FINOPS.md), [docs/LLMOPS.md](docs/LLMOPS.md), [docs/SKILLS_RND.md](docs/SKILLS_RND.md)
-- [docs/SECURITY.md](docs/SECURITY.md), [docs/LICENSES.md](docs/LICENSES.md), [docs/GITHUB_INTEGRATION.md](docs/GITHUB_INTEGRATION.md)
-- [docs/ASSETS.md](docs/ASSETS.md): visual pack (ChatGPT prompts, pipeline, provenance)
-- French documentation: [README.fr.md](README.fr.md) and [docs/fr/](docs/fr/ARCHITECTURE.md)
+The [technical documentation](docs/README.md) organizes the guides by role, environment and
+data flow. The [interactive guide](https://alebgl77.github.io/ai-factory/docs/index.en.html)
+covers the dashboard and the path to a private pilot. [Documentation en français](docs/fr/README.md)
 
 ## Author
 

@@ -24,6 +24,10 @@ on:
         description: "Also run the single sign-on end-to-end test (oauth2-proxy and a test OIDC provider)"
         type: boolean
         default: false
+      kubernetes:
+        description: "Also run the Helm and kind deployment tests"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -71,8 +75,8 @@ jobs:
 
   config:
     name: Configuration, snapshot and visual pack
-    # This required check also reports applicable stack and SSO failures.
-    needs: [stack-changes, smoke, sso-e2e]
+    # This required check also reports applicable stack, SSO and Kubernetes failures.
+    needs: [stack-changes, smoke, sso-e2e, kubernetes]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -83,12 +87,15 @@ jobs:
         env:
           DETECTION_RESULT: ${{ needs.stack-changes.result }}
           DETECTION_CHANGED: ${{ needs.stack-changes.outputs.changed }}
+          DETECTION_KUBERNETES: ${{ needs.stack-changes.outputs.kubernetes }}
           SMOKE_RESULT: ${{ needs.smoke.result }}
           SSO_RESULT: ${{ needs.sso-e2e.result }}
+          KUBERNETES_RESULT: ${{ needs.kubernetes.result }}
           EXPECT_SMOKE: ${{ (github.event_name == 'workflow_dispatch' && inputs.smoke) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
           EXPECT_SSO: ${{ (github.event_name == 'workflow_dispatch' && inputs.sso_e2e) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
+          EXPECT_KUBERNETES: ${{ (github.event_name == 'workflow_dispatch' && inputs.kubernetes) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.kubernetes == 'true') }}
         run: |
-          if [[ "$DETECTION_RESULT" != success || ! "$DETECTION_CHANGED" =~ ^(true|false)$ ]]; then
+          if [[ "$DETECTION_RESULT" != success || ! "$DETECTION_CHANGED" =~ ^(true|false)$ || ! "$DETECTION_KUBERNETES" =~ ^(true|false)$ ]]; then
             echo "::error::Unable to determine which deployment tests are required"
             exit 1
           fi
@@ -98,6 +105,10 @@ jobs:
           fi
           if [[ "$EXPECT_SSO" == true && "$SSO_RESULT" != success ]]; then
             echo "::error::Single sign-on end-to-end test did not pass"
+            exit 1
+          fi
+          if [[ "$EXPECT_KUBERNETES" == true && "$KUBERNETES_RESULT" != success ]]; then
+            echo "::error::Kubernetes deployment test did not pass"
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -295,6 +306,7 @@ jobs:
       contents: read
     outputs:
       changed: ${{ steps.detect.outputs.changed }}
+      kubernetes: ${{ steps.detect.outputs.kubernetes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -340,3 +352,28 @@ jobs:
       # environment rendered by docker compose, Dex (Apache-2.0) as test provider.
       - name: OIDC sign-in, forged headers, fixed edge address, group gate
         run: compose/sso/test_sso_e2e.sh
+
+  kubernetes:
+    name: Kubernetes (Helm and kind)
+    if: (github.event_name == 'workflow_dispatch' && inputs.kubernetes) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.kubernetes == 'true')
+    needs: [stack-changes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install integrity-verified Helm, kind and kubectl
+        run: |
+          bash .github/scripts/install_kubernetes_tools.sh "$RUNNER_TEMP/kube-tools" helm kind kubectl
+          echo "$RUNNER_TEMP/kube-tools" >> "$GITHUB_PATH"
+      - run: pip install --require-hashes -r api/requirements-dev.txt
+      - name: Kubernetes configuration and storage entrypoint
+        run: python -m pytest -q tests/kubernetes tests/deployment/test_kubernetes_logging.py tests/deployment/test_seaweedfs_entrypoint.py
+      - name: Disposable cluster, policy enforcement, persistence and OIDC
+        run: bash tests/kubernetes/test_kind.sh

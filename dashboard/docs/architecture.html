@@ -6,13 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Architecture technique, plan 2D des dix zones et matrice des rôles et périmètres d’AI Factory.">
   <title>Atlas d’architecture · AI Factory</title>
+  <link rel="alternate" hreflang="en" href="./architecture.en.html">
   <link rel="stylesheet" href="./architecture.css">
+  <script defer src="./guide.js"></script>
 </head>
 <body>
   <a class="skip" href="#contenu">Aller au contenu</a>
   <header class="masthead">
     <a class="brand" href="../index.html?lang=fr"><span class="mark" aria-hidden="true">AF</span> AI Factory</a>
-    <a class="back" href="./index.html">Guide d’exploitation <span aria-hidden="true">↗</span></a>
+    <nav class="masthead-actions" aria-label="Navigation de l’atlas">
+      <a class="back" href="./index.html">Guide d’exploitation <span aria-hidden="true">↗</span></a>
+      <a class="locale-switch" data-guide-language href="./architecture.en.html" hreflang="en" lang="en" aria-label="Read in English">EN</a>
+    </nav>
   </header>
   <main id="contenu" tabindex="-1">
     <div class="hero">
@@ -22,7 +27,7 @@
       <dl class="hero-stats">
         <div><dt>10</dt><dd>zones sur le plan</dd></div>
         <div><dt>4</dt><dd>périmètres BU d’exemple</dd></div>
-        <div><dt>2</dt><dd>bases d’état distinctes</dd></div>
+        <div><dt>2</dt><dd>bases pour le parcours de décision</dd></div>
       </dl>
     </div>
 
@@ -40,6 +45,7 @@
       <p class="eyebrow">01 · Vue logique</p>
       <h2 id="titre-architecture">Services et frontières de confiance</h2>
       <p>GitHub Pages sert une démonstration statique alimentée par des données fictives. Dans l’installation privée, Caddy sert l’interface et l’API sur la même origine HTTPS. Le proxy SSO vérifie l’identité auprès du fournisseur OIDC. FastAPI applique ensuite les droits de l’utilisateur ou du compte de service à la BU du cas d’usage.</p>
+      <p>Sur Compose, Caddy et l’API partagent un réseau d’identité privé. Sur Kubernetes, l’Ingress termine HTTPS et Caddy, le proxy OAuth2 et l’API partagent la boucle locale du pod. Le pod API utilise un PVC. L’architecture logique ci-dessous suit la tâche et sa décision.</p>
       <figure>
         <a class="plate" href="./media/architecture.svg" aria-label="Agrandir le schéma d’architecture logique"><img src="./media/architecture.svg" width="1088" height="848" alt="Flux public et privé du navigateur vers l’API, le portefeuille, le Workbench et le modèle local." fetchpriority="high" decoding="async"></a>
         <figcaption>Vue de la chaîne portefeuille. <a href="./media/architecture.svg">Ouvrir le schéma en plein écran</a>.</figcaption>
@@ -112,7 +118,7 @@
         <details id="zone-rd">
           <summary><span>05</span> R&amp;D Lab</summary>
           <p><strong>Fonction.</strong> Exploration sur les bancs <code>X1</code> à <code>X3</code>. <strong>Actions.</strong> Inspecter un banc et consulter la vue « Skills Lab &amp; R&amp;D Lab » dans la console.</p>
-          <p>Ouvrir le <a href="./flow-lab.html">Laboratoire de flux IA</a> pour relier des composants, rejouer des scénarios fictifs et comparer les résultats de routage, de sécurité et de consommation.</p>
+          <p>Ouvrir le <a href="./flow-lab.html?lang=fr">Laboratoire de flux IA</a> pour relier des composants, rejouer des scénarios fictifs et comparer les résultats de routage, de sécurité et de consommation.</p>
         </details>
         <details id="zone-skills">
           <summary><span>06</span> Skills Lab</summary>
@@ -225,12 +231,13 @@
             <tr><th scope="row">Passerelle locale</th><td>Une clé virtuelle par cas et l’alias <code>chat-sensitive</code> bornent le routage. Le moteur intégré utilise la réponse texte du modèle local.</td><td>Exécuter une sous-tâche synthétique, observer la durée et contrôler la provenance des tokens.</td></tr>
             <tr><th scope="row">Autorisation et concurrence</th><td>L’autorisation de départ est à usage unique. Les mutations utilisent la révision courante. Les résultats tardifs suivent la tentative à laquelle ils appartiennent.</td><td>Simuler une réaffectation et un redémarrage. Renouveler une autorisation de départ si elle est encore requise.</td></tr>
             <tr><th scope="row">Décision et audit</th><td>Le mode <code>portfolio</code> requiert l’audit Workbench. Les deux bases se rapprochent avec l’identité du dossier et sa révision exacte.</td><td>Tester les trois issues avec un autre approbateur et un redémarrage entre décision et affichage.</td></tr>
-            <tr><th scope="row">Livraison et restauration</th><td>Le déploiement documenté utilise un processus API et des images vérifiées par empreinte. Le volume <code>api-state</code> conserve les bases et l’état.</td><td>Vérifier les attestations, exécuter le précontrôle et restaurer une sauvegarde cohérente sur un réseau isolé.</td></tr>
+            <tr><th scope="row">Livraison et restauration</th><td>Le déploiement documenté utilise un processus API et des images vérifiées par empreinte. Le volume <code>api-state</code> sous Compose ou le PVC sous Kubernetes conserve les bases et l’état.</td><td>Vérifier les attestations, contrôler la configuration de la cible et restaurer une sauvegarde cohérente dans un environnement isolé.</td></tr>
           </tbody>
         </table>
       </div>
       <ul class="sources" aria-label="Guides de qualification">
         <li><a href="./index.html#production">Mise en production</a></li>
+        <li><a href="./index.html#kubernetes">Pilote Kubernetes</a></li>
         <li><a href="./index.html#reprise">Sauvegarde et reprise</a></li>
         <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/GATEWAY_SECURITY.md">Sécurité LiteLLM</a></li>
         <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/fr/SECURITY.md">Durcissement de la pile</a></li>

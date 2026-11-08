@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MIT
+# Disposable test issuer. The browser fixture provides synthetic identities at the Dex
+# connector callback only. Dex itself signs the OIDC tokens and oauth2-proxy verifies them.
+issuer: https://dex.kube-test.svc.cluster.local:5556/dex
+storage: {type: memory}
+web:
+  https: 0.0.0.0:5556
+  tlsCert: /tls/tls.crt
+  tlsKey: /tls/tls.key
+oauth2:
+  skipApprovalScreen: true
+  pkce:
+    enforce: true
+    codeChallengeMethodsSupported: [S256]
+frontend:
+  dir: /srv/dex/web
+enablePasswordDB: false
+staticClients:
+  - id: factory-e2e
+    secretEnv: DEX_CLIENT_SECRET
+    name: Factory kind test
+    redirectURIs: ["https://factory.test/oauth2/callback"]
+connectors:
+  - type: authproxy
+    id: synthetic
+    name: Synthetic identities
+    config: {}
