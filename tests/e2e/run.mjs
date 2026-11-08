@@ -1529,6 +1529,33 @@ check('roadmap anchors and both translations remain readable with JavaScript dis
 await staticRoadmapContext.close();
 
 const guide = await ctx.newPage();
+const tourImages = ['agents', 'decisions', 'models', 'observatory', 'security'];
+const tourCaptions = {
+  fr: ['Du projet au sous‑agent', 'Une décision humaine traçable', 'Tester les flux de modèles',
+    'L’Observatoire des usages IA', 'Protéger et restaurer'],
+  en: ['From project to subagent', 'A traceable human decision', 'Test model flows',
+    'The AI Usage Observatory', 'Protect and recover'],
+};
+const validGuideTour = (page, lang) => page.locator('#visual-tour').evaluate((tour, { images, captions, lang }) => {
+  const figures = [...tour.querySelectorAll('figure')];
+  const paths = [
+    [`../index.html?lang=${lang}`, '#sous-agents'],
+    [`../companion/index.html?lang=${lang}`, '#workbench'],
+    [`./flow-lab.html?lang=${lang}`, '#integrations'],
+    [lang === 'fr' ? './architecture.html#zone-observatoire' : './architecture.en.html#zone-observatoire', '#acces'],
+    ['#production', '#reprise'],
+  ];
+  return location.hash === '#visual-tour' && figures.length === images.length &&
+    figures.every((figure, index) => {
+      const image = figure.querySelector('img');
+      const links = [...figure.querySelectorAll('.tour-links a')];
+      return image?.src === new URL(`./media/editorial-${images[index]}.webp`, location.href).href &&
+        image.loading === 'lazy' && image.alt.trim().length > 0 &&
+        figure.querySelector('figcaption h3')?.textContent === captions[index] &&
+        links.length === paths[index].length && links.every((link, position) => link.getAttribute('href') === paths[index][position]);
+    }) && document.documentElement.scrollWidth <= innerWidth;
+}, { images: tourImages, captions: tourCaptions[lang], lang });
+
 await guide.setViewportSize({ width: 390, height: 844 });
 await guide.goto(new URL('docs/index.html#sous-agents', base).href);
 const guideNav = guide.getByRole('navigation', { name: 'Sommaire' });
@@ -1563,6 +1590,13 @@ check('English operations guide preserves French anchors and supports keyboard s
   await guide.locator('#supervision details[open]').getByText('An execution stalls or times out').isVisible() &&
   await guide.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth));
 
+await englishNav.getByRole('link', { name: 'Visual tour' }).click();
+const englishTour = await validGuideTour(guide, 'en');
+await guide.getByRole('link', { name: 'Lire en français' }).click();
+await guide.waitForURL('**/index.html#visual-tour');
+check('the bilingual visual tour keeps its anchor, five local illustrations, captions and actions',
+  englishTour && await validGuideTour(guide, 'fr'));
+
 await guide.goto(new URL('docs/architecture.en.html#zone-observatoire', base).href);
 const englishRoomOpen = await guide.locator('#zone-observatoire').evaluate(room => room.open);
 await guide.getByRole('link', { name: 'Lire en français' }).click();
@@ -1573,7 +1607,7 @@ check('architecture atlas switches language while keeping the room open on mobil
   await guide.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth));
 await guide.close();
 
-const staticGuideContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+const staticGuideContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 320, height: 740 } });
 try {
   const staticGuide = await staticGuideContext.newPage();
   await staticGuide.goto(new URL('docs/index.en.html', base).href);
@@ -1581,6 +1615,9 @@ try {
   check('operations guide keeps native navigation and content without JavaScript',
     new URL(staticGuide.url()).hash === '#kubernetes' &&
     await staticGuide.getByRole('heading', { name: 'Kubernetes pilot' }).isVisible());
+  await staticGuide.getByRole('navigation', { name: 'Contents' }).getByRole('link', { name: 'Visual tour' }).click();
+  check('visual tour keeps all five illustrations and actions at 320px without JavaScript',
+    await validGuideTour(staticGuide, 'en'));
 } finally {
   await staticGuideContext.close();
 }

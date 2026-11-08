@@ -6,6 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Run the demo, deploy AI Factory privately on Compose or Kubernetes, and operate it with clear controls.">
   <title>Operations guide · AI Factory</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Operations guide · AI Factory">
+  <meta property="og:description" content="Explore five Factory workflows, then prepare to deploy and operate it privately.">
+  <meta property="og:image" content="https://alebgl77.github.io/ai-factory/docs/media/ai-factory-cover.en.jpg">
+  <meta property="og:image:width" content="1774">
+  <meta property="og:image:height" content="887">
+  <meta property="og:image:alt" content="AI Factory cover with an isometric view of the servers and workspaces.">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="alternate" hreflang="fr" href="./index.html">
   <link rel="stylesheet" href="./guide.css">
   <script defer src="./guide.js"></script>
@@ -25,6 +33,7 @@
       <p class="eyebrow">Documentation</p>
       <ol>
         <li><a href="#apercu">Overview</a></li>
+        <li><a href="#visual-tour">Visual tour</a></li>
         <li><a href="#demarrage">Get started</a></li>
         <li><a href="#environnements">Environments and prerequisites</a></li>
         <li><a href="#acces">Identity and access scope</a></li>
@@ -45,6 +54,7 @@
         <p class="lead">Start with a fictional scenario or prepare a private deployment. Follow access controls, agent work, human decisions and incident recovery.</p>
         <div class="hero-links">
           <a class="primary" href="#demarrage">Choose a walkthrough</a>
+          <a class="secondary" href="#visual-tour">Explore the visual tour</a>
           <a class="secondary" href="./architecture.en.html">Open the architecture atlas</a>
           <a class="secondary" href="./roadmap.html?lang=en">View the roadmap</a>
         </div>
@@ -70,6 +80,84 @@
         </ol>
         <p class="note">GitHub Pages presents fictional cases. Compose and Kubernetes can host a private deployment with its own identities, data and model services.</p>
         <p><a href="./architecture.en.html">Explore the architecture diagrams and 2D floor plan</a></p>
+      </section>
+
+      <section id="visual-tour" class="visual-tour" aria-labelledby="titre-parcours-visuel">
+        <p class="eyebrow">Visual atlas · 05 workflows</p>
+        <h2 id="titre-parcours-visuel">Five workflows inside the Factory</h2>
+        <p class="tour-intro">Concept illustrations of workspaces, with links to demos and operating procedures.</p>
+        <ol class="tour-grid">
+          <li>
+            <figure>
+              <img src="./media/editorial-agents.webp" alt="An illuminated path connects a coordination desk to two work areas." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">01 / Orchestration</p>
+                <h3>From project to subagent</h3>
+                <p>Assign a task, authorize its start under the business-unit policy, then review the evidence and reported token counts.</p>
+                <div class="tour-links">
+                  <a href="../index.html?lang=en">Open the Factory <span aria-hidden="true">↗</span></a>
+                  <a href="#sous-agents">Delegation guide</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-decisions.webp" alt="The request path leads to a decision table in a review room." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">02 / Decisions</p>
+                <h3>A traceable human decision</h3>
+                <p>Have an independent approver verify the case and its revision, then find the outcome in the portfolio.</p>
+                <div class="tour-links">
+                  <a href="../companion/index.html?lang=en">Try the Decision Companion <span aria-hidden="true">↗</span></a>
+                  <a href="#workbench">Approval rules</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-models.webp" alt="A branching path connects three server areas." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">03 / Routing</p>
+                <h3>Test model flows</h3>
+                <p>Simulate a route, an outage or a privacy constraint. Compare destinations, token counts and estimated costs.</p>
+                <div class="tour-links">
+                  <a href="./flow-lab.html?lang=en">Run a Flow Lab simulation <span aria-hidden="true">↗</span></a>
+                  <a href="#integrations">Models and connectors</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-observatory.webp" alt="An analysis table shows groups of translucent blocks beside a display." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">04 / Adoption</p>
+                <h3>The AI Usage Observatory</h3>
+                <p>Explore adoption by team, tool and period through aggregate views with a privacy threshold.</p>
+                <div class="tour-links">
+                  <a href="./architecture.en.html#zone-observatoire">Locate the Observatory <span aria-hidden="true">↗</span></a>
+                  <a href="#acces">Access scopes</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-security.webp" alt="A checkpoint separates workstations from a server room." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">05 / Operations</p>
+                <h3>Protect and recover</h3>
+                <p>Qualify access and network egress, then rehearse recovery by verifying the restored decision journal.</p>
+                <div class="tour-links">
+                  <a href="#production">Prepare for production</a>
+                  <a href="#reprise">Rehearse a restore</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+        </ol>
       </section>
 
       <section id="demarrage" aria-labelledby="titre-demarrage">
