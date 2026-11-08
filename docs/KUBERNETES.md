@@ -164,3 +164,6 @@ forwarding headers before and after sign-in. It checks the API listener from wit
 namespace and exercises NetworkPolicy with an allowed test TLS proxy and a denied client Pod.
 The test TLS proxy represents an Ingress data path. Use your target controller and storage driver
 for the pilot's qualification.
+
+The job also exercises optional Alloy delivery to a disposable TLS and Basic Auth Loki endpoint.
+It checks release-scoped collection, log labels, redaction and the collector's Kubernetes permissions.

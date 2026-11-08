@@ -105,6 +105,7 @@ def create_helm_values(root):
                 or not DIGEST.fullmatch(digest)):
             raise ValueError(f"Invalid first-party release image for {name}.")
         images[name] = {"repository": repository, "digest": digest}
+
     def upstream(service, expected_repository):
         entry = services[service]
         reference, _, digest = entry["image"].partition("@")

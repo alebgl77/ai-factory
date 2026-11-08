@@ -17,8 +17,9 @@ kc() { kubectl --namespace "$namespace" "$@"; }
 cleanup() {
   local status=$?
   trap - EXIT
-  if (( status != 0 )); then
-    kc get pods,pvc,events -o wide >&2 || true
+  if (( status != 0 )) && [[ -s "$KUBECONFIG" ]]; then
+    kc get pods,pvc -o wide >&2 || true
+    kc get events --sort-by=.lastTimestamp | tail -n 30 >&2 || true
     for pod in $(kc get pod -o name); do
       kc logs "$pod" --all-containers --prefix --tail=60 >&2 || true
     done
@@ -136,8 +137,15 @@ source_claim="$(kc get pvc -l app.kubernetes.io/instance=demo -o jsonpath='{.ite
 [[ -n "$source_claim" && "$source_claim" != restored-state ]]
 python3 "$fixtures/fixtures.py" restore "$source_claim" restored-state | kc create -f -
 kc wait --for=condition=Ready pod/restore --timeout=120s
-kc exec restore -- tar -C /source -cf - . > "$work/state.tar"
-kc exec -i restore -- tar --no-same-owner --no-overwrite-dir -C /target -xf - < "$work/state.tar"
+# Archive all entries, including hidden state, while preserving the destination mount root.
+kc exec restore -- python -c '
+import sys, tarfile
+from pathlib import Path
+with tarfile.open(fileobj=sys.stdout.buffer, mode="w|") as archive:
+    for entry in sorted(Path("/source").iterdir()):
+        archive.add(entry, arcname=entry.name)
+' > "$work/state.tar"
+kc exec -i restore -- tar --no-same-owner --no-same-permissions --no-overwrite-dir -C /target -xf - < "$work/state.tar"
 kc delete pod restore --timeout=120s
 deploy restored --set persistence.existingClaim=restored-state
 forward service/restored-ai-factory 18080:8080
@@ -196,3 +204,4 @@ for address in sys.argv[1:]:
 forward pod/ingress 18443:8443
 forward pod/dex 15556:5556
 python3 "$fixtures/private_client.py" "$work/factory.crt" "$work/dex.crt"
+timeout --kill-after=20s 180s bash "$fixtures/test_logging_kind.sh" "$chart" "$namespace"

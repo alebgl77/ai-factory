@@ -12,13 +12,17 @@ restrict access to the operator group.
 For a cold backup, suspend any controller that would restart the workload, scale
 the Factory Deployment to zero and wait for its Pod to terminate. Take a CSI
 snapshot or use your storage provider's backup mechanism while the claim is
-quiescent, then resume the workload. Copy the whole state directory in one
-operation if using file-level backup. A live copy of individual SQLite files
-can miss transactions or disagree with the associated audit records.
+quiescent, then resume the workload. For a file-level backup, archive all
+children of the state directory together, including dotfiles. Omit the volume
+mount root from the archive. A live copy of individual SQLite files can miss
+transactions or disagree with the associated audit records.
 
 Restore to a new claim in an isolated namespace. Set `persistence.existingClaim`
 to the restored claim and start with the chart and image versions recorded at
-backup time. Check the Factory health endpoint, read a known item from the
+backup time. For a file archive, preserve the destination volume's ownership
+and access settings when extracting, for example with GNU tar's
+`--no-same-owner --no-same-permissions` as the workload UID. Check the Factory
+health endpoint, read a known item from the
 restored state and, if present, run
 `python -m app.audit verify /data/audit.jsonl` in the API container. Record the
 restore duration and data loss window, then complete any application upgrade

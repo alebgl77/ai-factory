@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Cookie-jar browser stand-in, as in the Compose SSO test, with strict TLS and two BUs."""
 
+import http.client
 import http.cookiejar
 import json
 import socket
@@ -69,6 +70,31 @@ def request(opener, path, status, *, headers=None, payload=None, origin=BASE):
         return response.headers, response.read(), response.geturl()
 
 
+def check_duplicate_origin(opener, context):
+    path = "/api/v1/registry/uc-01/model-version"
+    req = urllib.request.Request(BASE + path)
+    jar = next(handler.cookiejar for handler in opener.handlers
+               if isinstance(handler, urllib.request.HTTPCookieProcessor))
+    jar.add_cookie_header(req)
+    cookie = req.get_header("Cookie")
+    assert cookie
+    payload = b'{"version":"kind-duplicate-origin"}'
+    connection = http.client.HTTPSConnection("factory.test", context=context, timeout=20)
+    try:
+        connection.putrequest("POST", path)
+        connection.putheader("Origin", BASE)
+        connection.putheader("Origin", BASE)
+        connection.putheader("Cookie", cookie)
+        connection.putheader("Content-Type", "application/json")
+        connection.putheader("Content-Length", str(len(payload)))
+        connection.endheaders(payload)
+        response = connection.getresponse()
+        assert response.status == 403, response.status
+        response.read()
+    finally:
+        connection.close()
+
+
 def main(factory_cert, dex_cert):
     context = ssl.create_default_context(cafile=factory_cert)
     context.load_verify_locations(cafile=dex_cert)
@@ -94,6 +120,7 @@ def main(factory_cert, dex_cert):
     finance = browser(context, SyntheticIdentity("carol", "finance"))
     _, page, landing = request(ops, "/", 200)
     assert landing == BASE + "/" and b"/vendor/three/build/three.module.js" in page
+    check_duplicate_origin(ops, context)
     request(finance, "/", 200)
     outsider = browser(context, SyntheticIdentity("eve", "outside"))
     _, _, callback = request(outsider, "/", 403)
