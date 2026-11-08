@@ -1,0 +1,116 @@
+# SPDX-License-Identifier: MIT
+profile: demo
+fullnameOverride: ""
+images:
+  api:
+    repository: ai-factory/api
+    tag: local
+    digest: ""
+    pullPolicy: IfNotPresent
+  dashboard:
+    repository: ai-factory/dashboard
+    tag: local
+    digest: ""
+    pullPolicy: IfNotPresent
+  caddy:
+    repository: caddy
+    tag: 2.11.7-alpine
+    digest: ""
+    pullPolicy: IfNotPresent
+  oauth2Proxy:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.15.6
+    digest: ""
+    pullPolicy: IfNotPresent
+imagePullSecrets: []
+allowMutableImagesForLocalTesting: false
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecretName: ""
+  annotations: {}
+sso:
+  issuerURL: ""
+  existingSecret: ""
+  clientIDKey: client-id
+  clientSecretKey: client-secret
+  cookieSecretKey: cookie-secret
+  allowedEmailDomains: []
+  allowedGroups: []
+  groupsClaim: groups
+  scope: openid email profile
+  providerCA:
+    existingSecret: ""
+    key: ca.crt
+businessUnits:
+  existingSecret: ""
+  key: business-units.yaml
+api:
+  roleMap: []
+  defaultRole: ""
+  workbenchMode: ""
+  workbenchCyberAudit: false
+  assistEnabled: false
+  portfolioRunner:
+    existingSecret: ""
+    key: portfolio-runner.json
+persistence:
+  existingClaim: ""
+  storageClass: null
+  size: 1Gi
+  accessMode: ReadWriteOnce
+networkPolicy:
+  ingressPeers: []
+  dnsPeers: []
+  egressRules: []
+telemetry:
+  allowInsecureClusterHTTP: false
+  prometheusURL: ""
+  grafanaURL: ""
+  grafanaPublicURL: ""
+  grafanaToken:
+    existingSecret: ""
+    key: token
+  langfuseURL: ""
+  langfuseCredentials:
+    existingSecret: ""
+    publicKey: public-key
+    secretKey: secret-key
+  litellmURL: ""
+  litellmCredentials:
+    existingSecret: ""
+    key: master-key
+  qdrantURL: ""
+resources:
+  edge:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 500m, memory: 128Mi}
+  api:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  dashboard:
+    requests: {cpu: 25m, memory: 16Mi}
+    limits: {cpu: 250m, memory: 64Mi}
+  oauth2Proxy:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+logging:
+  enabled: false
+  alloy:
+    image:
+      repository: grafana/alloy
+      tag: v1.21.3
+  loki:
+    url: ""
+    existingSecret: ""
+    usernameKey: username
+    passwordKey: password
+    caKey: ""
+    tenantId: ""
+  egress:
+    kubernetesAPI: []
+    dnsNamespace: ""
+    dnsPodSelector: {}
+    dnsCIDRs: []
+    loki: []

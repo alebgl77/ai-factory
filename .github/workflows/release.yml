@@ -291,6 +291,10 @@ jobs:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Install integrity-verified Helm
+        run: |
+          bash .github/scripts/install_kubernetes_tools.sh "$RUNNER_TEMP/kube-tools" helm
+          echo "$RUNNER_TEMP/kube-tools" >> "$GITHUB_PATH"
       - name: Build the deployment bundle for this tag
         env:
           REGISTRY: ${{ needs.preflight.outputs.registry }}
@@ -298,12 +302,19 @@ jobs:
           set -euo pipefail
           release_sha="$(git rev-parse HEAD)"
           bundle="$(mktemp -d)"
-          trap 'rm -rf "$bundle"' EXIT
+          staging="$(mktemp -d)"
+          trap 'rm -rf "$bundle" "$staging"' EXIT
           git archive "$release_sha" -- \
             .env.example docker-compose.yml docker-compose.release.yml docker-compose.portfolio.yml \
             compose config scripts/check_production.py .github/scripts/verify_image.sh \
-            docs/DEPLOYMENT.md docs/GATEWAY_SECURITY.md docs/SECURITY.md docs/fr/PORTFOLIO.md LICENSE SECURITY.md licenses | tar -x -C "$bundle"
+            docs/DEPLOYMENT.md docs/GATEWAY_SECURITY.md docs/SECURITY.md docs/fr/PORTFOLIO.md \
+            docs/KUBERNETES.md docs/KUBERNETES_OPERATIONS.md LICENSE SECURITY.md licenses | tar -x -C "$bundle"
           python3 .github/scripts/create_release_bundle.py "$bundle" "$RUNNER_TEMP/release" "$TAG" "$release_sha" "$REGISTRY"
+          mkdir -p "$bundle/deploy/helm"
+          python3 .github/scripts/create_release_bundle.py --helm-values "$bundle"
+          python3 scripts/package_helm.py "$staging"
+          helm lint --strict "$staging/ai-factory" -f "$bundle/deploy/helm/values.release.json"
+          helm package "$staging/ai-factory" --version "${TAG#v}" --app-version "$TAG" --destination "$bundle/deploy/helm"
           tar -C "$bundle" -czf "$RUNNER_TEMP/release/ai-factory-deploy-$TAG.tar.gz" .
       - name: Image list and signed checksums
         working-directory: ${{ runner.temp }}/release

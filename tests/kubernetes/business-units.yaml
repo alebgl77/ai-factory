@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+version: 1
+groups:
+  ops: [cc-ops]
+  finance: [cc-finance]
+  admins: ["*"]
+resources:
+  D1: [cc-ops, cc-finance]
+people:
+  cc-ops: [p01]
+  cc-finance: [p07]
+identities: {}

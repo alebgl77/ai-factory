@@ -12,6 +12,7 @@ DIGEST = re.compile(r"sha256:[a-f0-9]{64}")
 IMAGE_NAME = re.compile(r"[a-z0-9][a-z0-9._/-]*(?::[a-zA-Z0-9._-]+)?")
 SERVICE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 LOCK_NAME = "docker-compose.release-lock.yml"
+HELM_VALUES_NAME = "values.release.json"
 
 
 def render_compose(root, *overlays):
@@ -92,8 +93,38 @@ def create_evidence(root, assets, tag, sha, registry, resolve=resolve_registry_d
     (root / "release-stack.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
+def create_helm_values(root):
+    """Project the signed release inventory into the chart's image values."""
+    evidence = json.loads((root / "release-stack.json").read_text(encoding="utf-8"))
+    images = {}
+    for name in ("api", "dashboard"):
+        entry = evidence["services"][name]
+        repository, _, digest = entry["image"].partition("@")
+        if (entry["origin"] != "release" or not re.fullmatch(rf"ghcr\.io/[a-z0-9][a-z0-9-]*/{name}", repository)
+                or not DIGEST.fullmatch(digest)):
+            raise ValueError(f"Invalid first-party release image for {name}.")
+        images[name] = {"repository": repository, "digest": digest}
+    for service, name, expected_repository in (
+        ("edge", "caddy", "caddy"),
+        ("oauth2-proxy", "oauth2Proxy", "quay.io/oauth2-proxy/oauth2-proxy"),
+    ):
+        entry = evidence["services"][service]
+        reference, _, digest = entry["image"].partition("@")
+        if (entry["origin"] != "upstream" or reference.split(":", 1)[0] != expected_repository
+                or not DIGEST.fullmatch(digest)):
+            raise ValueError(f"Invalid upstream release image for {service}.")
+        images[name] = {"repository": expected_repository, "digest": digest}
+    (root / "deploy" / "helm" / HELM_VALUES_NAME).write_text(
+        json.dumps({"images": images}, indent=2) + "\n", encoding="utf-8",
+    )
+
+
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--helm-values":
+        create_helm_values(Path(sys.argv[2]))
+        sys.exit(0)
     if len(sys.argv) != 6:
-        sys.exit("usage: create_release_bundle.py BUNDLE_ROOT IMAGE_ARTIFACT_DIR TAG SOURCE_SHA REGISTRY")
+        sys.exit("usage: create_release_bundle.py BUNDLE_ROOT IMAGE_ARTIFACT_DIR TAG SOURCE_SHA REGISTRY\n"
+                 "       create_release_bundle.py --helm-values BUNDLE_ROOT")
     root, assets, tag, sha, registry = sys.argv[1:]
     create_evidence(Path(root), Path(assets), tag, sha, registry)

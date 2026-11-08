@@ -57,6 +57,32 @@ def test_unresolved_or_invalid_upstream_digest_fails():
         bundle.deployment_inventory({"edge": {"image": "caddy:2.11.7-alpine"}}, {}, REGISTRY, lambda _: "bad")
 
 
+def test_helm_values_reuse_the_same_release_inventory(tmp_path):
+    chart_assets = tmp_path / "deploy" / "helm"
+    chart_assets.mkdir(parents=True)
+    evidence = {"services": {
+        "api": {"image": f"{REGISTRY}/api@{DIGEST}", "origin": "release"},
+        "dashboard": {"image": f"{REGISTRY}/dashboard@{DIGEST}", "origin": "release"},
+        "edge": {"image": f"caddy:2.11.7-alpine@{UPSTREAM_DIGEST}", "origin": "upstream"},
+        "oauth2-proxy": {"image": f"quay.io/oauth2-proxy/oauth2-proxy:v7.15.6@{UPSTREAM_DIGEST}", "origin": "upstream"},
+    }}
+    inventory = tmp_path / "release-stack.json"
+    inventory.write_text(json.dumps(evidence), encoding="utf-8")
+    bundle.create_helm_values(tmp_path)
+    assert json.loads((chart_assets / bundle.HELM_VALUES_NAME).read_text(encoding="utf-8")) == {
+        "images": {
+            "api": {"repository": f"{REGISTRY}/api", "digest": DIGEST},
+            "dashboard": {"repository": f"{REGISTRY}/dashboard", "digest": DIGEST},
+            "caddy": {"repository": "caddy", "digest": UPSTREAM_DIGEST},
+            "oauth2Proxy": {"repository": "quay.io/oauth2-proxy/oauth2-proxy", "digest": UPSTREAM_DIGEST},
+        },
+    }
+    evidence["services"]["dashboard"]["image"] = f"{REGISTRY}/api@{DIGEST}"
+    inventory.write_text(json.dumps(evidence), encoding="utf-8")
+    with pytest.raises(ValueError, match="dashboard"):
+        bundle.create_helm_values(tmp_path)
+
+
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker Compose is required for real config rendering")
 def test_release_overlay_renders_every_profile_and_removes_every_build(tmp_path, monkeypatch):
     root = tmp_path / "bundle"
