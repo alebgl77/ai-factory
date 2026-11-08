@@ -323,8 +323,7 @@ if (!process.env.E2E_BASE_URL) {
     ideaCard('8', '@factory-administration', 'Administration Factory', 'Réunir les guides', 'adoption', ['documentation']),
     ideaCard('9', 'cc-ops', 'Opérations', 'Piste historique sur les archives', 'adoption', ['documentation']),
   ];
-  let workbenchOutcome = null;
-let portfolioWorkbenchEnabled = true;
+  let workbenchOutcome = null, portfolioWorkbenchEnabled = true, holdPortfolioOutcome = null;
   const portfolioId = n => n.toString(16).padStart(32, '0');
   const activityDay = Math.floor(Date.now() / 86400000) * 86400000;
   const activityTime = (age, hour = 0) => new Date(activityDay - age * 86400000 + hour * 3600000).toISOString();
@@ -466,7 +465,8 @@ let portfolioWorkbenchEnabled = true;
       }
       data.capabilities = { ...data.capabilities, global_admin: false, workbench_handoff: portfolioWorkbenchEnabled,
         roles_by_unit: { delivery: [portfolioRole] } };
-      return route.fulfill({ json: data });
+      const reply = { json: data };
+      return holdPortfolioOutcome ? holdPortfolioOutcome.then(() => route.fulfill(reply)) : route.fulfill(reply);
     }
     if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
       assessmentCalls.push(route.request().postDataJSON());
@@ -849,13 +849,25 @@ let portfolioWorkbenchEnabled = true;
   portfolioWorkbenchEnabled = true;
   await scoped.clock.fastForward(20000);
   await decisionDetail.getByRole('link', { name: 'Ouvrir Companion' }).waitFor();
+  const detailFocused = () => decisionDetail.evaluate(node => node === document.activeElement);
+  const focusBeforeOutcome = await detailFocused();
+  let releasePortfolioOutcome;
+  holdPortfolioOutcome = new Promise(resolve => { releasePortfolioOutcome = resolve; });
   workbenchOutcome = 'approve';
+  const pendingOutcome = scoped.waitForRequest(req => req.method() === 'GET' &&
+    new URL(req.url()).pathname === '/api/v1/portfolio');
   await scoped.clock.fastForward(20000);
+  await pendingOutcome;
+  // Refreshing the dashboard can re-render the drawer while the portfolio request is pending.
+  await scoped.evaluate(() => window.__twin.refresh());
+  check('portfolio retains drawer focus during a dashboard refresh with a Workbench outcome pending',
+    focusBeforeOutcome && await detailFocused());
+  releasePortfolioOutcome(); holdPortfolioOutcome = null;
   await decisionDetail.getByText('Dernière décision Workbench', { exact: true }).waitFor();
   check('exact Workbench outcome refreshes the selected task and retains drawer focus',
     (await decisionDetail.textContent()).includes('Approuvée') &&
     await decisionDetail.getByRole('link', { name: 'Ouvrir Companion' }).count() === 0 &&
-    await decisionDetail.evaluate(node => node === document.activeElement));
+    await detailFocused());
   portfolioStatus = 403;
   await scoped.clock.fastForward(20000);
   await scoped.locator('.portfolio[data-portfolio-state="blocked"]').waitFor();

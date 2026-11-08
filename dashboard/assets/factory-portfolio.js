@@ -580,7 +580,7 @@
         cancelled: t('The task was cancelled.', 'La tâche a été annulée.'),
       })[task.status];
     const list = (label, rows) => rows.length ? `<div><b>${label}</b><ul>${rows.map(row => `<li>${esc(row)}</li>`).join('')}</ul></div>` : '';
-    return `<article class="portfolio-detail" data-portfolio-detail tabindex="-1">
+    return `<article class="portfolio-detail" data-portfolio-detail="${esc(task.id)}" tabindex="-1">
       <div class="portfolio-caption"><h4>${esc(task.title)}</h4>${button('data-portfolio-action', 'clear', t('Close details', 'Fermer le détail'))}</div>
       <p class="portfolio-note">${esc(project?.title || '')} · ${esc(unit(task.unit))} · ${due(task.due_on)} · ${esc(ownerText(task))}</p>
       ${task.description ? `<p>${esc(task.description)}</p>` : ''}

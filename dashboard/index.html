@@ -5280,7 +5280,7 @@ function setHTMLKeepFocus(root, html) {
   if (root.__html === html) return;
   root.__html = html;
   const a = document.activeElement;
-  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioFilter', 'portfolioAction', 'portfolioField', 'ideasOpen', 'assistOpen'].find(x => a.dataset[x] !== undefined) : null;
+  const k = root.contains(a) ? ['flag', 'emp', 'res', 'edit', 'end', 'del', 'att', 'preset', 'day', 'uc', 'rec', 'export', 'csec', 'cact', 'f', 'shadowAction', 'shadowField', 'shadowFilter', 'activityOpen', 'activityFilter', 'activityRetry', 'portfolioOpen', 'portfolioChoice', 'portfolioDetail', 'portfolioFilter', 'portfolioAction', 'portfolioField', 'ideasOpen', 'assistOpen'].find(x => a.dataset[x] !== undefined) : null;
   const v = k && a.dataset[k];
   root.innerHTML = html;
   if (k) {
