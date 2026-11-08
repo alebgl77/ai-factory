@@ -104,6 +104,9 @@ Prometheus → Grafana → API → 3D dashboard.
 **Offline version**: open `dashboard/index.html` directly in a browser. The dashboard then uses
 the embedded demo snapshots (one in English, one in French) and shows an *Offline demo* badge.
 
+The Helm chart supports a local Kubernetes demo and an authenticated private pilot with
+operator-managed services. See the [Kubernetes deployment guide](docs/KUBERNETES.md).
+
 ## What the factory does
 
 | Priority | Capability | Where |

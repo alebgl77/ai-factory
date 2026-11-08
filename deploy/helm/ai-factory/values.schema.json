@@ -1,0 +1,388 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "type": "string",
+      "enum": ["demo", "private"]
+    },
+    "fullnameOverride": {"type": "string"},
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "api": {"$ref": "#/$defs/image"},
+        "dashboard": {"$ref": "#/$defs/image"},
+        "caddy": {"$ref": "#/$defs/image"},
+        "oauth2Proxy": {"$ref": "#/$defs/image"}
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string"}
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "allowMutableImagesForLocalTesting": {"type": "boolean"},
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "className": {"type": "string"},
+        "host": {"type": "string"},
+        "tlsSecretName": {"type": "string"},
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      }
+    },
+    "sso": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "issuerURL": {"type": "string"},
+        "existingSecret": {"type": "string"},
+        "clientIDKey": {"type": "string"},
+        "clientSecretKey": {"type": "string"},
+        "cookieSecretKey": {"type": "string"},
+        "allowedEmailDomains": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "allowedGroups": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "groupsClaim": {"type": "string"},
+        "scope": {"type": "string"},
+        "providerCA": {"$ref": "#/$defs/secretFile"}
+      }
+    },
+    "businessUnits": {"$ref": "#/$defs/secretFile"},
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roleMap": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "defaultRole": {
+          "type": "string",
+          "enum": [
+            "",
+            "viewer"
+          ]
+        },
+        "workbenchMode": {
+          "type": "string",
+          "enum": [
+            "",
+            "off",
+            "demo",
+            "portfolio"
+          ]
+        },
+        "workbenchCyberAudit": {"type": "boolean"},
+        "assistEnabled": {"type": "boolean"},
+        "portfolioRunner": {"$ref": "#/$defs/secretFile"}
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingClaim": {"type": "string"},
+        "storageClass": {
+          "type": ["null", "string"]
+        },
+        "size": {"type": "string"},
+        "accessMode": {
+          "type": "string",
+          "enum": ["ReadWriteOnce", "ReadWriteOncePod"]
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ingressPeers": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/peer"}
+        },
+        "dnsPeers": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/peer"}
+        },
+        "egressRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "to": {
+                "type": "array",
+                "items": {"$ref": "#/$defs/peer"}
+              },
+              "ports": {
+                "type": "array",
+                "items": {"$ref": "#/$defs/port"}
+              }
+            },
+            "required": ["to", "ports"]
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowInsecureClusterHTTP": {"type": "boolean"},
+        "caBundle": {"$ref": "#/$defs/secretFile"},
+        "prometheusURL": {"type": "string"},
+        "grafanaURL": {"type": "string"},
+        "grafanaPublicURL": {"type": "string"},
+        "grafanaToken": {"$ref": "#/$defs/secretFile"},
+        "langfuseURL": {"type": "string"},
+        "langfuseCredentials": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existingSecret": {"type": "string"},
+            "publicKey": {"type": "string"},
+            "secretKey": {"type": "string"}
+          }
+        },
+        "litellmURL": {"type": "string"},
+        "litellmCredentials": {"$ref": "#/$defs/secretFile"},
+        "qdrantURL": {"type": "string"}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "edge": {"$ref": "#/$defs/resources"},
+        "api": {"$ref": "#/$defs/resources"},
+        "dashboard": {"$ref": "#/$defs/resources"},
+        "oauth2Proxy": {"$ref": "#/$defs/resources"}
+      },
+      "required": ["edge", "api", "dashboard", "oauth2Proxy"]
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "alloy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "repository": {"type": "string"},
+                "tag": {"type": "string"},
+                "digest": {"type": "string"},
+                "pullPolicy": {
+                  "type": "string",
+                  "enum": ["Always", "IfNotPresent", "Never"]
+                }
+              }
+            }
+          }
+        },
+        "loki": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "url": {"type": "string"},
+            "existingSecret": {"type": "string"},
+            "usernameKey": {"type": "string"},
+            "passwordKey": {"type": "string"},
+            "caKey": {"type": "string"},
+            "tenantId": {"type": "string"}
+          }
+        },
+        "egress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kubernetesAPI": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/cidrPort"}
+            },
+            "dnsNamespace": {"type": "string"},
+            "dnsPodSelector": {
+              "type": "object",
+              "additionalProperties": {"type": "string"}
+            },
+            "dnsCIDRs": {
+              "type": "array",
+              "items": {"type": "string"}
+            },
+            "loki": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/cidrPort"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {"type": "string"},
+        "digest": {"type": "string"},
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        }
+      },
+      "required": ["repository", "pullPolicy"]
+    },
+    "secretFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {"type": "string"},
+        "key": {"type": "string"}
+      }
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "matchLabels": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "matchExpressions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "key": {"type": "string"},
+              "operator": {
+                "type": "string",
+                "enum": ["In", "NotIn", "Exists", "DoesNotExist"]
+              },
+              "values": {
+                "type": "array",
+                "items": {"type": "string"}
+              }
+            },
+            "required": ["key", "operator"]
+          }
+        }
+      }
+    },
+    "peer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ipBlock": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cidr": {"type": "string"},
+            "except": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "required": [
+            "cidr"
+          ]
+        },
+        "podSelector": {"$ref": "#/$defs/selector"},
+        "namespaceSelector": {"$ref": "#/$defs/selector"}
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": ["TCP", "UDP", "SCTP"]
+        },
+        "port": {
+          "anyOf": [
+            {"type": "string"},
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          ]
+        },
+        "endPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "port"
+      ]
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object",
+          "minProperties": 2,
+          "required": ["cpu", "memory"],
+          "additionalProperties": {
+            "type": ["string", "number"]
+          }
+        },
+        "limits": {
+          "type": "object",
+          "minProperties": 2,
+          "required": ["cpu", "memory"],
+          "additionalProperties": {
+            "type": ["string", "number"]
+          }
+        }
+      },
+      "required": ["requests", "limits"]
+    },
+    "cidrPort": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cidr": {"type": "string"},
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": ["cidr", "port"]
+    }
+  }
+}

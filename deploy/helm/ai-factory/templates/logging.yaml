@@ -1,0 +1,357 @@
+{{- define "ai-factory.loggingConfig" -}}
+{{- $labels := include "ai-factory.selectorLabels" . | fromYaml -}}
+{{- $selectors := list -}}
+{{- range $name, $value := $labels -}}
+{{- $selectors = append $selectors (printf "%s=%s" $name $value) -}}
+{{- end -}}
+discovery.kubernetes "factory_pods" {
+  role = "pod"
+
+  namespaces {
+    names = {{ list .Release.Namespace | toJson }}
+  }
+
+  selectors {
+    role  = "pod"
+    label = {{ join "," $selectors | toJson }}
+  }
+}
+
+discovery.relabel "factory_pods" {
+  targets = discovery.kubernetes.factory_pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_instance"]
+    target_label  = "project"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+
+  rule {
+    action = "labelkeep"
+    regex  = "__meta_kubernetes_(namespace|pod_(uid|name|container_name))|container|service|project|pod|namespace"
+  }
+}
+
+loki.source.kubernetes "factory_pods" {
+  targets    = discovery.relabel.factory_pods.output
+  forward_to = [loki.process.factory.receiver]
+}
+
+loki.process "factory" {
+  stage.drop {
+    longer_than = "128KiB"
+  }
+
+  // Keep these stages in sync with compose/alloy/config.alloy.
+  stage.replace {
+    expression = "(?i)(sk-[a-z0-9_-]{6,}|pk-lf-[a-z0-9_-]{6,}|bearer\\s+[a-z0-9._-]{12,}|glsa_[a-z0-9_]{12,})"
+    replace    = "***"
+  }
+
+  stage.regex {
+    expression = "(?i)(?:\\blevel\\b|\\blvl\\b|\"level\"|\"severity\")\\s*[=:]\\s*\"?(?P<level>debug|info|warn|warning|error|err|fatal|critical)\\b"
+  }
+
+  stage.template {
+    source   = "level"
+    template = {{ "{{ ToLower .Value }}" | quote }}
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+
+  forward_to = [loki.write.operator.receiver]
+}
+
+loki.write "operator" {
+  external_labels = { factory = "ai-factory-reference" }
+  max_streams     = 256
+
+  endpoint {
+    url                 = {{ .Values.logging.loki.url | toJson }}
+    follow_redirects    = false
+    batch_size          = "256KiB"
+    batch_wait          = "1s"
+    remote_timeout      = "10s"
+    max_backoff_period  = "30s"
+    max_backoff_retries = 5
+    {{- with .Values.logging.loki.tenantId }}
+    tenant_id           = {{ . | toJson }}
+    {{- end }}
+
+    basic_auth {
+      username      = sys.env("FACTORY_LOKI_USERNAME")
+      password_file = "/var/run/factory-loki/password"
+    }
+
+    tls_config {
+      min_version = "TLS12"
+      {{- if .Values.logging.loki.caKey }}
+      ca_file     = "/var/run/factory-loki/ca.crt"
+      {{- end }}
+    }
+  }
+}
+{{- end -}}
+
+{{- define "ai-factory.loggingCIDR" -}}
+{{- if not (regexMatch "^[0-9A-Fa-f:.]+/[1-9][0-9]{0,2}$" .) -}}
+{{- fail "logging egress requires explicit non-default CIDRs" -}}
+{{- end -}}
+{{- . | quote -}}
+{{- end -}}
+
+{{- define "ai-factory.loggingPeer" -}}
+{{- $port := int .port -}}
+{{- if or (lt $port 1) (gt $port 65535) -}}
+{{- fail "logging egress requires a destination port from 1 to 65535" -}}
+{{- end -}}
+- to:
+    - ipBlock:
+        cidr: {{ include "ai-factory.loggingCIDR" .cidr }}
+  ports:
+    - protocol: TCP
+      port: {{ $port }}
+{{- end -}}
+
+{{- define "ai-factory.loggingLabels" -}}
+app.kubernetes.io/name: {{ .Chart.Name | quote }}
+app.kubernetes.io/instance: {{ .Release.Name | quote }}
+app.kubernetes.io/component: alloy
+{{- end -}}
+
+{{- if .Values.logging.enabled }}
+{{- $name := printf "%s-alloy" (include "ai-factory.fullname" .) }}
+{{- $logging := .Values.logging }}
+{{- $loki := $logging.loki }}
+{{- $egress := $logging.egress }}
+{{- if has .Release.Namespace (list "default" "kube-system" "kube-public" "kube-node-lease") }}
+{{- fail "logging requires a dedicated namespace for this release" }}
+{{- end }}
+{{- if not (regexMatch "^https://[^/?#@[:space:]]+(/[^?#@[:space:]]*)?/loki/api/v1/push$" $loki.url) }}
+{{- fail "logging.loki.url must be a credential-free HTTPS URL ending in /loki/api/v1/push" }}
+{{- end }}
+{{- if or (empty $egress.kubernetesAPI) (empty $egress.loki) }}
+{{- fail "logging.egress.kubernetesAPI and logging.egress.loki need explicit CIDRs and ports" }}
+{{- end }}
+{{- if ne (empty $egress.dnsNamespace) (empty $egress.dnsPodSelector) }}
+{{- fail "logging.egress.dnsNamespace and logging.egress.dnsPodSelector must be set together" }}
+{{- end }}
+{{- if and (empty $egress.dnsNamespace) (empty $egress.dnsCIDRs) }}
+{{- fail "logging egress requires DNS pod selectors or explicit DNS CIDRs" }}
+{{- end }}
+{{- $secret := required "logging.loki.existingSecret is required" $loki.existingSecret }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-factory.loggingLabels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-factory.loggingLabels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-factory.loggingLabels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-factory.loggingLabels" . | nindent 4 }}
+data:
+  config.alloy: |
+    {{- include "ai-factory.loggingConfig" . | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-factory.loggingLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ai-factory.loggingLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ai-factory.loggingLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "ai-factory.loggingConfig" . | sha256sum }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        fsGroup: 473
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alloy
+          image: {{ include "ai-factory.image" $logging.alloy.image | quote }}
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --server.http.listen-addr=127.0.0.1:12345
+            - --storage.path=/var/lib/alloy/data
+            - --disable-reporting
+          securityContext:
+            {{- include "ai-factory.containerSecurity" 473 | nindent 12 }}
+          env:
+            - name: FACTORY_LOKI_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: {{ required "logging.loki.usernameKey is required" $loki.usernameKey | quote }}
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  exec 3<>/dev/tcp/127.0.0.1/12345
+                  printf 'GET /-/ready HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3
+                  read -r status <&3
+                  [[ "$status" == "HTTP/1."*" 200 "* ]]
+            timeoutSeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+              ephemeral-storage: 16Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+              ephemeral-storage: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+              readOnly: true
+            - name: loki-credentials
+              mountPath: /var/run/factory-loki
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/alloy/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}
+        - name: loki-credentials
+          secret:
+            secretName: {{ $secret | quote }}
+            defaultMode: 0440
+            items:
+              - key: {{ required "logging.loki.passwordKey is required" $loki.passwordKey | quote }}
+                path: password
+              {{- with $loki.caKey }}
+              - key: {{ . | quote }}
+                path: ca.crt
+              {{- end }}
+        - name: state
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ai-factory.loggingLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-factory.loggingLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- range $egress.kubernetesAPI }}
+    {{- include "ai-factory.loggingPeer" . | nindent 4 }}
+    {{- end }}
+    - to:
+        {{- with $egress.dnsNamespace }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $egress.dnsPodSelector | nindent 14 }}
+        {{- end }}
+        {{- range $egress.dnsCIDRs }}
+        - ipBlock:
+            cidr: {{ include "ai-factory.loggingCIDR" . }}
+        {{- end }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- range $egress.loki }}
+    {{- include "ai-factory.loggingPeer" . | nindent 4 }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ai-factory.fullname" . }}
+  labels:
+    {{- include "ai-factory.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ai-factory.selectorLabels" . | nindent 6 }}
+      factory.ai/profile: {{ .Values.profile | quote }}
+  policyTypes: [Ingress, Egress]
+  {{- if .Values.networkPolicy.ingressPeers }}
+  ingress:
+    - from:
+        {{- toYaml .Values.networkPolicy.ingressPeers | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+  {{- else }}
+  ingress: []
+  {{- end }}
+  {{- if or .Values.networkPolicy.dnsPeers .Values.networkPolicy.egressRules }}
+  egress:
+    {{- with .Values.networkPolicy.dnsPeers }}
+    - to:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- with .Values.networkPolicy.egressRules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- else }}
+  egress: []
+  {{- end }}

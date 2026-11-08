@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+# Overlay for an operator-owned Loki endpoint. Replace host, CIDRs and DNS
+# selectors with the destinations seen by your cluster's NetworkPolicy engine.
+logging:
+  enabled: true
+  loki:
+    url: https://loki.example.com/loki/api/v1/push
+    existingSecret: factory-loki
+    caKey: ca.crt # Set to "" when the image's system trust store suffices.
+  egress:
+    kubernetesAPI:
+      - {cidr: 192.0.2.4/32, port: 443}
+      - {cidr: 192.0.2.5/32, port: 6443}
+    dnsNamespace: kube-system
+    dnsPodSelector:
+      k8s-app: kube-dns
+    loki:
+      - {cidr: 198.51.100.3/32, port: 443}

@@ -1,0 +1,297 @@
+{{- $private := eq .Values.profile "private" -}}
+{{- $name := include "ai-factory.fullname" . -}}
+{{- $telemetry := .Values.telemetry -}}
+{{- $runner := .Values.api.portfolioRunner -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ai-factory.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ai-factory.selectorLabels" . | nindent 6 }}
+      factory.ai/profile: {{ .Values.profile | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "ai-factory.selectorLabels" . | nindent 8 }}
+        factory.ai/profile: {{ .Values.profile | quote }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: edge
+          image: {{ include "ai-factory.image" .Values.images.caddy | quote }}
+          imagePullPolicy: {{ .Values.images.caddy.pullPolicy }}
+          securityContext:
+            {{- include "ai-factory.containerSecurity" 10001 | nindent 12 }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              # Copy without the image's file capability so execution works with all capabilities dropped.
+              cp /usr/bin/caddy /tmp/caddy-bin
+              exec /tmp/caddy-bin run --config /etc/factory-edge/Caddyfile --adapter caddyfile
+          env:
+            - {name: FACTORY_CADDY_ADMIN, value: "off"}
+            - {name: FACTORY_CADDY_SITE_LAYOUT, value: {{ ternary "kubernetes_private_sites" "kubernetes_demo_sites" $private | quote }}}
+            - {name: FACTORY_HOST, value: {{ ternary .Values.ingress.host "localhost" $private | quote }}}
+            - {name: FACTORY_SCHEME, value: {{ ternary "https" "http" $private | quote }}}
+            - {name: FACTORY_AUTH, value: {{ ternary "sso" "none" $private | quote }}}
+            - {name: FACTORY_TLS_TERMINATION, value: {{ ternary "ingress" "caddy" $private | quote }}}
+            - {name: API_UPSTREAM, value: "127.0.0.1:8000"}
+            - {name: DASHBOARD_UPSTREAM, value: "127.0.0.1:8081"}
+            - {name: SSO_UPSTREAM, value: "127.0.0.1:4180"}
+            - {name: DASHBOARD_THREE_SOURCE, value: vendored}
+            - {name: XDG_CONFIG_HOME, value: /tmp/config}
+            - {name: XDG_DATA_HOME, value: /tmp/data}
+          ports:
+            - {name: web, containerPort: 8080, protocol: TCP}
+          startupProbe:
+            exec:
+              command: [wget, "-q", "-O", /dev/null, "http://127.0.0.1:2018/healthz"]
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: [wget, "-q", "-O", /dev/null, "http://127.0.0.1:2018/healthz"]
+            periodSeconds: 15
+            timeoutSeconds: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  wget -q -O /dev/null http://127.0.0.1:2018/healthz
+                  {{- if $private }}
+                  wget -q -O /dev/null http://127.0.0.1:4180/ready
+                  {{- end }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources.edge | nindent 12 }}
+          volumeMounts:
+            - {name: edge-config, mountPath: /etc/factory-edge, readOnly: true}
+            - {name: edge-tmp, mountPath: /tmp}
+        - name: api
+          image: {{ include "ai-factory.image" .Values.images.api | quote }}
+          imagePullPolicy: {{ .Values.images.api.pullPolicy }}
+          securityContext:
+            {{- include "ai-factory.containerSecurity" 10001 | nindent 12 }}
+          command: [uvicorn, "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--no-proxy-headers", "--no-server-header", "--no-access-log"]
+          env:
+            - {name: FACTORY_CONFIG_DIR, value: /config}
+            - {name: FACTORY_STATE_DIR, value: /data}
+            - {name: FACTORY_DEMO_MODE, value: {{ ternary "never" "always" $private | quote }}}
+            - {name: FACTORY_AUTH_MODE, value: {{ ternary "proxy" "none" $private | quote }}}
+            - {name: FACTORY_TRUSTED_PROXIES, value: "127.0.0.1/32"}
+            - {name: FACTORY_WORKBENCH_MODE, value: {{ include "ai-factory.workbenchMode" . | quote }}}
+            - {name: FACTORY_WORKBENCH_CYBER_AUDIT, value: {{ ternary "on" "off" .Values.api.workbenchCyberAudit | quote }}}
+            - {name: FACTORY_ASSIST_ENABLED, value: {{ ternary "on" "off" .Values.api.assistEnabled | quote }}}
+            {{- if $private }}
+            - {name: FACTORY_BU_POLICY, value: /var/run/factory/business-units/policy.yaml}
+            - {name: FACTORY_ROLE_MAP, value: {{ join "," .Values.api.roleMap | quote }}}
+            - {name: FACTORY_DEFAULT_ROLE, value: {{ .Values.api.defaultRole | quote }}}
+            {{- if $runner.existingSecret }}
+            - {name: FACTORY_PORTFOLIO_RUNNER_FILE, value: /var/run/factory/portfolio/runner.json}
+            {{- end }}
+            {{- with $telemetry.prometheusURL }}
+            - {name: PROMETHEUS_URL, value: {{ . | quote }}}
+            {{- end }}
+            {{- with $telemetry.grafanaURL }}
+            - {name: GRAFANA_URL, value: {{ . | quote }}}
+            {{- end }}
+            {{- with $telemetry.grafanaPublicURL }}
+            - {name: GRAFANA_PUBLIC_URL, value: {{ . | quote }}}
+            {{- end }}
+            {{- if $telemetry.grafanaToken.existingSecret }}
+            - {name: GRAFANA_TOKEN_FILE, value: /var/run/factory/grafana/token}
+            {{- end }}
+            {{- with $telemetry.langfuseURL }}
+            - {name: LANGFUSE_HOST, value: {{ . | quote }}}
+            {{- end }}
+            {{- if $telemetry.langfuseCredentials.existingSecret }}
+            {{- include "ai-factory.secretEnv" (dict "env" "LANGFUSE_PUBLIC_KEY" "secret" $telemetry.langfuseCredentials.existingSecret "key" $telemetry.langfuseCredentials.publicKey) | nindent 12 }}
+            {{- include "ai-factory.secretEnv" (dict "env" "LANGFUSE_SECRET_KEY" "secret" $telemetry.langfuseCredentials.existingSecret "key" $telemetry.langfuseCredentials.secretKey) | nindent 12 }}
+            {{- end }}
+            {{- with $telemetry.litellmURL }}
+            - {name: LITELLM_URL, value: {{ . | quote }}}
+            {{- end }}
+            {{- if $telemetry.litellmCredentials.existingSecret }}
+            {{- include "ai-factory.secretEnv" (dict "env" "LITELLM_MASTER_KEY" "secret" $telemetry.litellmCredentials.existingSecret "key" $telemetry.litellmCredentials.key) | nindent 12 }}
+            {{- end }}
+            {{- with $telemetry.qdrantURL }}
+            - {name: QDRANT_URL, value: {{ . | quote }}}
+            {{- end }}
+            {{- end }}
+          startupProbe:
+            exec:
+              command: [python, "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=2).close()"]
+            periodSeconds: 2
+            failureThreshold: 60
+            timeoutSeconds: 3
+          readinessProbe:
+            exec:
+              command: [python, "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=2).close()"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: [python, "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=2).close()"]
+            periodSeconds: 15
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources.api | nindent 12 }}
+          volumeMounts:
+            - {name: app-config, mountPath: /config, readOnly: true}
+            - {name: api-state, mountPath: /data}
+            - {name: api-tmp, mountPath: /tmp}
+            {{- if $private }}
+            - {name: business-units, mountPath: /var/run/factory/business-units, readOnly: true}
+            {{- if $runner.existingSecret }}
+            - {name: portfolio-runner, mountPath: /var/run/factory/portfolio, readOnly: true}
+            {{- end }}
+            {{- if $telemetry.grafanaToken.existingSecret }}
+            - {name: grafana-token, mountPath: /var/run/factory/grafana, readOnly: true}
+            {{- end }}
+            {{- if $telemetry.caBundle.existingSecret }}
+            # httpx uses certifi with trust_env disabled in the API image.
+            - name: telemetry-ca
+              mountPath: /usr/local/lib/python3.12/site-packages/certifi/cacert.pem
+              subPath: ca-bundle.crt
+              readOnly: true
+            {{- end }}
+            {{- end }}
+        - name: dashboard
+          image: {{ include "ai-factory.image" .Values.images.dashboard | quote }}
+          imagePullPolicy: {{ .Values.images.dashboard.pullPolicy }}
+          securityContext:
+            {{- include "ai-factory.containerSecurity" 101 | nindent 12 }}
+          command: [nginx, "-g", "daemon off;", "-c", /etc/factory-dashboard/nginx.conf]
+          startupProbe:
+            exec:
+              command: [wget, "-q", "-O", /dev/null, "http://127.0.0.1:8081/healthz"]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: [wget, "-q", "-O", /dev/null, "http://127.0.0.1:8081/healthz"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: [wget, "-q", "-O", /dev/null, "http://127.0.0.1:8081/healthz"]
+            periodSeconds: 15
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.resources.dashboard | nindent 12 }}
+          volumeMounts:
+            - {name: dashboard-config, mountPath: /etc/factory-dashboard, readOnly: true}
+            - {name: dashboard-tmp, mountPath: /tmp}
+        {{- if $private }}
+        - name: oauth2-proxy
+          image: {{ include "ai-factory.image" .Values.images.oauth2Proxy | quote }}
+          imagePullPolicy: {{ .Values.images.oauth2Proxy.pullPolicy }}
+          securityContext:
+            {{- include "ai-factory.containerSecurity" 65532 | nindent 12 }}
+          {{- if .Values.sso.providerCA.existingSecret }}
+          args: ["--provider-ca-file=/var/run/factory/provider-ca/ca.crt"]
+          volumeMounts:
+            - {name: provider-ca, mountPath: /var/run/factory/provider-ca, readOnly: true}
+          {{- end }}
+          env:
+            - {name: OAUTH2_PROXY_PROVIDER, value: oidc}
+            - {name: OAUTH2_PROXY_OIDC_ISSUER_URL, value: {{ .Values.sso.issuerURL | quote }}}
+            {{- include "ai-factory.secretEnv" (dict "env" "OAUTH2_PROXY_CLIENT_ID" "secret" .Values.sso.existingSecret "key" .Values.sso.clientIDKey) | nindent 12 }}
+            {{- include "ai-factory.secretEnv" (dict "env" "OAUTH2_PROXY_CLIENT_SECRET" "secret" .Values.sso.existingSecret "key" .Values.sso.clientSecretKey) | nindent 12 }}
+            {{- include "ai-factory.secretEnv" (dict "env" "OAUTH2_PROXY_COOKIE_SECRET" "secret" .Values.sso.existingSecret "key" .Values.sso.cookieSecretKey) | nindent 12 }}
+            - {name: OAUTH2_PROXY_SCOPE, value: {{ .Values.sso.scope | quote }}}
+            - {name: OAUTH2_PROXY_EMAIL_DOMAINS, value: {{ join "," .Values.sso.allowedEmailDomains | quote }}}
+            - {name: OAUTH2_PROXY_ALLOWED_GROUPS, value: {{ join "," .Values.sso.allowedGroups | quote }}}
+            - {name: OAUTH2_PROXY_OIDC_GROUPS_CLAIM, value: {{ .Values.sso.groupsClaim | quote }}}
+            - {name: OAUTH2_PROXY_REDIRECT_URL, value: {{ printf "https://%s/oauth2/callback" .Values.ingress.host | quote }}}
+            - {name: OAUTH2_PROXY_WHITELIST_DOMAINS, value: {{ .Values.ingress.host | quote }}}
+            - {name: OAUTH2_PROXY_CODE_CHALLENGE_METHOD, value: S256}
+            - {name: OAUTH2_PROXY_APPROVAL_PROMPT, value: auto}
+            - {name: OAUTH2_PROXY_HTTP_ADDRESS, value: "127.0.0.1:4180"}
+            - {name: OAUTH2_PROXY_REVERSE_PROXY, value: "true"}
+            - {name: OAUTH2_PROXY_TRUSTED_PROXY_IPS, value: "127.0.0.1/32"}
+            - {name: OAUTH2_PROXY_REAL_CLIENT_IP_HEADER, value: X-Real-IP}
+            - {name: OAUTH2_PROXY_UPSTREAMS, value: "static://202"}
+            - {name: OAUTH2_PROXY_SET_XAUTHREQUEST, value: "true"}
+            - {name: OAUTH2_PROXY_SKIP_PROVIDER_BUTTON, value: "true"}
+            - {name: OAUTH2_PROXY_INSECURE_OIDC_SKIP_NONCE, value: "false"}
+            - {name: OAUTH2_PROXY_COOKIE_NAME, value: "__Host-factory-sso"}
+            - {name: OAUTH2_PROXY_COOKIE_SECURE, value: "true"}
+            - {name: OAUTH2_PROXY_COOKIE_SAMESITE, value: lax}
+            - {name: OAUTH2_PROXY_COOKIE_HTTPONLY, value: "true"}
+            - {name: OAUTH2_PROXY_COOKIE_EXPIRE, value: 8h}
+            - {name: OAUTH2_PROXY_COOKIE_CSRF_PER_REQUEST, value: "true"}
+            - {name: OAUTH2_PROXY_COOKIE_CSRF_EXPIRE, value: 5m}
+            - {name: OAUTH2_PROXY_SESSION_COOKIE_MINIMAL, value: "true"}
+            - {name: OAUTH2_PROXY_SHOW_DEBUG_ON_ERROR, value: "false"}
+            - {name: OAUTH2_PROXY_REQUEST_LOGGING, value: "false"}
+            - {name: OAUTH2_PROXY_SILENCE_PING_LOGGING, value: "true"}
+          resources:
+            {{- toYaml .Values.resources.oauth2Proxy | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: app-config
+          configMap:
+            name: {{ $name }}-config
+            items:
+              {{- range $path, $_ := .Files.Glob "assets/config/**" }}
+              {{- $relative := trimPrefix "assets/config/" $path }}
+              - key: {{ $relative | replace "/" "__" | quote }}
+                path: {{ $relative | quote }}
+              {{- end }}
+        - name: edge-config
+          configMap:
+            name: {{ $name }}-edge
+            items:
+              - {key: Caddyfile, path: Caddyfile}
+        - name: dashboard-config
+          configMap:
+            name: {{ $name }}-edge
+            items:
+              - {key: nginx.conf, path: nginx.conf}
+        - name: api-state
+          persistentVolumeClaim:
+            claimName: {{ default $name .Values.persistence.existingClaim | quote }}
+        - name: edge-tmp
+          emptyDir: {sizeLimit: 128Mi}
+        - name: api-tmp
+          emptyDir: {sizeLimit: 32Mi}
+        - name: dashboard-tmp
+          emptyDir: {sizeLimit: 16Mi}
+        {{- if $private }}
+        {{- include "ai-factory.fileSecret" (dict "volume" "business-units" "secret" .Values.businessUnits.existingSecret "key" .Values.businessUnits.key "path" "policy.yaml") | nindent 8 }}
+        {{- if $runner.existingSecret }}
+        {{- include "ai-factory.fileSecret" (dict "volume" "portfolio-runner" "secret" $runner.existingSecret "key" $runner.key "path" "runner.json") | nindent 8 }}
+        {{- end }}
+        {{- if $telemetry.grafanaToken.existingSecret }}
+        {{- include "ai-factory.fileSecret" (dict "volume" "grafana-token" "secret" $telemetry.grafanaToken.existingSecret "key" $telemetry.grafanaToken.key "path" "token") | nindent 8 }}
+        {{- end }}
+        {{- if $telemetry.caBundle.existingSecret }}
+        {{- include "ai-factory.fileSecret" (dict "volume" "telemetry-ca" "secret" $telemetry.caBundle.existingSecret "key" $telemetry.caBundle.key "path" "ca-bundle.crt") | nindent 8 }}
+        {{- end }}
+        {{- if .Values.sso.providerCA.existingSecret }}
+        {{- include "ai-factory.fileSecret" (dict "volume" "provider-ca" "secret" .Values.sso.providerCA.existingSecret "key" .Values.sso.providerCA.key "path" "ca.crt") | nindent 8 }}
+        {{- end }}
+        {{- end }}

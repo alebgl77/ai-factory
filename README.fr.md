@@ -75,6 +75,9 @@ Ouvrez l’**Observatoire des usages IA** depuis la carte ou l’onglet Usine. L
 
 ### Démarrage local (sans aucune clé)
 
+Le chart Helm permet de lancer une démo Kubernetes locale ou un pilote privé avec SSO et
+services gérés par l'exploitant. [Guide Kubernetes](docs/KUBERNETES.md)
+
 Prérequis : Docker 24+ avec Compose v2, 4 vCPU, 8 Go de RAM libres, ports 80 et 443 disponibles.
 
 ```bash
