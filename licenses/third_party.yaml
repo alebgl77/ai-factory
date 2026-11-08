@@ -130,7 +130,7 @@ images:
     source: https://github.com/langfuse/langfuse
   - service: clickhouse
     image: clickhouse/clickhouse-server
-    tag: 26.8.36.3
+    tag: 26.10.3.7
     spdx: Apache-2.0
     license: Apache-2.0
     usage: separate-service
