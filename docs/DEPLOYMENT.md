@@ -100,7 +100,7 @@ Quand le moteur Portfolio est activé, vérifiez la jauge interne **factory_port
 
 ## Identifier l'état de la pile et protéger les volumes
 
-Le retour au socle éprouvé concerne **PostgreSQL 17.11** et le montage **postgres-data:/var/lib/postgresql/data**, **Langfuse web et worker 3.227.0**, **ClickHouse 26.8.36.3** et **Valkey 8.1.11**. **Grafana 13.0.12** reprend aussi son épinglage précédent. Conservez le même nom de projet Compose pour retrouver vos volumes existants. Relevez les images réellement exécutées et leurs montages, ainsi que la version des bases et les migrations déjà appliquées. Si PostgreSQL 18, Langfuse 4 ou leurs dépendances ont déjà écrit des données, suspendez le retour aux versions antérieures et utilisez le plan de restauration ou de poursuite de migration issu de la qualification.
+Le socle utilise **PostgreSQL 17.11** avec le montage **postgres-data:/var/lib/postgresql/data** et des images **Langfuse web et worker v3** à la même version. Relevez les références exactes de ClickHouse, Valkey et Grafana dans le `docker-compose.yml` du commit choisi ou dans l’inventaire signé `release-stack.json` d’une installation par release. Conservez le même nom de projet Compose pour retrouver vos volumes existants. Relevez les images réellement exécutées et leurs montages, ainsi que la version des bases et les migrations déjà appliquées. Si PostgreSQL 18, Langfuse 4 ou leurs dépendances ont déjà écrit des données, suspendez le retour aux versions antérieures et utilisez le plan de restauration ou de poursuite de migration issu de la qualification.
 
 Figez les écritures avant une sauvegarde cohérente de référence. Capturez les deux bases de service et les rôles PostgreSQL, les données et métadonnées ClickHouse, le stockage SeaweedFS/S3, les files Valkey et l'état **api-state**. Pour une sauvegarde de volumes, arrêtez les services qui y écrivent ou utilisez des instantanés cohérents du système de stockage. Incluez les données des autres services selon leur politique de reprise, les fichiers Compose et d'exploitation, ainsi que les secrets de chiffrement et d'authentification dans un coffre distinct. Contrôlez le chiffrement, l'intégrité, les droits et la restauration de chaque élément. Les données réelles éventuellement copiées en qualification restent dans une enclave isolée et suivent les règles de rétention de l'entreprise.
 
@@ -131,10 +131,29 @@ Le stockage de production ne sert jamais de cible d'essai. Les commandes de remi
 
 ## Répéter la migration Langfuse 4
 
-1. Dans une pile isolée, restaurez l'instantané cohérent de PostgreSQL, ClickHouse, S3 et Valkey et vérifiez d'abord que Langfuse 3 relit les traces historiques. Évaluez la version minimale de chaque dépendance selon le guide éditeur et gardez le passage PostgreSQL 18 et le changement de version Valkey dans des fenêtres distinctes.
-2. Montez ensemble **langfuse-web** et **langfuse-worker** vers le même tag v4 vérifié. Commencez en mode **legacy** sur les deux services pour vérifier les migrations et les usages v3. Conservez la propagation native en double écriture et gardez le parcours v4 et le backfill désactivés à cette étape, conformément au guide éditeur.
-3. Passez en mode **dual** lors d'une étape dédiée. Vérifiez l'ingestion LiteLLM, la lecture **/api/public/observations** utilisée par AI Factory, la lecture **/api/public/traces** utilisée par le smoke test, le masquage C3/C4 et les métriques de tokens. Surveillez la propagation du worker et l'espace ClickHouse.
-4. Migrez les producteurs et les lecteurs vers les API et SDK compatibles avec **events_only**, y compris les deux consommateurs mentionnés. Validez la comparabilité des métriques et des échantillons de traces. Choisissez un backfill ou une période de recouvrement d'après la rétention et la capacité mesurée. Qualifiez le passage à **events_only** uniquement après ces vérifications. [Guide de migration Langfuse v3 vers v4](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4)
+1. Utilisez la dernière v3 et vérifiez que toutes les entrées de **Background Migrations** sont terminées. Suspendez l’ingestion et arrêtez les écritures, puis prenez une sauvegarde cohérente de PostgreSQL, ClickHouse, S3 et Valkey. Restaurez-la sur des volumes isolés dans un projet Compose distinct. Vérifiez que Langfuse v3 y relit les traces historiques. Contrôlez les versions minimales et les droits ClickHouse selon le guide éditeur. Réservez des fenêtres distinctes pour PostgreSQL 18 et Valkey.
+2. Depuis le commit source exact, utilisez l’overlay facultatif pour passer ensemble **langfuse-web** et **langfuse-worker** en **4.72.0**, épinglée par digest. Il sélectionne le mode d’écriture **legacy** avec propagation OTel native et désactive les parcours de lecture v4 et la reprise historique. Conservez le verrou de release vérifié pour les installations signées. Répétez la migration depuis les sources avec le fichier d’environnement du projet isolé.
+
+   ```bash
+   : "${LANGFUSE_REHEARSAL_ENV:?set the isolated Compose environment file}"
+   : "${LANGFUSE_REHEARSAL_PROJECT:?set the isolated Compose project name}"
+   lf_v4=(docker compose --env-file "$LANGFUSE_REHEARSAL_ENV" --project-name "$LANGFUSE_REHEARSAL_PROJECT"
+     -f docker-compose.yml -f docker-compose.langfuse-v4.yml)
+   "${lf_v4[@]}" config --quiet
+   "${lf_v4[@]}" pull langfuse-web langfuse-worker
+   "${lf_v4[@]}" stop langfuse-web langfuse-worker
+   "${lf_v4[@]}" up -d --wait --wait-timeout 600 langfuse-web langfuse-worker
+   ```
+
+3. Vérifiez les traces historiques et nouvelles du projet restauré avant de planifier le passage en mode **dual**. Contrôlez l’ingestion LiteLLM, la lecture **/api/public/observations** d’AI Factory, **/api/public/traces**, le masquage C3/C4 et les métriques de tokens. Surveillez la propagation du worker et l’espace ClickHouse.
+4. Migrez les producteurs et les lecteurs vers les API et SDK compatibles avec **events_only**. Comparez les métriques et des traces représentatives. Choisissez un backfill ou une période de recouvrement selon la rétention et la capacité mesurée. Qualifiez **events_only** après ces contrôles. Une fois les schémas modifiés par v4, restaurez la sauvegarde cohérente antérieure ou appliquez une procédure de retour de schéma éprouvée sur une copie avant de redémarrer v3. [Guide de migration Langfuse v3 vers v4](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4)
+
+Sur un hôte Docker jetable, le scénario de CI démarre un projet v3 synthétique vide, migre les deux services et contrôle que les lecteurs historiques retrouvent toujours les traces. Il supprime les volumes de ce projet jetable à la fin.
+
+```bash
+COMPOSE_PROJECT_NAME="factory-ci-langfuse-v4-$(date +%s)" \
+  bash scripts/smoke_stack.sh --verify-langfuse-v4 --down
+```
 
 ## Préparer la bascule et le retour arrière
 

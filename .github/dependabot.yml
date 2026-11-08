@@ -103,7 +103,7 @@ updates:
   # Images of the separate services in docker-compose.yml (Grafana, Postgres, LiteLLM...).
   # A bump must also update licenses/third_party.yaml, which CI checks.
   # Keep data-bearing services and tightly coupled Langfuse components out of generic groups.
-  # Major and ungrouped updates arrive separately for migration and rollback review.
+  # Langfuse major version updates are explicit migrations. Keep security proposals visible.
   - package-ecosystem: docker-compose
     directory: /
     schedule:
@@ -115,10 +115,17 @@ updates:
       default-days: 7
     commit-message:
       prefix: deps
+    ignore:
+      - dependency-name: langfuse/langfuse
+        update-types: ["version-update:semver-major"]
+      - dependency-name: langfuse/langfuse-worker
+        update-types: ["version-update:semver-major"]
     groups:
-      langfuse-patches:
+      langfuse-compatible:
         applies-to: version-updates
-        update-types: [patch]
+        patterns: ["*langfuse/langfuse", "*langfuse/langfuse-worker"]
+      langfuse-security:
+        applies-to: security-updates
         patterns: ["*langfuse/langfuse", "*langfuse/langfuse-worker"]
       stateless-service-images:
         applies-to: version-updates

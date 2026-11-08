@@ -7,6 +7,7 @@ set -euo pipefail
 base="${1:-}"
 changed=true
 kubernetes=true
+langfuse_v4=true
 if [[ "$base" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$base^{commit}" 2>/dev/null; then
   if git diff --quiet --no-ext-diff "$base" HEAD -- \
     ':(glob)docker-compose*.yml' .env.example compose/ config/ api/ dashboard/ sim/ \
@@ -20,6 +21,13 @@ if [[ "$base" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "$base^{commit}" 2>/dev/nu
     .github/workflows/ .github/scripts/ .github/dependabot.yml; then
     kubernetes=false
   fi
+  if git diff --quiet --no-ext-diff "$base" HEAD -- \
+    docker-compose.yml docker-compose.langfuse-v4.yml .env.example compose/litellm/ \
+    api/app/connectors/langfuse.py sim/traffic/ scripts/smoke_stack.sh \
+    .github/workflows/ci.yml .github/scripts/detect_stack_changes.sh; then
+    langfuse_v4=false
+  fi
 fi
 printf 'changed=%s\n' "$changed"
 printf 'kubernetes=%s\n' "$kubernetes"
+printf 'langfuse_v4=%s\n' "$langfuse_v4"

@@ -9,6 +9,7 @@
 #   --down       stop the stack at the end (docker compose down; images and volumes kept)
 #   --timeout    seconds to wait for the services to become healthy (default 900)
 #   --verify-persistence  recreate PostgreSQL and read a synthetic marker (disposable CI only)
+#   --verify-langfuse-v4  rehearse the paired upgrade with synthetic traces (fresh disposable project only)
 #
 # Checks: every service healthy; edge, dashboard (vendored Three.js, CSP) and API health;
 # snapshot fed by live sources with live GPU telemetry; Prometheus targets up and gateway
@@ -36,6 +37,7 @@ DO_UP=1
 BUILD="--build"
 DOWN=0
 VERIFY_PERSISTENCE=0
+VERIFY_LANGFUSE_V4=0
 TIMEOUT=900
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -43,16 +45,17 @@ while [ $# -gt 0 ]; do
     --no-build) BUILD=""; shift ;;
     --down) DOWN=1; shift ;;
     --verify-persistence) VERIFY_PERSISTENCE=1; shift ;;
+    --verify-langfuse-v4) VERIFY_LANGFUSE_V4=1; shift ;;
     --timeout) TIMEOUT="${2:?}"; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
 
-if [ "$VERIFY_PERSISTENCE" = 1 ] && {
+if { [ "$VERIFY_PERSISTENCE" = 1 ] || [ "$VERIFY_LANGFUSE_V4" = 1 ]; } && {
   [ "$DO_UP" != 1 ] || [ "$DOWN" != 1 ] || [[ "${COMPOSE_PROJECT_NAME:-}" != factory-ci-* ]];
 }; then
-  echo "--verify-persistence requires a disposable factory-ci-* project with --down and startup." >&2
+  echo "Deployment rehearsals require a disposable factory-ci-* project with --down and startup." >&2
   exit 2
 fi
 
@@ -60,7 +63,22 @@ for bin in docker curl python3; do
   command -v "$bin" >/dev/null 2>&1 || { echo "missing dependency: $bin" >&2; exit 2; }
 done
 
+DOCKER=(docker)
 DC=(docker compose --profile sim)
+if [ "$VERIFY_LANGFUSE_V4" = 1 ]; then
+  # Ignore local dotenv files, Compose overrides and exported credentials.
+  DOCKER=(env -i "PATH=$PATH" "HOME=$HOME" docker --context default)
+  DC=("${DOCKER[@]}" compose --profile sim --project-name "$COMPOSE_PROJECT_NAME" --env-file .env.example -f docker-compose.yml)
+  LF_V4_DC=("${DC[@]}" -f docker-compose.langfuse-v4.yml)
+  label="label=com.docker.compose.project=$COMPOSE_PROJECT_NAME"
+  if ! existing_containers="$("${DOCKER[@]}" ps -aq --filter "$label")" \
+    || ! existing_volumes="$("${DOCKER[@]}" volume ls -q --filter "$label")" \
+    || ! existing_networks="$("${DOCKER[@]}" network ls -q --filter "$label")" \
+    || [ -n "$existing_containers$existing_volumes$existing_networks" ]; then
+    echo "The Langfuse rehearsal requires a fresh Docker project and a working daemon." >&2
+    exit 2
+  fi
+fi
 PASS=0
 FAIL=0
 RESULTS=()
@@ -69,18 +87,80 @@ ok()   { PASS=$((PASS + 1)); RESULTS+=("PASS  $1"); printf '  \033[32mPASS\033[0
 ko()   { FAIL=$((FAIL + 1)); RESULTS+=("FAIL  $1${2:+ — $2}"); printf '  \033[31mFAIL\033[0m  %s%s\n' "$1" "${2:+ — $2}"; }
 step() { printf '\n== %s\n' "$1"; }
 
-if [ ! -f .env ]; then
+if [ "$VERIFY_LANGFUSE_V4" != 1 ] && [ ! -f .env ]; then
   echo "No .env: copying .env.example (placeholders, demo only)."
   cp .env.example .env
 fi
 
 # Resolved configuration (interpolated by docker compose, so .env quoting rules apply).
-CONFIG_JSON="$(mktemp)"
-WORK="$(mktemp -d)"
-trap 'rm -rf "$CONFIG_JSON" "$WORK"' EXIT
+WORK="$(mktemp -d)" || exit 1
+CONFIG_JSON="$WORK/compose.json"
+CLEAN_REHEARSAL=0
+cleanup() {
+  local status=$?
+  if [ "$CLEAN_REHEARSAL" = 1 ]; then
+    step "Remove the disposable Langfuse rehearsal project and its volumes"
+    "${DC[@]}" down --volumes --remove-orphans || status=1
+  fi
+  rm -rf "$WORK"
+  exit "$status"
+}
+trap cleanup EXIT
 if ! "${DC[@]}" config --format json > "$CONFIG_JSON"; then
   echo "docker compose config failed" >&2
   exit 1
+fi
+if [ "$VERIFY_LANGFUSE_V4" = 1 ]; then
+  # Compose can adopt an existing resource by name even if it has no Compose label.
+  if ! "${LF_V4_DC[@]}" config --format json > "$WORK/overlay.json" 2>/dev/null \
+    || ! "${DOCKER[@]}" volume ls --format '{{.Name}}' > "$WORK/volumes.txt" 2>/dev/null \
+    || ! "${DOCKER[@]}" network ls --format '{{.Name}}' > "$WORK/networks.txt" 2>/dev/null \
+    || ! python3 - "$WORK" "$COMPOSE_PROJECT_NAME" > "$WORK/langfuse-versions.txt" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+work, project = Path(sys.argv[1]), sys.argv[2]
+
+def managed_resources(config, kind, existing):
+    definitions = config[kind]
+    if config["name"] != project or not isinstance(definitions, dict):
+        raise ValueError
+    for key, settings in definitions.items():
+        name = f"{project}_{key}"
+        if settings.get("external", False) is not False or settings.get("name") != name or name in existing:
+            raise ValueError
+    return set(definitions)
+
+def langfuse_version(config, major):
+    versions = set()
+    for service, repository in (("langfuse-web", "langfuse"), ("langfuse-worker", "langfuse-worker")):
+        image = config["services"][service]["image"]
+        match = re.fullmatch(rf"langfuse/{repository}:({major}\.\d+\.\d+)(?:@sha256:[0-9a-f]{{64}})?", image)
+        if match is None:
+            raise ValueError
+        versions.add(match.group(1))
+    if len(versions) != 1:
+        raise ValueError
+    return versions.pop()
+
+try:
+    base, overlay = [json.loads((work / file).read_text(encoding="utf-8"))
+                     for file in ("compose.json", "overlay.json")]
+    for kind in ("volumes", "networks"):
+        existing = set((work / f"{kind}.txt").read_text(encoding="utf-8").splitlines())
+        if managed_resources(base, kind, existing) != managed_resources(overlay, kind, existing):
+            raise ValueError
+    print(langfuse_version(base, 3), langfuse_version(overlay, 4))
+except (AttributeError, KeyError, TypeError, ValueError, OSError):
+    sys.exit(1)
+PY
+  then
+    echo "The Langfuse rehearsal requires paired v3/v4 images and new project-owned volumes and networks with no external resources." >&2
+    exit 2
+  fi
+  read -r LF_V3_VERSION LF_V4_VERSION < "$WORK/langfuse-versions.txt" || exit 2
 fi
 cfg() { # cfg SERVICE VAR [DEFAULT]
   python3 - "$CONFIG_JSON" "$1" "$2" "${3:-}" <<'PY'
@@ -90,6 +170,15 @@ env = (json.load(open(path)).get("services", {}).get(svc, {}) or {}).get("enviro
 print(env.get(var) if env.get(var) is not None else default)
 PY
 }
+if [ "$VERIFY_LANGFUSE_V4" = 1 ] && {
+  [ "$(cfg litellm CLOUD_API_BASE)" != http://mock-llm:8080/cloud/v1 ] \
+  || [ "$(cfg litellm VPS_API_BASE)" != http://mock-llm:8080/vps/v1 ] \
+  || [ "$(cfg litellm LOCAL_API_BASE)" != http://mock-llm:8080/local/v1 ] \
+  || [ "$(cfg litellm LOCAL_EMBED_API_BASE)" != http://mock-llm:8080/local/v1 ];
+}; then
+  echo "The Langfuse rehearsal requires synthetic model providers." >&2
+  exit 2
+fi
 FACTORY_HOST="$(cfg edge FACTORY_HOST localhost)"
 FACTORY_SCHEME="$(cfg edge FACTORY_SCHEME http)"
 HTTP_PORT="$(python3 - "$CONFIG_JSON" <<'PY'
@@ -134,6 +223,7 @@ PY
 # ---------------------------------------------------------------------------- start
 if [ "$DO_UP" = 1 ]; then
   step "docker compose --profile sim up -d $BUILD"
+  CLEAN_REHEARSAL="$VERIFY_LANGFUSE_V4"
   # shellcheck disable=SC2086
   if ! "${DC[@]}" up -d $BUILD; then
     echo "docker compose up failed" >&2
@@ -360,12 +450,12 @@ if [ "$chain" = "1" ]; then ok "audit hash chain verifies (factory_audit_chain_o
 
 # -------------------------------------------------------------- LiteLLM gateway
 step "LiteLLM gateway (through mock-llm)"
-llm() { # llm MODEL METADATA_JSON -> prints "<http status> <x-litellm-model-id>"
-  "${DC[@]}" exec -T litellm python3 - "$1" "$2" <<'PY'
+llm() { # llm MODEL METADATA_JSON [TEXT] -> prints "<http status> <x-litellm-model-id>"
+  "${DC[@]}" exec -T litellm python3 - "$1" "$2" "${3:-Smoke test (fictional data).}" <<'PY'
 import json, os, sys, urllib.request, urllib.error
-model, metadata = sys.argv[1], json.loads(sys.argv[2])
+model, metadata, text = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3]
 body = {"model": model, "max_tokens": 16, "stream": False, "metadata": metadata,
-        "messages": [{"role": "user", "content": "Smoke test (fictional data)."}]}
+        "messages": [{"role": "user", "content": text}]}
 req = urllib.request.Request("http://127.0.0.1:4000/v1/chat/completions", data=json.dumps(body).encode(),
                              headers={"Authorization": "Bearer " + os.environ["LITELLM_MASTER_KEY"],
                                       "Content-Type": "application/json"})
@@ -575,7 +665,7 @@ if [ -n "$logs_ok" ]; then ok "container logs in Loki (services: $svcs)"; else k
 step "Container hardening (docker inspect of every container of the project)"
 "${DC[@]}" ps -aq > "$WORK/ids.txt"
 # shellcheck disable=SC2046
-docker inspect $(cat "$WORK/ids.txt") > "$WORK/inspect.json" 2>/dev/null
+"${DOCKER[@]}" inspect $(cat "$WORK/ids.txt") > "$WORK/inspect.json" 2>/dev/null
 hardening() { # hardening CHECK -> "OK <count>" or the offending services
   python3 - "$WORK/inspect.json" "$1" <<'PY'
 import json, sys
@@ -652,13 +742,158 @@ SQL
   fi
 fi
 
+# ---------------------------------------------------------------- Langfuse rehearsal
+langfuse_images() { # rendered config path -> running container IDs with exact expected references
+  local config="$1" service container image expected
+  for service in langfuse-web langfuse-worker; do
+    container="$("${DC[@]}" ps -q "$service")" && [ -n "$container" ] || return 1
+    image="$("${DOCKER[@]}" inspect --format '{{.Config.Image}}' "$container")" || return 1
+    expected="$(json_get "$config" "d['services']['$service']['image']")"
+    [ "$image" = "$expected" ] || return 1
+    printf '%s\n' "$container"
+  done
+}
+langfuse_backing_ids() { # prove the database, queue and object store containers and mounts stayed in place
+  local service container
+  for service in postgres clickhouse valkey seaweedfs; do
+    container="$("${DC[@]}" ps -q "$service")" && [ -n "$container" ] || return 1
+    printf '%s\n' "$container"
+  done
+}
+wait_langfuse_version() {
+  local version="$1"
+  for _ in {1..24}; do
+    if ecurl "langfuse.$FACTORY_HOST" /api/public/ready -f -o "$WORK/lf-ready.json" 2>/dev/null \
+      && [ "$(json_get "$WORK/lf-ready.json" 'd.get("status") == "OK" and d.get("version") == "'"$version"'"')" = True ]; then
+      return 0
+    fi
+    sleep 5
+  done
+  return 1
+}
+wait_langfuse_v3_migrations() {
+  # Dormant v4 backfills have args.envGate and never complete on this v3 fixture.
+  local unfinished
+  for _ in {1..24}; do
+    unfinished="$("${DC[@]}" exec -T postgres psql -X -v ON_ERROR_STOP=1 -Atq -U postgres -d langfuse -c \
+      "SELECT count(*) FROM background_migrations WHERE finished_at IS NULL AND args ->> 'envGate' IS NULL" 2>/dev/null)"
+    [ "$unfinished" != 0 ] || return 0
+    sleep 5
+  done
+  return 1
+}
+wait_langfuse_marker() { # marker -> exact trace ID, no trace payload in diagnostics
+  local marker="$1" trace_id
+  for _ in {1..24}; do
+    if ecurl "langfuse.$FACTORY_HOST" "/api/public/traces?limit=10&userId=$marker" -f -u "$LF_PK:$LF_SK" \
+      -o "$WORK/lf-marker.json" 2>/dev/null; then
+      trace_id="$(json_get "$WORK/lf-marker.json" '[t["id"] for t in d["data"] if t.get("userId") == "'"$marker"'"][0]')"
+      if [[ "$trace_id" =~ ^[A-Za-z0-9_-]{1,128}$ ]]; then
+        printf '%s\n' "$trace_id"
+        return 0
+      fi
+    fi
+    sleep 5
+  done
+  return 1
+}
+verify_langfuse_trace() { # trace ID, exact marker, optional C3 canary and expected observation ID
+  local trace_id="$1" marker="$2" canary="${3:-}" expected_observation="${4:-}" status
+  for _ in {1..24}; do
+    if ecurl "langfuse.$FACTORY_HOST" "/api/public/traces/$trace_id" -f -u "$LF_PK:$LF_SK" \
+      -o "$WORK/lf-trace.json" 2>/dev/null; then
+      python3 - "$WORK/lf-trace.json" "$trace_id" "$marker" "$canary" "$expected_observation" <<'PY'
+import json, pathlib, sys
+path, trace_id, marker, canary, expected_observation = sys.argv[1:]
+body = pathlib.Path(path).read_text(encoding="utf-8")
+try:
+    trace = json.loads(body)
+except ValueError:
+    sys.exit(1)
+if not isinstance(trace, dict) or trace.get("id") != trace_id or trace.get("userId") != marker:
+    sys.exit(1)
+observations = trace.get("observations")
+observations = observations if isinstance(observations, list) else []
+if canary:
+    entries = [trace, *observations]
+    if canary in body or any(
+        not isinstance(entry, dict) or any(
+            entry.get(field) not in (None, "redacted-by-litellm") for field in ("input", "output")
+        ) for entry in entries
+    ):
+        sys.exit(2)
+    if "C3" not in (trace.get("tags") or []):
+        sys.exit(1)
+ids = [obs["id"] for obs in observations if isinstance(obs, dict) and isinstance(obs.get("id"), str) and obs["id"]]
+if not ids or (expected_observation and expected_observation not in ids):
+    sys.exit(1)
+if not expected_observation and not canary:
+    print(ids[0])
+PY
+      status=$?
+      if [ "$status" != 1 ]; then return "$status"; fi
+    fi
+    sleep 5
+  done
+  return 1
+}
+rehearse_langfuse_v4() {
+  local old_ids new_ids storage_ids marker new_marker metadata trace_id observation_id new_trace_id canary status model_id
+  step "Langfuse v$LF_V3_VERSION to v$LF_V4_VERSION (disposable data, paired upgrade)"
+  if ! old_ids="$(langfuse_images "$CONFIG_JSON")" || ! storage_ids="$(langfuse_backing_ids)" \
+    || ! wait_langfuse_version "$LF_V3_VERSION" || ! wait_langfuse_v3_migrations; then
+    ko "Langfuse rehearsal has the exact running v$LF_V3_VERSION cohort, storage and completed active migrations"
+    return
+  fi
+  marker="upgrade-old-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+  metadata="$(printf '{"usecase":"smoke-test","sensitivity":"C1","trace_user_id":"%s"}' "$marker")"
+  mock_failure cloud 0
+  read -r status model_id <<<"$(llm chat-default "$metadata")"
+  if [ "$status" != 200 ] || [[ "$model_id" != cloud-* ]] \
+    || ! trace_id="$(wait_langfuse_marker "$marker")" \
+    || ! observation_id="$(verify_langfuse_trace "$trace_id" "$marker")"; then
+    ko "Langfuse v$LF_V3_VERSION recorded the unique pre-upgrade trace and its observation"
+    return
+  fi
+  ok "Langfuse v$LF_V3_VERSION recorded the unique pre-upgrade trace and its observation"
+
+  if ! "${LF_V4_DC[@]}" pull langfuse-web langfuse-worker \
+    || ! "${DC[@]}" stop traffic langfuse-web langfuse-worker \
+    || ! "${LF_V4_DC[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 600 langfuse-web langfuse-worker \
+    || ! new_ids="$(langfuse_images "$WORK/overlay.json")" || [ "$new_ids" = "$old_ids" ] \
+    || [ "$(langfuse_backing_ids)" != "$storage_ids" ] || ! wait_langfuse_version "$LF_V4_VERSION"; then
+    ko "Langfuse web and worker both upgraded to v$LF_V4_VERSION with original storage"
+    return
+  fi
+  ok "Langfuse web and worker both upgraded to v$LF_V4_VERSION with original storage"
+  if ! verify_langfuse_trace "$trace_id" "$marker" "" "$observation_id"; then
+    ko "Langfuse v$LF_V4_VERSION preserved the exact v3 trace and observation"
+    return
+  fi
+  ok "Langfuse v$LF_V4_VERSION preserved the exact v3 trace and observation"
+
+  new_marker="upgrade-new-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+  canary="Fictional C3 rehearsal prompt $new_marker"
+  metadata="$(printf '{"usecase":"smoke-test","sensitivity":"C3","trace_user_id":"%s","tags":["C3"]}' "$new_marker")"
+  mock_failure local 0
+  read -r status model_id <<<"$(llm chat-sensitive "$metadata" "$canary")"
+  if [ "$status" = 200 ] && [[ "$model_id" == local-* ]] \
+    && new_trace_id="$(wait_langfuse_marker "$new_marker")" && [ "$new_trace_id" != "$trace_id" ] \
+    && verify_langfuse_trace "$new_trace_id" "$new_marker" "$canary"; then
+    ok "Langfuse v$LF_V4_VERSION received a fresh C3 trace with masked input and output"
+  else
+    ko "Langfuse v$LF_V4_VERSION received a fresh C3 trace with masked input and output"
+  fi
+}
+if [ "$VERIFY_LANGFUSE_V4" = 1 ] && [ "$FAIL" = 0 ]; then rehearse_langfuse_v4; fi
+
 # ------------------------------------------------------------------------ summary
 step "Summary"
 for r in "${RESULTS[@]}"; do echo "  $r"; done
 echo "  ---"
 echo "  $PASS passed, $FAIL failed"
 
-if [ "$DOWN" = 1 ]; then
+if [ "$DOWN" = 1 ] && [ "$VERIFY_LANGFUSE_V4" != 1 ]; then
   step "docker compose down (images and volumes kept)"
   "${DC[@]}" down
 fi
