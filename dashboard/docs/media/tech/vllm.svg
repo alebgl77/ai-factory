@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>vLLM</title>
+  <rect x=".5" y=".5" width="31" height="31" rx="6" fill="#f6f8f2" stroke="#dfe3d8" />
+  <svg viewBox="0 0 24 24" x="5" y="5" width="22" height="22">
+    <path d="m23.6 0-8.721 4.59L9.829 24h7.41zM9.83 24V5.142H.4Z" />
+  </svg>
+</svg>

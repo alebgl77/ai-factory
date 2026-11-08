@@ -1,8 +1,8 @@
 """Hybrid placement engine: cloud first, then VPS, then local; sensitive classes local only.
 
 Policy (CONTRACT principles and factory.yaml ``placement``):
-- a workload whose sensitivity is in ``sensitive_classes`` runs on the local GPU only; when the
-  local target is down it is **queued**, never sent to the cloud or the VPS;
+- sensitive workloads require the local GPU. When it is down, the planner returns ``queued``
+  to recommend waiting. The planner does not enqueue work. Direct gateway requests fail closed;
 - other workloads follow ``order`` (default cloud -> vps -> local), skipping targets that are
   down and the VPS when the model needs more than ``vps_max_params_b`` billion parameters.
 """

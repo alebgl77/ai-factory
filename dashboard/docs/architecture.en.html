@@ -1,0 +1,249 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AI Factory architecture, 2D plan of its ten zones and business-unit access matrix.">
+  <title>Architecture atlas · AI Factory</title>
+  <link rel="alternate" hreflang="fr" href="./architecture.html">
+  <link rel="stylesheet" href="./architecture.css">
+  <script defer src="./guide.js"></script>
+</head>
+<body>
+  <a class="skip" href="#contenu">Skip to the content</a>
+  <header class="masthead">
+    <a class="brand" href="../index.html?lang=en"><span class="mark" aria-hidden="true">AF</span> AI Factory</a>
+    <nav class="masthead-actions" aria-label="Atlas navigation">
+      <a class="back" href="./index.en.html">Operations guide <span aria-hidden="true">↗</span></a>
+      <a class="locale-switch" data-guide-language href="./architecture.html" hreflang="fr" lang="fr" aria-label="Lire en français">FR</a>
+    </nav>
+  </header>
+  <main id="contenu" tabindex="-1">
+    <div class="hero">
+      <p class="eyebrow">Technical atlas · 01 to 05</p>
+      <h1>Architecture<br>of the Factory</h1>
+      <p class="lead">Follow a task from the workstation to the local model, through its access controls and back to a human decision.</p>
+      <dl class="hero-stats">
+        <div><dt>10</dt><dd>zones on the plan</dd></div>
+        <div><dt>4</dt><dd>example business units</dd></div>
+        <div><dt>2</dt><dd>databases in the decision workflow</dd></div>
+      </dl>
+    </div>
+
+    <nav class="section-nav" aria-label="Atlas sections">
+      <ol>
+        <li><a href="#architecture"><span>01</span> Architecture</a></li>
+        <li><a href="#plan-2d"><span>02</span> 2D plan</a></li>
+        <li><a href="#matrice-bu"><span>03</span> Business units and roles</a></li>
+        <li><a href="#parcours"><span>04</span> Workflow</a></li>
+        <li><a href="#securite"><span>05</span> Security</a></li>
+      </ol>
+    </nav>
+
+    <section id="architecture" aria-labelledby="titre-architecture">
+      <p class="eyebrow">01 · Logical view</p>
+      <h2 id="titre-architecture">Services and trust boundaries</h2>
+      <p>GitHub Pages serves a static demo with fictional data. In a private deployment, Caddy exposes the interface and API on the same HTTPS origin. The SSO proxy verifies identity with the OIDC provider. FastAPI then applies user or service-account rights to the business unit associated with the use case.</p>
+      <p>On Compose, Caddy and the API share a private identity network. On Kubernetes, Ingress terminates HTTPS and Caddy, OAuth2 Proxy and the API share the pod’s loopback interface. The API pod uses a PVC. The logical diagram follows a task and its decision.</p>
+      <figure>
+        <a class="plate" href="./media/architecture.en.svg" aria-label="Enlarge the logical architecture diagram"><img src="./media/architecture.en.svg" width="1088" height="848" alt="Public and private flows from the browser to the API, portfolio, Workbench and local model." fetchpriority="high" decoding="async"></a>
+        <figcaption>Portfolio workflow. <a href="./media/architecture.en.svg">Open the full-size diagram</a>.</figcaption>
+      </figure>
+      <div class="split">
+        <article class="panel">
+          <h3>Identity and data</h3>
+          <p>The trusted proxy supplies the stable subject. The same SSO group must grant both the role and the business-unit scope. The API filters use cases, profiles, bookings and results before returning them. Workbench cases and portfolio tasks reside in separate private SQLite databases.</p>
+        </article>
+        <article class="panel">
+          <h3>Execution and reconciliation</h3>
+          <p>The built-in runner claims eligible subtasks and calls the local model through LiteLLM in strict mode. The runner keeps provider token counts when available. Workbench reconciliation runs in the background independently of the runner.</p>
+        </article>
+      </div>
+      <ul class="sources" aria-label="Architecture sources">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/compose/caddy/Caddyfile">Caddy entry point</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/security.py">API access controls</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/portfolio_runner.py">Built-in runner</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/portfolio_workbench.py">Workbench reconciliation</a></li>
+      </ul>
+    </section>
+
+    <section id="plan-2d" aria-labelledby="titre-plan">
+      <p class="eyebrow">02 · Overhead view</p>
+      <h2 id="titre-plan">2D floor plan and room functions</h2>
+      <p>The plan draws the footprints of the 3D scene to scale, with <code>−Z</code> at the top. The rooms provide wayfinding in the demo. The <a href="#matrice-bu">business-unit policy</a> determines access in a private deployment.</p>
+      <figure>
+        <a class="plate" href="./media/floor-plan.en.svg" aria-label="Enlarge the 2D Factory floor plan"><img src="./media/floor-plan.en.svg" width="1066" height="903" alt="Overhead view of ten numbered zones with the War Room and Secure Lab at the top, the Delivery floor in the center and the entrance at the lower right." loading="lazy" decoding="async"></a>
+        <figcaption>Room footprints and resources. <a href="./media/floor-plan.en.svg">Enlarge the plan</a> or <a href="../index.html?lang=en">open the Factory</a> and select <strong>Plan</strong>.</figcaption>
+      </figure>
+
+      <nav class="room-nav" aria-label="Room details">
+        <ol>
+          <li><a href="#zone-war"><span>01</span> War Room</a></li>
+          <li><a href="#zone-lab"><span>02</span> Secure Lab</a></li>
+          <li><a href="#zone-cafe"><span>03</span> Coffee corner</a></li>
+          <li><a href="#zone-observatoire"><span>04</span> Observatory</a></li>
+          <li><a href="#zone-rd"><span>05</span> R&amp;D Lab</a></li>
+          <li><a href="#zone-skills"><span>06</span> Skills Lab</a></li>
+          <li><a href="#zone-agent-ops"><span>07</span> Agent Ops</a></li>
+          <li><a href="#zone-delivery"><span>08</span> Delivery floor</a></li>
+          <li><a href="#zone-pods"><span>09</span> Focus pods</a></li>
+          <li><a href="#zone-entree"><span>10</span> Entrance and lockers</a></li>
+        </ol>
+      </nav>
+
+      <div class="room-grid">
+        <details id="zone-war" open>
+          <summary><span>01</span> War Room</summary>
+          <p><strong>Purpose.</strong> Review and resolution in room <code>R1</code> with six seats and video conferencing.</p>
+          <p><strong>Actions.</strong> Book a review and run a simulated discussion. For an audited decision in a private portfolio, open the Companion with Workbench permissions.</p>
+        </details>
+        <details id="zone-lab" open>
+          <summary><span>02</span> Secure Lab</summary>
+          <p><strong>Purpose.</strong> Workstations for sensitive data. Scene labels <code>L1</code> and <code>L2</code> correspond to policy identifiers <code>B1</code> and <code>B2</code>.</p>
+          <p><strong>Actions.</strong> Book an authorized workstation for a C3/C4 case. The example policy assigns <code>B1</code> to HR and <code>B2</code> to Finance.</p>
+        </details>
+        <details id="zone-cafe">
+          <summary><span>03</span> Coffee corner</summary>
+          <p><strong>Purpose.</strong> Collect improvement ideas from people and agents.</p>
+          <p><strong>Actions.</strong> Visit the area in walkthrough mode. In versions with the idea box, open the wall, post an idea and check its assigned category.</p>
+          <p>The demo keeps idea notes in the browser. In a protected installation, authenticated Factory users can see ideas as soon as they are posted. A badge identifies the posting source, and the category describes the topic. The source is a verified business unit or <strong>Factory Administration</strong> for a global administrator without a verified unit.</p>
+          <p>A global human administrator can look up the author’s identity separately. The system audits that lookup.</p>
+        </details>
+        <details id="zone-observatoire">
+          <summary><span>04</span> AI Usage Observatory</summary>
+          <p><strong>Purpose.</strong> Aggregate AI usage and track tools and alternatives.</p>
+          <p><strong>Actions.</strong> Open it from the 3D room or the <strong>Factory</strong> menu. In a private deployment, dedicated groups filter teams by business unit. Decisions and imports require explicit global access in the relevant group.</p>
+        </details>
+        <details id="zone-rd">
+          <summary><span>05</span> R&amp;D Lab</summary>
+          <p><strong>Purpose.</strong> Explore the <code>X1</code> to <code>X3</code> test benches. <strong>Actions.</strong> Inspect a bench and open the Skills Lab &amp; R&amp;D Lab console view.</p>
+          <p>Open the <a href="./flow-lab.html?lang=en">AI Flow Lab</a> to connect components, replay fictional scenarios and compare routing, security and usage outcomes.</p>
+        </details>
+        <details id="zone-skills">
+          <summary><span>06</span> Skills Lab</summary>
+          <p><strong>Purpose.</strong> Training and skill sharing in the eight-seat <code>S1</code> room. <strong>Actions.</strong> Check sessions and the schedule, then book within your scope.</p>
+        </details>
+        <details id="zone-agent-ops">
+          <summary><span>07</span> Agent Ops room</summary>
+          <p><strong>Purpose.</strong> Monitor agents at consoles <code>O1</code> and <code>O2</code>. <strong>Actions.</strong> Review Agent Ops metrics and examine an attempt’s result and duration in the portfolio before resuming work.</p>
+        </details>
+        <details id="zone-delivery">
+          <summary><span>08</span> Delivery floor</summary>
+          <p><strong>Purpose.</strong> Squad area with workstations <code>D1</code> to <code>D6</code>. <strong>Actions.</strong> Find business-unit work in <strong>Planning → Portfolio and tasks</strong>. Plan, assign, delegate or submit according to your role.</p>
+        </details>
+        <details id="zone-pods">
+          <summary><span>09</span> Focus pods</summary>
+          <p><strong>Purpose.</strong> Two individual booths, <code>C1</code> and <code>C2</code>, for calls. <strong>Action.</strong> Check availability and book a resource assigned by the operator policy.</p>
+        </details>
+        <details id="zone-entree">
+          <summary><span>10</span> Entrance and lockers</summary>
+          <p><strong>Purpose.</strong> Scene entrance and starting point for the walkthrough, marked by the teal dot on the plan. <strong>Actions.</strong> Get your bearings, switch to Plan and visit a room.</p>
+        </details>
+      </div>
+      <ul class="sources" aria-label="Floor plan sources">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/dashboard/index.html">3D scene and <code>POV_ZONES</code> coordinates</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/SHADOW_AI.md">AI Usage Observatory</a></li>
+      </ul>
+    </section>
+
+    <section id="matrice-bu" aria-labelledby="titre-matrice">
+      <p class="eyebrow">03 · Business boundaries</p>
+      <h2 id="titre-matrice">Business-unit and role matrix</h2>
+      <p>The business units and subjects below come from the example configuration. The operator maps each group to business cost centers, profiles, resources and teams. Portfolio roles build on this policy.</p>
+      <div class="table-frame" tabindex="0" role="region" aria-label="Example business-unit scopes, horizontally scrollable">
+        <table>
+          <caption>Example scope configuration</caption>
+          <thead><tr><th scope="col">Business unit</th><th scope="col">SSO group</th><th scope="col">Workstation and profile</th><th scope="col">Observatory teams</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Operations <code>cc-ops</code></th><td><code>bu-operations</code></td><td><code>D1</code> · <code>p02</code></td><td>Operations</td></tr>
+            <tr><th scope="row">Customer relations <code>cc-relation</code></th><td><code>bu-relation</code></td><td><code>D2</code> · <code>p03</code></td><td>Customer relations and marketing</td></tr>
+            <tr><th scope="row">Human resources <code>cc-rh</code></th><td><code>bu-rh</code></td><td>Secure <code>B1</code> · <code>p06</code></td><td>Human resources</td></tr>
+            <tr><th scope="row">Finance <code>cc-finance</code></th><td><code>bu-finance</code></td><td>Secure <code>B2</code> · <code>p07</code></td><td>Finance</td></tr>
+            <tr><th scope="row">Governance <code>["*"]</code></th><td><code>factory-governance-admin</code></td><td><code>R1</code> · cross-unit</td><td>According to the group’s global role</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-frame" tabindex="0" role="region" aria-label="Operational roles, horizontally scrollable">
+        <table>
+          <caption>Responsibilities in a private deployment</caption>
+          <thead><tr><th scope="col">Role</th><th scope="col">Actions</th><th scope="col">Control</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Factory leadership <code>admin</code></th><td>Manage objectives, indicators and projects.</td><td>Role and global scope <code>["*"]</code> in the same group.</td></tr>
+            <tr><th scope="row">Project lead <code>project_lead</code></th><td>Create and plan tasks for the business unit.</td><td>Portfolio role declared for this scope.</td></tr>
+            <tr><th scope="row">Manager <code>manager</code></th><td>Assign, delegate and authorize a start that requires approval.</td><td>Eligible agent and business-unit autonomy policy.</td></tr>
+            <tr><th scope="row">Architect <code>architect</code></th><td>Review evidence for a technical deliverable.</td><td>Architect distinct from the submitter.</td></tr>
+            <tr><th scope="row">Assigned employee or agent</th><td>View the task, start when eligible and submit evidence. An eligible agent can report usage according to execution mode.</td><td>Verified subject, active assignment and business-unit use case. Agents require a passing evaluation.</td></tr>
+            <tr><th scope="row">Workbench approver <code>approver</code> or <code>admin</code></th><td>Approve, reject or request changes to the submitted revision.</td><td>Global <code>["*"]</code> group and separation from the task’s submitter and architect.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="sources" aria-label="Business-unit policy sources">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/config/business-units.example.yaml">Example policy</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/BU_SECURITY.md">Isolation and bookings</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/PORTFOLIO.md">Portfolio roles</a></li>
+      </ul>
+    </section>
+
+    <section id="parcours" aria-labelledby="titre-parcours">
+      <p class="eyebrow">04 · Sequence</p>
+      <h2 id="titre-parcours">From task to decision</h2>
+      <ol class="sequence" aria-label="Portfolio to Workbench workflow">
+        <li><span>01</span><strong>Plan</strong><p>The project lead defines the task and its dependencies.</p></li>
+        <li><span>02</span><strong>Assign</strong><p>The manager chooses an agent or starts automatic selection.</p></li>
+        <li><span>03</span><strong>Execute</strong><p>An eligible agent prepares the result and submits evidence.</p></li>
+        <li><span>04</span><strong>Review</strong><p>A separate architect reviews the task when technical review is required.</p></li>
+        <li><span>05</span><strong>Decide</strong><p>A sensitive task enters Workbench handoff. The Companion records the decision.</p></li>
+      </ol>
+      <div class="outcomes" aria-label="Workbench decision outcomes">
+        <div><strong>Approve → Completed</strong><p>Dependent tasks can resume.</p></div>
+        <div><strong>Reject → Cancelled</strong><p>Dependencies that require successful completion stay blocked.</p></div>
+        <div><strong>Request changes → Ready</strong><p>A new submission opens a separate case.</p></div>
+      </div>
+      <div class="split">
+        <article class="panel">
+          <h3>Delegation and recovery</h3>
+          <p>An active parent can have up to four subtasks, including cancellations, one level deep. They stay in its project and business unit. Dependencies, assignment and the autonomous, human-approval or blocked policy govern when work can start.</p>
+          <p>The runner checks the parent’s execution and project revision before applying a result. It discards stale responses.</p>
+        </article>
+        <article class="panel">
+          <h3>Decision scope</h3>
+          <p>The API matches the case, revision and digest, then returns the outcome and timestamp to the portfolio. The decision rationale and decision-maker’s identity stay in Workbench.</p>
+          <p>A CRM or ERP operation follows the approved connector workflow. The portfolio decision covers the prepared work.</p>
+        </article>
+      </div>
+      <ul class="sources" aria-label="Workflow sources">
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/app/portfolio.py">API task commands and subtasks</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/api/ai_factory_workbench/service.py">Workbench decision service</a></li>
+      </ul>
+    </section>
+
+    <section id="securite" aria-labelledby="titre-securite">
+      <p class="eyebrow">05 · Operating conditions</p>
+      <h2 id="titre-securite">Controls to qualify in private</h2>
+      <div class="table-frame" tabindex="0" role="region" aria-label="Controls and evidence, horizontally scrollable">
+        <table>
+          <caption>Qualification checkpoints</caption>
+          <thead><tr><th scope="col">Control</th><th scope="col">Expected behavior</th><th scope="col">Qualification evidence</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Business-unit isolation</th><td>Role and scope come from the same SSO group. A C3/C4 case requires a secure resource for bookings.</td><td>Check cross-unit denial and refusal of a workstation outside the authorized scope.</td></tr>
+            <tr><th scope="row">Local gateway</th><td>A per-case virtual key and the <code>chat-sensitive</code> alias constrain routing. The built-in runner uses text output from the local model.</td><td>Run a synthetic subtask, observe its duration and check token count provenance.</td></tr>
+            <tr><th scope="row">Authorization and concurrency</th><td>The start grant is single-use. Mutations use the current revision. Late results remain bound to their originating attempt.</td><td>Simulate reassignment and restart. Renew the start grant if still required.</td></tr>
+            <tr><th scope="row">Decision and audit</th><td><code>portfolio</code> mode requires Workbench auditing. The two databases reconcile using the exact case identity and revision.</td><td>Test all three outcomes with a separate approver and restart between decision and display.</td></tr>
+            <tr><th scope="row">Delivery and restore</th><td>The documented deployment uses one API process and digest-verified images. The Compose <code>api-state</code> volume or Kubernetes PVC preserves the databases and state.</td><td>Verify attestations and target configuration, then restore a consistent backup in isolation.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="sources" aria-label="Qualification guides">
+        <li><a href="./index.en.html#production">Prepare for production</a></li>
+        <li><a href="./index.en.html#kubernetes">Kubernetes pilot</a></li>
+        <li><a href="./index.en.html#reprise">Backup and restore</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/GATEWAY_SECURITY.md">LiteLLM security</a></li>
+        <li><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/SECURITY.md">Stack hardening</a></li>
+      </ul>
+    </section>
+  </main>
+  <footer><span>AI Factory · Architecture atlas</span><a href="#contenu">Back to the top</a></footer>
+</body>
+</html>

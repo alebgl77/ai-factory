@@ -17,13 +17,14 @@ import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from app import state as state_module
 from app.audit import GENESIS, AuditContext, AuditLog, record_hash, scan
 from app.main import SWAGGER_UI_VERSION, create_app
 from app.seclog import reference
 from app.security import (ASSESSMENT, AUDIT_READ, AUTHENTICATED, MODEL_VERSION, PLACEMENT_DECIDE, READ, ROLES,
                           SPACES_WRITE, RateLimiter, SecurityConfig, roles_granting)
 from app.settings import Settings
-from app.state import SeparationOfDuties, StateStore, apply_registry_overrides
+from app.state import SeparationOfDuties, StateError, StateStore, apply_registry_overrides
 from tests.conftest import FIXTURE_DIR, NOW, TODAY, review_body
 
 API_DIR = Path(__file__).resolve().parents[1]
@@ -600,6 +601,22 @@ def test_no_unaudited_write_when_the_audit_log_cannot_be_written(tmp_path):
     assert client.post("/api/v1/placement/decide", json={"sensitivity": "C1"}).status_code == 503
     sec = client.get("/api/v1/health").json()["security"]
     assert sec["audit"]["available"] is False and "audit_unavailable" in sec["warnings"]
+
+
+def test_native_lock_failure_refuses_mutation(tmp_path, monkeypatch):
+    store = StateStore(str(tmp_path / "s"))
+    ctx = AuditContext(actor="svc", role="admin", auth_mode="none", request_id="r", client_ip="127.0.0.1")
+
+    def unavailable(*args):
+        raise OSError("lock unavailable")
+
+    if state_module.fcntl is not None:
+        monkeypatch.setattr(state_module.fcntl, "flock", unavailable)
+    else:
+        monkeypatch.setattr(state_module.msvcrt, "locking", unavailable)
+    with pytest.raises(StateError, match="state lock unavailable"):
+        store.append_audit(ctx, action="placement.decide", target="placement:what-if", after={"i": 1})
+    assert not store.audit.path.exists()
 
 
 def test_concurrent_writers_keep_one_valid_chain(tmp_path, cfg):

@@ -3,6 +3,7 @@
 import asyncio
 import json
 from pathlib import Path
+import socket
 import ssl
 import sys
 from types import SimpleNamespace
@@ -39,6 +40,8 @@ def strict_settings(fc, tmp_path, monkeypatch):
     monkeypatch.setenv("VPS_CHAT_MODEL", "openai/vps-chat")
     monkeypatch.setenv("LOCAL_CHAT_MODEL", "openai/local-chat")
     monkeypatch.setenv("LOCAL_EMBED_MODEL", "openai/local-embed")
+    monkeypatch.setenv("LOCAL_API_BASE", "http://10.40.20.15:8000/v1")
+    monkeypatch.setenv("LOCAL_EMBED_API_BASE", "https://[fd00::20]:8000/v1")
     monkeypatch.setattr(fc, "GUARDRAIL_MODE", "block")
     monkeypatch.setattr(fc, "PII_REDACTION", True)
     litellm = sys.modules["litellm"]
@@ -395,6 +398,99 @@ def test_startup_accepts_exact_compose_ollama_origin(fc, strict_settings, monkey
     monkeypatch.setenv("VPS_API_BASE", "http://ollama-vps:11434/v1")
     callback = fc.FactoryMetrics()
     asyncio.run(callback._strict_http_client.aclose())
+
+
+def dns_records(*addresses):
+    return [(socket.AF_INET6 if ":" in address else socket.AF_INET,
+             socket.SOCK_STREAM, 0, "", (address, 0)) for address in addresses]
+
+
+@pytest.mark.parametrize("variable", ["LOCAL_API_BASE", "LOCAL_EMBED_API_BASE"])
+@pytest.mark.parametrize("base", [
+    "", "http://203.0.113.10/v1", "http://127.0.0.1/v1", "http://169.254.169.254/v1",
+    "http://[::ffff:10.0.0.1]/v1", "http://[fd00::20%eth0]/v1", "http://[2001:db8::20]/v1",
+    "http://10.40.20.15:/v1", "http://10.40.20.15:08000/v1", "http://canary@10.40.20.15/v1",
+    "http://10.40.20.15/v1?secret=canary", "http://10.40.20.15/v1#canary",
+    "http://mock-llm:8080/local/v1", "http://vllm-local:8001/v1", "http://vllm-embed:8001/v1",
+])
+def test_strict_startup_rejects_unapproved_local_bases(fc, strict_settings, monkeypatch, variable, base):
+    monkeypatch.setenv(variable, base)
+    with pytest.raises(ValueError, match=variable) as failure:
+        fc.FactoryMetrics()
+    if base:
+        assert base not in str(failure.value)
+
+
+@pytest.mark.parametrize("variable,base", [
+    ("LOCAL_API_BASE", "http://vllm-local:8000/v1"),
+    ("LOCAL_EMBED_API_BASE", "https://embeddings.gpu.company.internal/v1"),
+])
+@pytest.mark.parametrize("addresses", [("203.0.113.10",), ("10.40.20.15", "2001:db8::1"), ()])
+def test_strict_startup_rejects_non_private_dns_answers(fc, strict_settings, monkeypatch, variable, base, addresses):
+    monkeypatch.setenv(variable, base)
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: dns_records(*addresses))
+    with pytest.raises(ValueError, match=variable):
+        fc.FactoryMetrics()
+
+
+@pytest.mark.parametrize("variable,host,path", [
+    ("LOCAL_API_BASE", "chat.gpu.company.internal", "chat/completions"),
+    ("LOCAL_EMBED_API_BASE", "embeddings.gpu.company.internal", "embeddings"),
+])
+def test_strict_gpu_transport_pins_verified_ips_preserves_tls_and_blocks_dns_changes(
+        fc, strict_settings, monkeypatch, variable, host, path):
+    answers = ["10.40.20.15", "fd00::20"]
+    connections = []
+    monkeypatch.setenv(variable, f"https://{host}:8443/v1")
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: dns_records(*answers))
+
+    async def transport(_self, request):
+        connections.append((request.url.host, request.url.port, request.url.path, request.headers["host"],
+                            request.extensions["sni_hostname"], await request.aread()))
+        return httpx.Response(307, headers={"Location": "https://remote.invalid/capture"})
+
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", transport)
+    callback = fc.FactoryMetrics()
+    url = f"https://{host}:8443/v1/{path}"
+
+    async def exchange():
+        async with callback._strict_http_client as client:
+            async def body_stream():
+                yield b"synthetic-sensitive-canary"
+
+            assert (await client.post(url, content=body_stream())).status_code == 307
+            # A mixed answer after startup cannot dispatch even to the previously private IP.
+            answers.append("203.0.113.10")
+            with pytest.raises(httpx.ConnectError, match="private DNS answer"):
+                await client.post(url, content=b"must-not-dispatch")
+
+    asyncio.run(exchange())
+    assert connections == [
+        ("10.40.20.15", 8443, f"/v1/{path}", f"{host}:8443", host, b"synthetic-sensitive-canary"),
+    ]
+
+
+def test_unresolved_compose_gpu_allows_startup_but_never_dispatches(fc, strict_settings, monkeypatch):
+    monkeypatch.setenv("LOCAL_API_BASE", "http://vllm-local:8000/v1")
+
+    def missing(*args, **kwargs):
+        raise socket.gaierror
+
+    async def transport(_self, request):
+        assert request.url.host == "cloud.provider.example"
+        return httpx.Response(200)
+
+    monkeypatch.setattr(socket, "getaddrinfo", missing)
+    monkeypatch.setattr(httpx.AsyncHTTPTransport, "handle_async_request", transport)
+    callback = fc.FactoryMetrics()
+
+    async def exchange():
+        async with callback._strict_http_client as client:
+            with pytest.raises(httpx.ConnectError, match="private DNS answer"):
+                await client.post("http://vllm-local:8000/v1/chat/completions")
+            assert (await client.post("https://cloud.provider.example/v1/chat/completions")).status_code == 200
+
+    asyncio.run(exchange())
 
 
 @pytest.mark.parametrize("name", ["CLOUD_CHAT_MODEL", "CLOUD_SMALL_MODEL", "VPS_CHAT_MODEL"])

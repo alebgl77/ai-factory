@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+version: 1
+groups:
+  ops: [cc-ops]
+  ops-agents: [cc-ops]
+  finance: [cc-finance]
+  admins: ["*"]
+resources:
+  D1: [cc-ops, cc-finance]
+people:
+  cc-ops: [p01]
+  cc-finance: [p07]
+identities: {}
+shadow_teams:
+  cc-ops: [operations]
+  cc-finance: [finance]
+portfolio_roles:
+  ops: [project_lead, manager]
+portfolio_agents:
+  restore-agent: ag-doc-research

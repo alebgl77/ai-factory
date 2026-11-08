@@ -221,7 +221,7 @@ be written the state change is rolled back and the API answers 503: there is no 
 model version), `costs` (showback/chargeback, platform overhead, 8 waste rules with estimated
 savings), `pipeline` (7 stages, evaluation thresholds per risk tier, deployment blocked while a
 reassessment is required, automatic rollback), `dataloop` (signal → action, any retraining is
-refused), `placement` (sensitive ⇒ local only, queued when the local GPU is unavailable),
+refused), `placement` (sensitive ⇒ local only, recommends waiting during a local GPU outage),
 `agentops`, `skills` (Art. 4 AI literacy), `catalog`.
 
 ## Offline snapshots of the dashboard

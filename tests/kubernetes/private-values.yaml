@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: MIT
+# CI fixture for a controller Pod and a TLS-enabled Dex Service in the test namespace.
+profile: private
+allowMutableImagesForLocalTesting: true
+ingress:
+  enabled: true
+  className: factory-test
+  host: factory.test
+  tlsSecretName: factory-test-tls
+sso:
+  issuerURL: https://dex.kube-test.svc.cluster.local:5556/dex
+  existingSecret: factory-test-oidc
+  providerCA:
+    existingSecret: factory-test-ca
+  allowedEmailDomains: [factory.test]
+  allowedGroups: [ops, finance, admins]
+  scope: openid email profile groups
+businessUnits:
+  existingSecret: factory-test-bu
+api:
+  roleMap: ["ops:maintainer", "ops-agents:viewer", "finance:maintainer", "admins:admin"]
+  workbenchMode: portfolio
+  workbenchCyberAudit: true
+  shadowAI:
+    enabled: true
+    groups: [ops, admins]
+    privacyThreshold: 7
+networkPolicy:
+  ingressPeers:
+    - podSelector:
+        matchLabels: {factory-test: ingress}
+  dnsPeers:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: kube-system}
+      podSelector:
+        matchLabels: {k8s-app: kube-dns}
+  egressRules:
+    - to:
+        - podSelector:
+            matchLabels: {factory-test: dex}
+      ports:
+        - {protocol: TCP, port: 5556}

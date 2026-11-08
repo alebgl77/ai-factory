@@ -7,11 +7,35 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 DIGEST = re.compile(r"sha256:[a-f0-9]{64}")
 IMAGE_NAME = re.compile(r"[a-z0-9][a-z0-9._/-]*(?::[a-zA-Z0-9._-]+)?")
 SERVICE_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 LOCK_NAME = "docker-compose.release-lock.yml"
+HELM_VALUES_NAME = "values.release.json"
+MARKDOWN_LINK = re.compile(r"\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^\s)]+))[^)\n]*\)")
+HTML_IMAGE = re.compile(r"""<img\s[^>]*?\bsrc=["']([^"']+)["']""", re.IGNORECASE)
+FENCED_CODE = re.compile(r"^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1[ \t]*$", re.MULTILINE | re.DOTALL)
+
+
+def validate_markdown_links(root):
+    """Require bundle-local files linked by the deployment documentation."""
+    root = root.resolve()
+    missing = []
+    for doc in sorted(root.rglob("*.md")):
+        content = FENCED_CODE.sub("", doc.read_text(encoding="utf-8"))
+        links = [first or second for first, second in MARKDOWN_LINK.findall(content)]
+        links.extend(HTML_IMAGE.findall(content))
+        for link in links:
+            target = urlsplit(link)
+            if target.scheme or target.netloc or not target.path:
+                continue
+            path = (doc.parent / unquote(target.path)).resolve()
+            if not path.is_relative_to(root) or not path.exists():
+                missing.append(f"{doc.relative_to(root)} -> {link}")
+    if missing:
+        raise ValueError("Missing deployment documentation targets:\n" + "\n".join(missing))
 
 
 def render_compose(root, *overlays):
@@ -92,8 +116,45 @@ def create_evidence(root, assets, tag, sha, registry, resolve=resolve_registry_d
     (root / "release-stack.json").write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
 
 
+def create_helm_values(root):
+    """Project the signed release inventory into the chart's image values."""
+    evidence = json.loads((root / "release-stack.json").read_text(encoding="utf-8"))
+    services = evidence["services"]
+    images = {}
+    for name in ("api", "dashboard"):
+        entry = services[name]
+        repository, _, digest = entry["image"].partition("@")
+        if (entry["origin"] != "release" or not re.fullmatch(rf"ghcr\.io/[a-z0-9][a-z0-9-]*/{name}", repository)
+                or not DIGEST.fullmatch(digest)):
+            raise ValueError(f"Invalid first-party release image for {name}.")
+        images[name] = {"repository": repository, "digest": digest}
+
+    def upstream(service, expected_repository):
+        entry = services[service]
+        reference, _, digest = entry["image"].partition("@")
+        if (entry["origin"] != "upstream" or reference.split(":", 1)[0] != expected_repository
+                or not DIGEST.fullmatch(digest)):
+            raise ValueError(f"Invalid upstream release image for {service}.")
+        return {"repository": expected_repository, "digest": digest}
+
+    images["caddy"] = upstream("edge", "caddy")
+    images["oauth2Proxy"] = upstream("oauth2-proxy", "quay.io/oauth2-proxy/oauth2-proxy")
+    values = {"images": images, "logging": {"alloy": {"image": upstream("alloy", "grafana/alloy")}}}
+    (root / "deploy" / "helm" / HELM_VALUES_NAME).write_text(
+        json.dumps(values, indent=2) + "\n", encoding="utf-8",
+    )
+
+
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--check-docs":
+        validate_markdown_links(Path(sys.argv[2]))
+        sys.exit(0)
+    if len(sys.argv) == 3 and sys.argv[1] == "--helm-values":
+        create_helm_values(Path(sys.argv[2]))
+        sys.exit(0)
     if len(sys.argv) != 6:
-        sys.exit("usage: create_release_bundle.py BUNDLE_ROOT IMAGE_ARTIFACT_DIR TAG SOURCE_SHA REGISTRY")
+        sys.exit("usage: create_release_bundle.py BUNDLE_ROOT IMAGE_ARTIFACT_DIR TAG SOURCE_SHA REGISTRY\n"
+                 "       create_release_bundle.py --helm-values BUNDLE_ROOT\n"
+                 "       create_release_bundle.py --check-docs BUNDLE_ROOT")
     root, assets, tag, sha, registry = sys.argv[1:]
     create_evidence(Path(root), Path(assets), tag, sha, registry)
