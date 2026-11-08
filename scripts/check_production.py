@@ -14,7 +14,10 @@ ROLE_NAMES = {"viewer", "editor", "maintainer", "approver", "admin"}
 IDENTITY_SERVICES = {"edge", "api", "oauth2-proxy"}
 EDGE_PORTS = {(80, "tcp"), (443, "tcp"), (443, "udp"), (3001, "tcp"), (3002, "tcp")}
 DEMO_SERVICES = {"mock-llm", "traffic", "gpu-sim"}
-GPU_SERVICES = {"vllm-local", "vllm-embed"}
+COMPOSE_GPU_BASES = {
+    "LOCAL_API_BASE": ("vllm-local", "http://vllm-local:8000/v1"),
+    "LOCAL_EMBED_API_BASE": ("vllm-embed", "http://vllm-embed:8000/v1"),
+}
 OPENAI_MODEL = re.compile(r"openai/[A-Za-z0-9][A-Za-z0-9_.:-]*(?:/[A-Za-z0-9][A-Za-z0-9_.:-]*)*")
 VPS_HTTP_BASE = "http://ollama-vps:11434/v1"
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(network) for network in (
@@ -80,35 +83,45 @@ def _https_url(value):
     return url is not None and url.scheme == "https" and _hostname(url.hostname)
 
 
-def _https_provider_base(value):
+def _provider_url(value):
     url = _http_url(value)
-    if url is None or url.scheme != "https":
-        return False
+    if url is None or "%" in url.hostname:
+        return None
     host = url.hostname
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
         if len(host) > 253 or not all(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
                                       for label in host.split(".")):
-            return False
+            return None
         authority = host
     else:
         authority = f"[{host}]" if address.version == 6 else host
-    return url.netloc.lower() == (authority if url.port is None else f"{authority}:{url.port}")
+    expected = authority if url.port is None else f"{authority}:{url.port}"
+    return url if url.netloc.lower() == expected else None
 
 
-def _private_ollama(services, networks, project):
+def _https_provider_base(value):
+    url = _provider_url(value)
+    return url is not None and url.scheme == "https"
+
+
+def _gateway_dns_override(gateway):
+    return any(gateway.get(key) for key in ("extra_hosts", "links", "external_links", "dns", "dns_opt", "dns_search"))
+
+
+def _private_compose_service(services, networks, project, target):
     gateway = services["litellm"]
-    ollama = _object(services.get("ollama-vps"))
+    service = _object(services.get(target))
     factory = _object(networks.get("factory"))
     attached = _object(gateway.get("networks"))
-    ollama_networks = _object(ollama.get("networks"))
+    service_networks = _object(service.get("networks"))
     if (not isinstance(project, str) or not project or factory.get("internal") is not True
-            or "factory" not in attached or "factory" not in ollama_networks
-            or gateway.get("extra_hosts") or ollama.get("ports")):
+            or "factory" not in attached or "factory" not in service_networks or service.get("ports")
+            or gateway.get("network_mode") or service.get("network_mode") or _gateway_dns_override(gateway)):
         return False
     # External or custom networks can host peers and aliases absent from this Compose model.
-    managed = attached.keys() | ollama_networks.keys()
+    managed = attached.keys() | service_networks.keys()
     network_names = {f"{project}_{key}" for key in managed}
     for key in managed:
         network = _object(networks.get(key))
@@ -119,14 +132,16 @@ def _private_ollama(services, networks, project):
     if any(_value(_object(networks[key]), "name") in network_names for key in networks.keys() - managed):
         return False
     # A Compose peer cannot also claim the name on a network visible to the gateway.
-    for name, service in services.items():
-        if name == "ollama-vps":
+    for name, peer in services.items():
+        if name == target:
             continue
-        peer_networks = _object(service.get("networks"))
+        peer_networks = _object(peer.get("networks"))
         for network in attached.keys() & peer_networks.keys():
             aliases = _object(peer_networks[network]).get("aliases") or []
-            if (not isinstance(aliases, list) or "ollama-vps" in aliases
-                    or "ollama-vps" in (service.get("hostname"), service.get("container_name"))):
+            if not isinstance(aliases, list) or any(
+                isinstance(alias, str) and alias.rstrip(".").lower() == target
+                for alias in (*aliases, name, peer.get("hostname"), peer.get("container_name"))
+            ):
                 return False
     return True
 
@@ -135,17 +150,18 @@ def _gpu_dns_name(value):
     return _hostname(value) and value.split(".", 1)[0] not in DEMO_SERVICES
 
 
-def _local_gpu_url(value, services, private_gpu_hosts):
-    url = _http_url(value)
+def _local_gpu_url(key, value, services, networks, project, private_gpu_hosts):
+    url = _provider_url(value)
     if url is None:
         return False
     host = url.hostname
-    if host in GPU_SERVICES:
-        return host in services
+    target, compose_base = COMPOSE_GPU_BASES[key]
+    if value == compose_base:
+        return _private_compose_service(services, networks, project, target)
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
-        return _gpu_dns_name(host) and host in private_gpu_hosts
+        return _gpu_dns_name(host) and host in private_gpu_hosts and not _gateway_dns_override(services["litellm"])
     return any(address in network for network in PRIVATE_NETWORKS)
 
 
@@ -323,12 +339,14 @@ def production_errors(config, *, private_gpu_hosts=()):
     if not _https_provider_base(_value(gateway, "CLOUD_API_BASE")):
         errors.append("Set CLOUD_API_BASE to an HTTPS provider URL without credentials, a query or a fragment.")
     vps_base = _value(gateway, "VPS_API_BASE")
+    networks = _object(config.get("networks"))
+    project = config.get("name")
     if not (_https_provider_base(vps_base) or (vps_base == VPS_HTTP_BASE
-            and _private_ollama(services, _object(config.get("networks")), config.get("name")))):
+            and _private_compose_service(services, networks, project, "ollama-vps"))):
         errors.append("Set VPS_API_BASE to HTTPS or the unpublished Compose ollama-vps service on the factory network.")
-    for key in ("LOCAL_API_BASE", "LOCAL_EMBED_API_BASE"):
-        if not _local_gpu_url(_value(gateway, key), services, private_gpu_hosts):
-            errors.append(f"Set {key} to an active local GPU service, a private IP or an approved private GPU DNS host.")
+    for key in COMPOSE_GPU_BASES:
+        if not _local_gpu_url(key, _value(gateway, key), services, networks, project, private_gpu_hosts):
+            errors.append(f"Set {key} to the expected private Compose GPU service, a private IP or an approved private GPU DNS host.")
     for key in ("LOCAL_CHAT_MODEL", "LOCAL_EMBED_MODEL"):
         model = _value(gateway, key)
         if len(model) > 256 or not OPENAI_MODEL.fullmatch(model):

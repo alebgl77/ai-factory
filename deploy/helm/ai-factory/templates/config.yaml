@@ -1,0 +1,24 @@
+{{- include "ai-factory.validate" . -}}
+{{- if or (not (.Files.Get "assets/config/factory.yaml")) (not (.Files.Get "assets/Caddyfile")) (not (.Files.Get "assets/nginx.conf")) -}}
+{{- fail "shared assets are missing; run python scripts/package_helm.py OUTPUT_DIR and use OUTPUT_DIR/ai-factory" -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-factory.fullname" . }}-config
+  labels:
+    {{- include "ai-factory.labels" . | nindent 4 }}
+binaryData:
+  {{- range $path, $data := .Files.Glob "assets/config/**" }}
+  {{ trimPrefix "assets/config/" $path | replace "/" "__" }}: {{ $data | toString | b64enc | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ai-factory.fullname" . }}-edge
+  labels:
+    {{- include "ai-factory.labels" . | nindent 4 }}
+binaryData:
+  Caddyfile: {{ .Files.Get "assets/Caddyfile" | b64enc | quote }}
+  nginx.conf: {{ .Files.Get "assets/nginx.conf" | replace "        listen 80;\n" "        listen 127.0.0.1:8081;\n" | b64enc | quote }}

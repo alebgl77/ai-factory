@@ -4,7 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Virtual AI Factory</title>
-<meta name="description" content="Jumeau numérique 3D d'une AI Factory en travail hybride : présence des squads, use cases, War Room, focus pods, co-localisation et conformité données sensibles.">
+<meta name="description" content="Jumeau numérique open source pour explorer le pilotage des projets et agents IA, les décisions humaines et les flux de modèles dans une organisation fictive.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Virtual AI Factory">
+<meta property="og:description" content="Un jumeau numérique open source pour explorer le pilotage des projets IA, les décisions et les flux de modèles.">
+<meta property="og:image" content="https://alebgl77.github.io/ai-factory/docs/media/ai-factory-cover.fr.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1774">
+<meta property="og:image:height" content="887">
+<meta property="og:image:alt" content="AI FACTORY. Le poste de pilotage de l’IA. Agents, décisions et modèles. Une usine IA en coupe illumine la couverture.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="exercise/uc04.css">
 <link rel="stylesheet" href="companion/handoff.css">
 <script defer src="exercise/uc04.js"></script>
@@ -74,11 +83,44 @@ button svg{pointer-events:none}
 #app{display:grid;height:100vh;height:100dvh;padding:10px;gap:10px;
   grid-template-columns:300px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
   grid-template-areas:"top top" "side stage" "time time"}
-#app[data-demo-entry]{grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"top top" "demo demo" "side stage" "time time"}
-.demo-entry{grid-area:demo;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r)}
+#app[data-demo-entry]{grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"demo demo" "top top" "side stage" "time time"}
+.demo-entry{
+  grid-area:demo;min-width:0;overflow:hidden;background:#111412;color:#f2f4ec;
+  border:1px solid #3a4238;border-radius:var(--r);
+  --demo-accent:#d7fa68;--demo-muted:#b9c1b4;--demo-line:#3a4238;
+  font-family:"Geist",var(--font)
+}
 .demo-entry[hidden],.view-ctrl[hidden],.legend[hidden],#fallbackSpaces[hidden]{display:none}
-.demo-entry strong{margin-right:4px;font-size:12px}
-.demo-entry .btn{min-height:44px;display:inline-flex;align-items:center;text-align:center;text-decoration:none}
+.demo-entry-main{position:relative;isolation:isolate;display:grid;gap:11px;padding:16px 20px 14px}
+.demo-entry-main::before{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(90deg,#111412 0%,#111412 33%,rgba(17,20,18,.75) 49%,rgba(17,20,18,0) 78%)
+}
+.demo-entry-art{
+  position:absolute;inset:0 0 0 auto;z-index:-2;display:block;width:min(68%,54rem);height:100%;
+  object-fit:cover;object-position:72% 49%;pointer-events:none
+}
+.demo-entry-intro{max-width:39rem}
+.demo-entry-kicker{display:flex;align-items:center;gap:8px;margin:0 0 4px;color:var(--demo-accent);font:650 10px/1.3 "Geist Mono",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}
+.demo-entry-kicker::before{content:"";width:7px;height:7px;flex:none;background:currentColor}
+.demo-entry-title{margin:0;font-size:clamp(25px,2.6vw,43px);line-height:1.06;letter-spacing:-.045em;font-weight:680;text-wrap:balance}
+.demo-entry-copy{margin:5px 0 0;color:var(--demo-muted);font-size:13px;line-height:1.35;text-wrap:pretty}
+.demo-entry-actions{display:flex;flex-wrap:wrap;gap:6px}
+.demo-entry .btn{min-height:44px;display:inline-flex;flex:0 1 auto;align-items:center;justify-content:center;text-align:center;text-decoration:none}
+.demo-entry .btn.primary{flex:0 1 auto;background:var(--demo-accent);color:#10140a}
+.demo-entry .btn.ghost{background:#181d18;border-color:#515a4e;color:#f2f4ec}
+.demo-entry .btn.ghost:hover{border-color:var(--demo-accent);background:#252c20}
+.demo-entry-footer{display:flex;justify-content:space-between;align-items:stretch;gap:0 12px;padding-inline:20px;border-top:1px solid var(--demo-line);background:#151915}
+.demo-tech,.demo-roadmap{display:flex;align-items:center;gap:8px;min-height:44px;padding:5px 0;color:var(--demo-muted);text-decoration:none}
+.demo-tech{font-size:12px;font-weight:650}
+.demo-roadmap{gap:8px 14px}
+.demo-tech:hover,.demo-roadmap:hover{color:var(--demo-accent)}
+.demo-entry :is(button,a):focus-visible{outline:2px solid var(--demo-accent);outline-offset:2px}
+.demo-roadmap-title{color:#f2f4ec;font-size:12px;font-weight:750;white-space:nowrap}
+.demo-roadmap-phases{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:11px}
+.demo-roadmap-phases > span{white-space:nowrap}
+.demo-roadmap-phases b{color:var(--demo-accent);font:700 .9em/1 "Geist Mono",ui-monospace,monospace;margin-inline-end:4px}
+.demo-roadmap-arrow{margin-inline-start:auto;color:var(--demo-accent);font-size:16px}
 
 /* ---------- Top bar ---------- */
 .top{grid-area:top;display:flex;align-items:stretch;gap:12px;min-width:0}
@@ -758,11 +800,22 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
   .live-btn{justify-self:end}
 }
 @media (max-width:860px){
-  #app[data-demo-entry]{grid-template-rows:auto auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto;grid-template-areas:"top" "demo" "stage" "time" "side"}
-  .demo-entry strong{width:100%}
-  .demo-entry .btn{flex:1;justify-content:center;white-space:normal}
+  #app[data-demo-entry]{grid-template-rows:auto auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto;grid-template-areas:"demo" "top" "stage" "time" "side"}
   :is(.top-actions,.d-head,.c-head,.help-head) .icon-btn,.timeline .icon-btn{min-width:44px;min-height:44px}
   :is(.top-actions,.tabs,.c-tabs,.timeline,.actions,.encounter-actions) :is(button,a,select),.srow-btn,#slider{min-height:44px}
+}
+@media (max-width:640px){
+  .demo-entry-main{padding:12px;gap:10px}
+  .demo-entry-main::before{background:linear-gradient(90deg,#111412 2%,rgba(17,20,18,.72) 50%,rgba(17,20,18,.3))}
+  .demo-entry-art{width:100%;object-position:70% 50%;opacity:.55}
+  .demo-entry-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  .demo-entry .btn{padding:5px 4px;font-size:12px;line-height:1.2}
+  .demo-entry-footer{display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding-inline:12px}
+  .demo-roadmap{display:grid;grid-template-columns:minmax(0,1fr) auto;row-gap:4px;margin:0;padding-block:7px}
+  .demo-roadmap-phases{display:grid;grid-column:1/-1;grid-row:2;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  .demo-roadmap-phases > span{display:flex;align-items:baseline;white-space:normal}
+  .demo-roadmap-arrow{grid-column:2;grid-row:1}
+  .demo-tech{justify-content:space-between;border-top:1px solid var(--demo-line)}
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
@@ -824,6 +877,39 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
 </head>
 <body>
 <div id="app">
+  <section class="demo-entry" id="demoEntry" aria-labelledby="demoEntryTitle" hidden>
+    <div class="demo-entry-main">
+      <template id="demoEntryArtwork">
+        <img class="demo-entry-art" id="demoEntryArt" src="./docs/media/ai-factory-control-floor.webp"
+          alt="" width="2172" height="724" decoding="async" fetchpriority="low">
+      </template>
+      <div class="demo-entry-intro">
+        <p class="demo-entry-kicker" id="demoEntryKicker">AI Factory · Démo publique</p>
+        <h2 class="demo-entry-title" id="demoEntryTitle">Le poste de pilotage de l’IA</h2>
+        <p class="demo-entry-copy" id="demoEntryCopy">Explorez les projets, les décisions et les flux d’une organisation fictive.</p>
+      </div>
+      <nav class="demo-entry-actions" id="demoEntryActions" aria-label="Parcours de la démo">
+        <button type="button" class="btn primary" id="demoProjects">Projets et tâches</button>
+        <a class="btn ghost" id="demoDecision" href="./companion/index.html?lang=fr">Compagnon de décision</a>
+        <a class="btn ghost" id="demoFlows" href="./docs/flow-lab.html?lang=fr">Laboratoire de flux</a>
+      </nav>
+    </div>
+    <div class="demo-entry-footer">
+      <a class="demo-roadmap" id="demoRoadmap" href="./docs/roadmap.html?lang=fr" aria-label="Feuille de route. En premier, identités et tests. Ensuite, compétences et ERP. À explorer, coûts et navigateur.">
+        <span class="demo-roadmap-title" id="demoRoadmapTitle">Feuille de route</span>
+        <span class="demo-roadmap-phases">
+          <span><b aria-hidden="true">01</b><span id="demoRoadmapFirst">Identités &amp; tests</span></span>
+          <span><b aria-hidden="true">02</b><span id="demoRoadmapNext">Compétences &amp; ERP</span></span>
+          <span><b aria-hidden="true">03</b><span id="demoRoadmapExplore">Coûts &amp; navigateur</span></span>
+        </span>
+        <span class="demo-roadmap-arrow" aria-hidden="true">↗</span>
+      </a>
+      <a class="demo-tech" id="demoTech" href="https://github.com/alebgl77/ai-factory/blob/main/README.fr.md#technologies">
+        <span id="demoTechLabel">Technologies sur GitHub</span><span class="demo-roadmap-arrow" aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </section>
+
   <header class="top">
     <div class="brand">
       <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 2.5v3M14.5 2.5v3M9.5 18.5v3M14.5 18.5v3M2.5 9.5h3M2.5 14.5h3M18.5 9.5h3M18.5 14.5h3"/><path d="M10 10h4v4h-4z"/></svg></div>
@@ -866,13 +952,6 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
       </div>
     </div>
   </header>
-
-  <nav class="demo-entry" id="demoEntry" aria-labelledby="demoEntryTitle" hidden>
-    <strong id="demoEntryTitle">Explorer la démo</strong>
-    <button type="button" class="btn primary" id="demoProjects">Projets et tâches</button>
-    <a class="btn ghost" id="demoDecision" href="./companion/index.html?lang=fr">Compagnon de décision</a>
-    <a class="btn ghost" id="demoFlows" href="./docs/flow-lab.html?lang=fr">Laboratoire de flux</a>
-  </nav>
 
   <aside class="side" aria-label="Équipe et espaces">
     <div class="tabs" role="tablist">
@@ -944,7 +1023,7 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
 
     <section class="console" id="console" aria-hidden="true" aria-labelledby="cTitle" tabindex="-1">
       <header class="c-head">
-        <div><div class="d-zone">Console AI Factory</div><h2 id="cTitle">Registre</h2></div>
+        <div><div class="d-zone" id="cKicker">Console AI Factory</div><h2 id="cTitle">Registre</h2></div>
         <div class="c-src" id="cSrc"></div>
         <button type="button" class="icon-btn" id="cClose" aria-label="Fermer la console"></button>
       </header>
@@ -3793,7 +3872,7 @@ function renderPilot(sn) {
     <button type="button" class="mini" data-portfolio-open>${icon('layers')} ${ui('Portfolio and tasks', 'Portefeuille et tâches')}</button>
     <button type="button" class="mini" data-ideas-open>${icon('desk')} ${ideasTitle()}</button>
     <button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Time, tokens and records', 'Temps, tokens et supports')}</button>
-    <p class="pilot-guide"><a href="./docs/index.html">${ui('Operations guide (French)', 'Guide d’exploitation')}</a></p></div>`;
+    <p class="pilot-guide"><a href="${ui('./docs/index.en.html', './docs/index.html')}">${ui('Operations guide', 'Guide d’exploitation')}</a></p></div>`;
   html += `<div class="grp pilot-sec"><div class="grp-h">Semaine du ${esc(shortDate(days[0]))}<em>présents / jour</em></div><div class="week">`;
   days.forEach((d, i) => {
     const team = pres[i] && pres[i] === maxP && pres[i] >= Math.ceil(N / 2);
@@ -3824,7 +3903,7 @@ function renderPilot(sn) {
   html += `<div class="grp pilot-sec"><div class="grp-h">Conformité & recommandations<em>${recs.length}</em></div><div class="recs" tabindex="-1" aria-label="Recommandations">` + (recs.length ? recs.map(r =>
     `<div class="rec ${r.kind}">${icon(r.icon)}<div><b>${esc(r.title)}</b><p>${esc(r.text)}</p>${r.action ? `<button type="button" class="mini" data-rec="${esc(r.key)}">${esc(r.action.label)}</button>` : ''}</div></div>`).join('')
     : `<div class="rec info">${icon('info')}<div><b>Rien à signaler</b><p>Aucune alerte pour ce jour.</p></div></div>`) + '</div></div>';
-  html += `<div class="grp pilot-sec"><div class="grp-h">Export de la semaine</div><div class="exports">
+  html += `<div class="grp pilot-sec"><div class="grp-h">${ui('Weekly export', 'Export de la semaine')}</div><div class="exports">
     <button type="button" class="mini" data-export="csv">${icon('download')} CSV (Excel)</button>
     <button type="button" class="mini" data-export="json">${icon('download')} JSON</button></div></div>`;
   setHTMLKeepFocus($('pilotPanel'), html);
@@ -3932,24 +4011,29 @@ function trapPanelTab(event, panel) {
    Console AI Factory (registry, FinOps, LLMOps pipeline, data loop, placement, Agent Ops, catalogue, Skills & R&D, Grafana)
    ===================================================================== */
 const CONSOLE_SECTIONS = {
-  registry: { title: 'Registre & risques', icon: 'shield' },
-  finops: { title: 'FinOps · coûts tokens & GPU', icon: 'layers' },
-  pipeline: { title: 'Pipeline LLMOps & RAG', icon: 'video' },
-  dataloop: { title: 'Boucle de données', icon: 'reset' },
-  placement: { title: 'Placement hybride', icon: 'building' },
-  agentops: { title: 'Agent Ops', icon: 'clock' },
-  activity: { icon: 'clock' },
-  portfolio: { icon: 'layers' },
+  registry: { title: ['Registry & risk', 'Registre & risques'], tab: ['Registry', 'Registre'], icon: 'shield' },
+  finops: { title: ['FinOps · token & GPU costs', 'FinOps · coûts tokens & GPU'], tab: ['FinOps', 'FinOps'], icon: 'layers' },
+  pipeline: { title: ['LLMOps & RAG pipeline', 'Pipeline LLMOps & RAG'], icon: 'video' },
+  dataloop: { title: ['Data loop', 'Boucle de données'], icon: 'reset' },
+  placement: { title: ['Hybrid placement', 'Placement hybride'], icon: 'building' },
+  agentops: { title: ['Agent Ops', 'Agent Ops'], icon: 'clock' },
+  activity: { title: ['Work history', 'Historique du travail'], icon: 'clock' },
+  portfolio: { title: ['Portfolio and tasks', 'Portefeuille et tâches'], icon: 'layers' },
   ideas: { icon: 'desk' },
-  catalog: { title: 'Catalogue libre-service', icon: 'desk' },
-  skills: { title: 'Skills Lab & R&D Lab', icon: 'users' },
-  rnd: { title: 'Skills Lab & R&D Lab', icon: 'users', alias: 'skills' },
-  shadow: { icon: 'shield' },
-  grafana: { title: 'Grafana', icon: 'info' },
+  catalog: { title: ['Self-service catalog', 'Catalogue libre-service'], icon: 'desk' },
+  skills: { title: ['Skills Lab & R&D Lab', 'Skills Lab & R&D Lab'], icon: 'users' },
+  rnd: { alias: 'skills' },
+  shadow: { tab: ['Observatory', 'Observatoire'], icon: 'shield' },
+  grafana: { title: ['Grafana', 'Grafana'], icon: 'info' },
 };
 const CONSOLE_ORDER = ['registry', 'shadow', 'finops', 'pipeline', 'dataloop', 'placement', 'agentops', 'activity', 'portfolio', 'ideas', 'catalog', 'skills', 'grafana'];
-const consoleTitle = key => key === 'shadow' ? shadowTitle() : key === 'activity' ? ui('Work history', 'Historique du travail')
-  : key === 'portfolio' ? ui('Portfolio and tasks', 'Portefeuille et tâches') : key === 'ideas' ? ideasTitle() : CONSOLE_SECTIONS[key]?.title || 'Console';
+function consoleTitle(key, tab = false) {
+  const section = CONSOLE_SECTIONS[CONSOLE_SECTIONS[key]?.alias || key];
+  if (tab && section?.tab) return ui(...section.tab);
+  if (key === 'shadow') return shadowTitle();
+  if (key === 'ideas') return tab ? ui('Coffee corner', 'Coin café') : ideasTitle();
+  return section?.title ? ui(...section.title) : 'Console';
+}
 const TIER_BADGES = new Map([
   ['prohibited', { className: 't-prohibited', label: 'Interdit (art. 5)' }],
   ['high', { className: 't-high', label: 'Haut risque' }],
@@ -3965,13 +4049,19 @@ const STAGE_FR = { ingestion: 'Ingestion', indexing: 'Découpage & index', versi
 const METRIC_FR = { faithfulness: 'Fidélité', answer_relevancy: 'Pertinence', context_precision: 'Précision contexte', context_recall: 'Rappel contexte', judge_score: 'Juge LLM', redteam_pass: 'Red team' };
 const BLOCK_FR = { risk_reassessment: 'réévaluation de risque requise', eval_gate: 'gate d’évaluation non franchi', prohibited: 'pratique interdite (art. 5)', human_review: 'revue humaine en attente' };
 const TRIGGER_FR = { thumbs_down_ratio: 'ratio de votes négatifs', error_rate: 'taux d’erreur', latency_p95_ms: 'latence p95', ttft_p95_ms: 'TTFT p95', faithfulness_drop: 'baisse de fidélité', cost_per_request: 'coût par requête', guardrail_violations: 'violations de garde-fous' };
-const BREACH_FR = { ttft_ms_p95: 'TTFT p95 > SLO', vector_latency_ms_p95: 'latence vectorielle p95 > SLO', tokens_per_task_p95: 'tokens par tâche p95 > SLO', success_rate: 'taux de succès < SLO' };
+const AGENT_SLO_BREACHES = {
+  ttft_ms_p95: ['TTFT p95 > SLO', 'TTFT p95 > SLO'],
+  vector_latency_ms_p95: ['vector latency p95 > SLO', 'latence vectorielle p95 > SLO'],
+  tokens_per_task_p95: ['tokens per task p95 > SLO', 'tokens par tâche p95 > SLO'],
+  success_rate: ['success rate < SLO', 'taux de succès < SLO'],
+};
 const PSTATUS_FR = { passed: 'OK', failed: 'Échec', blocked: 'Bloqué', running: 'En cours', pending: 'En attente', skipped: 'Ignoré' };
 const SIGNAL_FR = { retrieval_hit_rate: 'Taux de récupération en baisse', query_drift: 'Dérive des requêtes', corpus_freshness: 'Corpus obsolète', eval_failure_cluster: 'Cluster d’échecs d’évaluation', cost_drift: 'Dérive des coûts', latency_drift: 'Dérive de latence' };
 const ACTION_FR = { reindex: 'Réindexation', update_eval_set: 'Mise à jour du jeu d’évaluation', change_routing: 'Changement de routage', human_review: 'Revue humaine' };
 // GPU label: telemetry from sim/gpu-sim is flagged as simulated, whatever model name it reports
-const gpuName = d => `${d?.name || d?.id || 'GPU'}${SNAP?.gpu?.source === 'sim' && !/simul/i.test(d?.name || '') ? ' (simulé)' : ''}`;
-const TARGET_FR = { cloud: 'Cloud', vps: 'VPS', local: 'GPU local', queued: 'En file d’attente' };
+const gpuName = d => `${d?.name || d?.id || 'GPU'}${SNAP?.gpu?.source === 'sim' && !/simul/i.test(d?.name || '') ? ui(' (simulated)', ' (simulé)') : ''}`;
+const PLACEMENT_TARGETS = { cloud: ['Cloud', 'Cloud'], vps: ['VPS', 'VPS'], local: ['Local GPU', 'GPU local'], queued: ['Wait recommended', 'Attente recommandée'] };
+const localizedLabel = (labels, key, fallback = key) => Object.hasOwn(labels, key) ? ui(...labels[key]) : fallback;
 // Small unit costs (per request, per 1k tokens, per task) need significant digits, not cents
 const eurFine = v => Number.isFinite(+v) ? (+v === 0 || Math.abs(+v) >= 1 ? eur(v) : (+v).toLocaleString(locale(), { style: 'currency', currency: SNAP?.factory?.currency || 'EUR', maximumSignificantDigits: 2 })) : '—';
 const compact = v => Number.isFinite(+v) ? (+v).toLocaleString(locale(), { notation: 'compact', maximumSignificantDigits: 3 }) : '—';
@@ -4049,7 +4139,7 @@ function renderConsole() {
   $('console').classList.toggle('is-ideas', consoleKey === 'ideas');
   $('cTitle').textContent = consoleTitle(consoleKey);
   $('cSrc').innerHTML = ['shadow', 'activity', 'portfolio', 'ideas'].includes(consoleKey) ? '' : sourceBadge();
-  setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(k === 'shadow' ? ui('Observatory', 'Observatoire') : consoleTitle(k).split(' ·')[0].replace(' & risques', ''))}</button>`).join(''));
+  setHTMLKeepFocus($('cTabs'), CONSOLE_ORDER.map(k => `<button type="button" role="tab" class="ctab" data-csec="${k}" aria-selected="${k === consoleKey}" tabindex="${k === consoleKey ? 0 : -1}">${esc(consoleTitle(k, true))}</button>`).join(''));
   if (consoleKey === 'shadow') {
     const stamp = `${language}:${shadowView.revision}`;
     if (shadowView.rendered !== stamp) {
@@ -4074,7 +4164,7 @@ function renderConsole() {
   const fn = { registry: secRegistry, finops: secFinops, pipeline: secPipeline, dataloop: secDataloop, placement: secPlacement, agentops: secAgentops, catalog: secCatalog, skills: secSkills, grafana: secGrafana }[consoleKey];
   setHTMLKeepFocus($('cBody'), fn ? fn() : '');
 }
-const apiOnly = () => SNAP_SOURCE === 'api' ? '' : ' disabled title="Nécessite l’API d’agrégation (stack déployée)"';
+const apiOnly = () => SNAP_SOURCE === 'api' ? '' : ` disabled title="${ui('Requires the aggregation API on a deployed stack', 'Nécessite l’API d’agrégation (stack déployée)')}"`;
 
 /* Activity rows remain in the open console only, scoped by the server. */
 function activitySource() {
@@ -4878,25 +4968,30 @@ function secDataloop() {
 }
 function secPlacement() {
   const p = SNAP?.placement || {}, g = SNAP?.gpu?.devices?.[0];
-  return `<section class="csec"><h3>Cibles d’exécution · cloud d’abord, repli VPS puis matériel local</h3><div class="ccards">${(p.targets || []).map(t => `<div class="ccard tgt-${esc(t.status)}"><b>${esc(TARGET_FR[t.id] || t.label || t.id)}</b>${chip('st-' + t.status, { up: 'disponible', degraded: 'dégradé', down: 'indisponible' }[t.status] || t.status)}
-      <small>utilisation ${num(t.util_pct)} % · ${eurFine(t.eur_per_1k_tokens)}/1k tokens · p95 ${num(t.latency_ms_p95)} ms</small>${t.id === 'local' && g ? `<small>${esc(gpuName(g))} · ${num(g.temp_c)} °C · ${num(g.power_w)} W · ${num(g.mem_used_gb, 1)}/${num(g.mem_total_gb)} Go (${esc(SNAP?.gpu?.source || '')})</small>` : ''}</div>`).join('')}</div>
-    <p class="cnote">Règle : les classes ${esc([...SENSITIVE_CLASSES].join(', '))} ne quittent jamais le GPU local (si celui-ci est indisponible, la charge est mise en file, jamais envoyée au cloud).</p></section>
-    <section class="csec"><h3>Charges et décisions</h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>Charge</th><th>Use case</th><th>Données</th><th>Cible</th><th>Repli</th><th>Alias passerelle</th><th>Raisons</th></tr></thead><tbody>${(p.workloads || []).map(w => `<tr><td>${esc(w.id)}</td><td><b>${ucCode(w.usecase)}</b></td><td>${chip(SENSITIVE_CLASSES.has(w.sensitivity) ? 'sens' : 'nsens', w.sensitivity || '—')}</td><td>${w.target === 'queued' || w.queued ? `<b class="warn" title="GPU local indisponible : la charge sensible attend, elle n’est jamais envoyée au cloud ni au VPS">⏸ ${esc(TARGET_FR.queued)}</b>` : `<b>${esc(TARGET_FR[w.target] || w.target)}</b>`}</td><td>${esc((w.fallback || []).map(f => TARGET_FR[f] || f).join(' → ') || '—')}</td><td><code>${esc(w.model_alias || '')}</code></td><td><small>${esc((w.reasons || []).join(' · '))}</small></td></tr>`).join('')}</tbody></table></div></section>`;
+  const classes = esc([...SENSITIVE_CLASSES].join(', '));
+  const status = { up: ['available', 'disponible'], degraded: ['degraded', 'dégradé'], down: ['unavailable', 'indisponible'] };
+  return `<section class="csec"><h3>${ui('Execution targets', 'Cibles d’exécution')}</h3><div class="ccards">${(p.targets || []).map(t => `<div class="ccard tgt-${esc(t.status)}"><b>${esc(localizedLabel(PLACEMENT_TARGETS, t.id, t.label || t.id))}</b>${chip('st-' + t.status, localizedLabel(status, t.status))}
+      <small>${ui('utilization', 'utilisation')} ${num(t.util_pct)} % · ${eurFine(t.eur_per_1k_tokens)}/1k tokens · p95 ${num(t.latency_ms_p95)} ms</small>${t.id === 'local' && g ? `<small>${esc(gpuName(g))} · ${num(g.temp_c)} °C · ${num(g.power_w)} W · ${num(g.mem_used_gb, 1)}/${num(g.mem_total_gb)} ${ui('GB', 'Go')} (${esc(SNAP?.gpu?.source || '')})</small>` : ''}</div>`).join('')}</div>
+    <p class="cnote">${ui(`Direct ${classes} requests require the local GPU and fail if it is unavailable. The planner may recommend waiting and does not enqueue work.`, `Les requêtes directes ${classes} nécessitent le GPU local et échouent s’il est indisponible. Le simulateur peut recommander d’attendre, sans mettre la charge en file.`)}</p></section>
+    <section class="csec"><h3>${ui('Workloads and recommendations', 'Charges et recommandations')}</h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>${ui('Workload', 'Charge')}</th><th>Use case</th><th>${ui('Data', 'Données')}</th><th>${ui('Target', 'Cible')}</th><th>${ui('Fallback', 'Repli')}</th><th>${ui('Gateway alias', 'Alias passerelle')}</th><th>${ui('Reasons', 'Raisons')}</th></tr></thead><tbody>${(p.workloads || []).map(w => {
+      const wait = w.target === 'queued' || w.queued;
+      return `<tr><td>${esc(w.id)}</td><td><b>${ucCode(w.usecase)}</b></td><td>${chip(SENSITIVE_CLASSES.has(w.sensitivity) ? 'sens' : 'nsens', w.sensitivity || '—')}</td><td><b${wait ? ' class="warn"' : ''}>${wait ? '⏸ ' : ''}${esc(localizedLabel(PLACEMENT_TARGETS, wait ? 'queued' : w.target))}</b></td><td>${esc((w.fallback || []).map(f => localizedLabel(PLACEMENT_TARGETS, f)).join(' → ') || '—')}</td><td><code>${esc(w.model_alias || '')}</code></td><td><small>${esc((w.reasons || []).join(' · '))}</small></td></tr>`;
+    }).join('')}</tbody></table></div></section>`;
 }
 function secAgentops() {
   const a = SNAP?.agentops || {}, g = a.global || {}, s = a.slo || {}, ser = a.series || [];
   const tile = (label, v, lim, unit, key) => { const bad = Number.isFinite(v) && Number.isFinite(lim) && v > lim;
     return `<div class="ctile ${bad ? 'warn' : 'ok'}"><b>${num(v)}${unit}</b><span>${label} · SLO ${num(lim)}${unit}</span>${sparkSvg(ser.map(p => p[key]), 120, 26)}</div>`; };
-  return `<section class="csec"><h3>Fenêtre ${esc(a.window || '1h')} · ${num(g.tasks)} tâches · succès ${pctS(g.success_rate)}</h3><button type="button" class="mini" data-activity-open>${icon('clock')} ${ui('Work history', 'Historique du travail')}</button><div class="ctiles">
-    ${tile('TTFT p95', g.ttft_ms_p95, s.ttft_ms_p95, ' ms', 'ttft_ms_p95')}${tile('Tokens par tâche p95', g.tokens_per_task_p95, s.tokens_per_task_p95, '', 'tokens_per_task_avg')}${tile('Latence vectorielle p95', g.vector_latency_ms_p95, s.vector_latency_ms_p95, ' ms', 'vector_latency_ms_p95')}
-    <div class="ctile"><b>${num(g.ttft_ms_p50)} ms</b><span>TTFT p50</span></div><div class="ctile"><b>${num(g.tokens_per_task_avg)}</b><span>tokens par tâche (moyenne)</span></div><div class="ctile"><b>${num(g.vector_latency_ms_p50)} ms</b><span>latence vectorielle p50</span></div></div></section>
-    <section class="csec"><h3>Par agent</h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>Agent</th><th>Use case</th><th>TTFT p95</th><th>Tokens/tâche p95</th><th>Latence vect. p95</th><th>Succès</th><th>€/tâche</th><th>Tâches</th></tr></thead><tbody>${(a.by_agent || []).map(x => `<tr class="${(x.breaches || []).length ? 'row-warn' : ''}"><td><b>${esc(SNAP?.catalog?.agents?.find(c => c.id === x.agent)?.name || x.agent)}</b>${(x.breaches || []).length ? `<small class="warn">⚠ ${esc(x.breaches.map(b => BREACH_FR[b] || b).join(', '))}</small>` : ''}</td><td>${ucCode(x.usecase)}</td><td>${num(x.ttft_ms_p95)} ms</td><td>${num(x.tokens_per_task_p95)}</td><td>${num(x.vector_latency_ms_p95)} ms</td><td>${pctS(x.success_rate)}</td><td>${eurFine(x.eur_per_task)}</td><td>${num(x.tasks)}</td></tr>`).join('')}</tbody></table></div></section>`;
+  return `<section class="csec"><h3>${ui('Window', 'Fenêtre')} ${esc(a.window || '1h')} · ${num(g.tasks)} ${ui('tasks', 'tâches')} · ${ui('success', 'succès')} ${pctS(g.success_rate)}</h3><button type="button" class="mini" data-activity-open>${icon('clock')} ${consoleTitle('activity')}</button><div class="ctiles">
+    ${tile('TTFT p95', g.ttft_ms_p95, s.ttft_ms_p95, ' ms', 'ttft_ms_p95')}${tile(ui('Tokens per task p95', 'Tokens par tâche p95'), g.tokens_per_task_p95, s.tokens_per_task_p95, '', 'tokens_per_task_avg')}${tile(ui('Vector latency p95', 'Latence vectorielle p95'), g.vector_latency_ms_p95, s.vector_latency_ms_p95, ' ms', 'vector_latency_ms_p95')}
+    <div class="ctile"><b>${num(g.ttft_ms_p50)} ms</b><span>TTFT p50</span></div><div class="ctile"><b>${num(g.tokens_per_task_avg)}</b><span>${ui('tokens per task (average)', 'tokens par tâche (moyenne)')}</span></div><div class="ctile"><b>${num(g.vector_latency_ms_p50)} ms</b><span>${ui('vector latency p50', 'latence vectorielle p50')}</span></div></div></section>
+    <section class="csec"><h3>${ui('By agent', 'Par agent')}</h3><div class="ctable-wrap"><table class="ctable"><thead><tr><th>Agent</th><th>Use case</th><th>TTFT p95</th><th>${ui('Tokens/task p95', 'Tokens/tâche p95')}</th><th>${ui('Vector latency p95', 'Latence vect. p95')}</th><th>${ui('Success', 'Succès')}</th><th>${ui('Cost/task', 'Coût/tâche')}</th><th>${ui('Tasks', 'Tâches')}</th></tr></thead><tbody>${(a.by_agent || []).map(x => `<tr class="${(x.breaches || []).length ? 'row-warn' : ''}"><td><b>${esc(SNAP?.catalog?.agents?.find(c => c.id === x.agent)?.name || x.agent)}</b>${(x.breaches || []).length ? `<small class="warn">⚠ ${esc(x.breaches.map(b => localizedLabel(AGENT_SLO_BREACHES, b)).join(', '))}</small>` : ''}</td><td>${ucCode(x.usecase)}</td><td>${num(x.ttft_ms_p95)} ms</td><td>${num(x.tokens_per_task_p95)}</td><td>${num(x.vector_latency_ms_p95)} ms</td><td>${pctS(x.success_rate)}</td><td>${eurFine(x.eur_per_task)}</td><td>${num(x.tasks)}</td></tr>`).join('')}</tbody></table></div></section>`;
 }
 function secCatalog() {
   const c = SNAP?.catalog || {}, tabs = [['models', 'Modèles'], ['agents', 'Agents'], ['tools', 'Outils'], ['repos', 'Dépôts intégrés']];
   const f = catalogFilter, items = c[f] || [];
   const card = {
-    models: m => `<b>${esc(m.id)}</b><small>${esc(m.provider || '')} · ${esc(TARGET_FR[m.hosting] || m.hosting || '')} · ${esc(m.license || '')}</small><small>alias <code>${esc(m.alias || '')}</code> · contexte ${num(m.context_k)} k · ${m.price_in_per_1k != null ? eur(m.price_in_per_1k) + ' / ' + eur(m.price_out_per_1k) + ' par 1k' : 'coût GPU'}</small><small>classes autorisées : ${esc((m.allowed_classes || []).join(', '))}${m.eval ? ' · éval ' + Object.entries(m.eval).map(([k, v]) => `${esc(k)} ${num(v, 2)}`).join(', ') : ''}</small>`,
+    models: m => `<b>${esc(m.id)}</b><small>${esc(m.provider || '')} · ${esc(localizedLabel(PLACEMENT_TARGETS, m.hosting, m.hosting || ''))} · ${esc(m.license || '')}</small><small>alias <code>${esc(m.alias || '')}</code> · ${ui('context', 'contexte')} ${num(m.context_k)} k · ${m.price_in_per_1k != null ? `${eur(m.price_in_per_1k)} / ${eur(m.price_out_per_1k)} ${ui('per 1k', 'par 1k')}` : ui('GPU cost', 'coût GPU')}</small><small>${ui('allowed classes', 'classes autorisées')} : ${esc((m.allowed_classes || []).join(', '))}${m.eval ? ui(' · eval ', ' · éval ') + Object.entries(m.eval).map(([k, v]) => `${esc(k)} ${num(v, 2)}`).join(', ') : ''}</small>`,
     agents: a => `<b>${esc(a.name || a.id)}</b><small>${esc(a.framework || '')} ${esc(a.version || '')} · ${ucCode(a.usecase)} · ${tierChip({ tier: a.risk_tier })}</small><small>outils : ${esc((a.tools || []).join(', '))}</small><small>éval : ${esc(a.eval_status || '—')} · responsable ${esc(personName(a.owner))}</small>`,
     tools: t => `<b>${esc(t.name || t.id)}</b><small>${esc(t.kind || '')} · permissions ${esc((t.permissions || []).join(', '))} · risque ${esc(t.risk || '')}</small><small>responsable ${esc(personName(t.owner))}</small>${t.shadow_policy ? `<small>${ui('Observatory policy', 'Politique Observatoire')} · ${esc(shadowLabel(SHADOW_POLICY, t.shadow_policy.status))}${t.shadow_policy.alternative ? ` · ${ui('Approved alternative', 'Alternative approuvée')} ${esc(t.shadow_policy.alternative)}` : ''}</small>` : ''}${c.shadow_governance === 'unavailable' ? `<small>${ui('Observatory policy unavailable', 'Politique Observatoire indisponible')}</small>` : ''}`,
     repos: r => `<b>${esc(r.name || r.id)}</b><small>${esc(r.pillar || '')} · ${esc(r.license || 'sans licence')} · ${esc({ integrated: 'intégré (sous-module)', to_relicense: 'à relicencier en MIT', excluded: 'exclu' }[r.status] || r.status || '')}</small>${r.description ? `<small>${esc(r.description)}</small>` : ''}<small>${r.submodule ? `<code>${esc(r.submodule)}</code>${r.commit ? ` @ <code>${esc(r.commit)}</code>` : ''} · ` : ''}secrets : ${esc({ clean: 'aucun', triaged: 'faux positifs triés' }[r.secrets_scan] || r.secrets_scan || '—')}</small>${r.secrets_detail ? `<small title="${esc(r.secrets_detail)}">${esc(r.secrets_detail)}</small>` : ''}${/^https:\/\/github\.com\//.test(r.url || '') ? `<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Voir le dépôt</a>` : ''}`,
@@ -4908,17 +5003,16 @@ function secCatalog() {
 function secSkills() {
   const k = SNAP?.skills || {}, r = SNAP?.rnd || {}, today = todayISO();
   const ses = (k.sessions || []).filter(s => s.date >= today).sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
-  const stages = [['explore', 'Exploration'], ['prototype', 'Prototype'], ['evaluate', 'Évaluation'], ['transfer', 'Transfert'], ['stopped', 'Arrêtée']];
-  return `<section class="csec"><div class="cbanner">${esc(k.art4?.note || 'Art. 4 AI Act : mesures de maîtrise de l’IA adaptées au rôle, au risque et au contexte.')}</div>
-    <h3>Couverture des parcours <em>${pctS(k.coverage)}</em></h3><div class="cbars">${(k.roles || []).map(x => `<div><span>${esc(ROLES[x.role]?.label || x.role)}</span><i><em style="width:${clamp((x.coverage || 0) * 100, 0, 100)}%"></em></i><b>${pctS(x.coverage)}</b></div>`).join('')}</div>
-    ${(k.people || []).some(p => (p.overdue || []).length) ? `<p class="cnote">En retard : ${(k.people || []).filter(p => (p.overdue || []).length).map(p => `${esc(personName(p.person))} (${p.overdue.length})`).join(', ')}</p>` : ''}</section>
-    <section class="csec"><h3>Sessions Skills Lab à venir <em>${ses.length}</em></h3><ul class="clist">${ses.slice(0, 8).map(s => { const m = (k.modules || []).find(x => x.id === s.module);
-      return `<li><b>${esc(m?.title || s.title || s.module)}</b><span>${esc(shortDate(s.date))} · ${esc(s.start)}–${esc(s.end)} · formateur ${esc(personName(s.trainer))} · ${(s.attendees || []).length} inscrit(s)${m?.format ? ' · ' + esc(m.format) : ''}</span><button type="button" class="mini" data-cact="s1" data-date="${esc(s.date)}">Voir la salle</button></li>`; }).join('') || '<li>Aucune session.</li>'}</ul></section>
-    <section class="csec"><h3>R&D Lab · ${num(r.gpu_hours_month)} h GPU / mois</h3>
-      ${language === 'en'
-        ? '<a class="mini" href="./docs/flow-lab.html?lang=en">Open the Flow Lab</a>'
-        : '<a class="mini" href="./docs/flow-lab.html?lang=fr">Ouvrir le laboratoire de flux</a>'}
-      <div class="kanban">${stages.map(([id, l]) => `<div><h4>${l}</h4>${(r.experiments || []).filter(e => e.stage === id).map(e => `<div class="kcard"><b>${esc(e.title)}</b><small>${esc(e.id)} · ${esc(personName(e.owner))}${e.linked_usecase ? ' · ' + ucCode(e.linked_usecase) : ''} · ${num(e.gpu_hours)} h GPU</small>${e.transfer_criteria ? `<small>Transfert si : ${esc(e.transfer_criteria)}</small>` : ''}</div>`).join('')}</div>`).join('')}</div></section>`;
+  const stages = { explore: ['Exploration', 'Exploration'], prototype: ['Prototype', 'Prototype'], evaluate: ['Evaluation', 'Évaluation'], transfer: ['Transfer', 'Transfert'], stopped: ['Stopped', 'Arrêtée'] };
+  const overdue = (k.people || []).filter(p => (p.overdue || []).length);
+  return `<section class="csec"><div class="cbanner">${esc(k.art4?.note || ui('AI Act Article 4. Tailor AI literacy measures to the role, risk and context.', 'Art. 4 AI Act. Adaptez les mesures de maîtrise de l’IA au rôle, au risque et au contexte.'))}</div>
+    <h3>${ui('Learning path coverage', 'Couverture des parcours')} <em>${pctS(k.coverage)}</em></h3><div class="cbars">${(k.roles || []).map(x => `<div><span>${esc(ROLES[x.role]?.label || x.role)}</span><i><em style="width:${clamp((x.coverage || 0) * 100, 0, 100)}%"></em></i><b>${pctS(x.coverage)}</b></div>`).join('')}</div>
+    ${overdue.length ? `<p class="cnote">${ui('Overdue', 'En retard')} · ${overdue.map(p => `${esc(personName(p.person))} (${p.overdue.length})`).join(', ')}</p>` : ''}</section>
+    <section class="csec"><h3>${ui('Upcoming Skills Lab sessions', 'Sessions Skills Lab à venir')} <em>${ses.length}</em></h3><ul class="clist">${ses.slice(0, 8).map(s => { const m = (k.modules || []).find(x => x.id === s.module);
+      return `<li><b>${esc(m?.title || s.title || s.module)}</b><span>${esc(shortDate(s.date))} · ${esc(s.start)}–${esc(s.end)} · ${ui('trainer', 'formateur')} ${esc(personName(s.trainer))} · ${(s.attendees || []).length} ${ui('enrolled', 'inscrit(s)')}${m?.format ? ' · ' + esc(m.format) : ''}</span><button type="button" class="mini" data-cact="s1" data-date="${esc(s.date)}">${ui('View room', 'Voir la salle')}</button></li>`; }).join('') || `<li>${ui('No upcoming sessions.', 'Aucune session à venir.')}</li>`}</ul></section>
+    <section class="csec"><h3>R&D Lab · ${num(r.gpu_hours_month)} ${ui('GPU h / month', 'h GPU / mois')}</h3>
+      <a class="mini" href="./docs/flow-lab.html?lang=${ui('en', 'fr')}">${ui('Open the Flow Lab', 'Ouvrir le laboratoire de flux')}</a>
+      <div class="kanban">${Object.entries(stages).map(([id, label]) => `<div><h4>${ui(...label)}</h4>${(r.experiments || []).filter(e => e.stage === id).map(e => `<div class="kcard"><b>${esc(e.title)}</b><small>${esc(e.id)} · ${esc(personName(e.owner))}${e.linked_usecase ? ' · ' + ucCode(e.linked_usecase) : ''} · ${num(e.gpu_hours)} ${ui('GPU h', 'h GPU')}</small>${e.transfer_criteria ? `<small>${ui('Transfer criteria', 'Critères de transfert')} · ${esc(e.transfer_criteria)}</small>` : ''}</div>`).join('')}</div>`).join('')}</div></section>`;
 }
 function secGrafana() {
   const g = SNAP?.grafana || {};
@@ -4927,20 +5021,25 @@ function secGrafana() {
 }
 function renderFactoryPanel() {
   const sn = SNAP || {}, reg = sn.registry || [], c = sn.costs || {}, p = sn.pipeline || {}, a = sn.agentops?.global || {}, slo = sn.agentops?.slo || {}, k = sn.skills || {};
+  const high = reg.filter(u => u.risk?.tier === 'high').length, review = reg.filter(u => u.risk?.reevaluation_required).length;
+  const blocked = (p.items || []).filter(i => i.blocked_by).length, rollbacks = (p.rollbacks || []).length;
+  const alerts = (c.alerts || []).length, events = (sn.dataloop?.events || []).length, experiments = (sn.rnd?.experiments || []).length;
+  const catalog = { models: ['models', 'modèles'], agents: ['agents', 'agents'], tools: ['tools', 'outils'], repos: ['repositories', 'dépôts'] };
+  const dashboards = (sn.grafana?.dashboards || []).length;
   const rows = [
-    ['registry', `${reg.length} use cases · ${reg.filter(u => u.risk?.tier === 'high').length} haut risque · ${reg.filter(u => u.risk?.reevaluation_required).length} réévaluation(s)`],
+    ['registry', ui(`${reg.length} use cases · ${high} high risk · ${review} requiring review`, `${reg.length} use cases · ${high} à haut risque · ${review} à réévaluer`)],
     ['shadow', ui('Shadow AI signals, adoption and governance', 'Signaux Shadow AI, adoption et gouvernance')],
     ['ideas', ui('Post notes and explore ideas by theme', 'Déposer des post-it et explorer les idées par thème')],
-    ['finops', `${eur(c.totals?.total_eur)} / ${num(c.days || 30)} j · ${(c.alerts || []).length} alerte(s) de gaspillage`],
-    ['pipeline', `${(p.items || []).filter(i => i.blocked_by).length} déploiement(s) bloqué(s) · ${(p.rollbacks || []).length} rollback(s)`],
-    ['dataloop', `${(sn.dataloop?.events || []).length} événement(s) · réentraînement désactivé`],
-    ['placement', (sn.placement?.targets || []).map(t => `${TARGET_FR[t.id] || t.id} ${t.status === 'up' ? '✓' : t.status === 'down' ? '✕' : '~'}`).join(' · ') || '—'],
-    ['agentops', `TTFT p95 ${num(a.ttft_ms_p95)} ms ${a.ttft_ms_p95 > slo.ttft_ms_p95 ? '⚠' : '✓'} · vecteur p95 ${num(a.vector_latency_ms_p95)} ms`],
-    ['catalog', ['models', 'agents', 'tools', 'repos'].map(x => `${(sn.catalog?.[x] || []).length} ${{ models: 'modèles', agents: 'agents', tools: 'outils', repos: 'dépôts' }[x]}`).join(' · ')],
-    ['skills', `couverture ${pctS(k.coverage)} · ${(sn.rnd?.experiments || []).length} expériences R&D`],
-    ['grafana', sn.grafana?.available ? `${(sn.grafana.dashboards || []).length} tableaux provisionnés` : 'non joignable (démo)'],
+    ['finops', `${eur(c.totals?.total_eur)} / ${num(c.days || 30)} ${ui(`days · ${alerts} waste alerts`, `j · ${alerts} alerte(s) de gaspillage`)}`],
+    ['pipeline', ui(`${blocked} blocked deployments · ${rollbacks} rollbacks`, `${blocked} déploiement(s) bloqué(s) · ${rollbacks} retour(s) arrière`)],
+    ['dataloop', ui(`${events} events · retraining disabled`, `${events} événement(s) · réentraînement désactivé`)],
+    ['placement', (sn.placement?.targets || []).map(t => `${localizedLabel(PLACEMENT_TARGETS, t.id)} ${t.status === 'up' ? '✓' : t.status === 'down' ? '✕' : '~'}`).join(' · ') || '—'],
+    ['agentops', `TTFT p95 ${num(a.ttft_ms_p95)} ms ${a.ttft_ms_p95 > slo.ttft_ms_p95 ? '⚠' : '✓'} · ${ui('vector p95', 'vecteur p95')} ${num(a.vector_latency_ms_p95)} ms`],
+    ['catalog', Object.entries(catalog).map(([key, label]) => `${(sn.catalog?.[key] || []).length} ${ui(...label)}`).join(' · ')],
+    ['skills', ui(`coverage ${pctS(k.coverage)} · ${experiments} R&D experiments`, `couverture ${pctS(k.coverage)} · ${experiments} expériences R&D`)],
+    ['grafana', sn.grafana?.available ? ui(`${dashboards} provisioned dashboards`, `${dashboards} tableaux provisionnés`) : ui('Unavailable in this view', 'Indisponible dans cette vue')],
   ];
-  setHTMLKeepFocus($('factoryPanel'), `<div class="grp"><div class="grp-h">Console de l’usine ${sourceBadge()}</div><ul class="plist">${rows.map(([key, txt]) =>
+  setHTMLKeepFocus($('factoryPanel'), `<div class="grp"><div class="grp-h">${ui('Factory console', 'Console de l’usine')} ${sourceBadge()}</div><ul class="plist">${rows.map(([key, txt]) =>
     `<li><button type="button" class="srow-btn" data-csec="${key}">${icon(CONSOLE_SECTIONS[key].icon)}<span class="pmain"><span class="pname">${esc(consoleTitle(key))}</span><small>${esc(txt)}</small></span></button></li>`).join('')}</ul></div>`);
 }
 async function consoleAction(btn) {
@@ -5015,18 +5114,37 @@ function setLanguage(lang) {
   $('exerciseLaunch').textContent = ui('UC-04 workshop', 'Atelier UC-04');
   $('exercise2d').textContent = ui('2D workshop', 'Atelier 2D');
   $('exercise2d').href = `exercise/index.html?lang=${lang}`;
-  $('demoEntryTitle').textContent = ui('Explore the demo', 'Explorer la démo');
+  $('demoEntryKicker').textContent = ui('AI Factory · Public demo', 'AI Factory · Démo publique');
+  $('demoEntryTitle').textContent = ui('The AI operations floor', 'Le poste de pilotage de l’IA');
+  $('demoEntryCopy').textContent = ui('Explore projects, decisions and model flows in a fictional organization.',
+    'Explorez les projets, les décisions et les flux d’une organisation fictive.');
+  $('demoEntryActions').setAttribute('aria-label', ui('Demo paths', 'Parcours de la démo'));
+  $('demoTechLabel').textContent = ui('Technologies on GitHub', 'Technologies sur GitHub');
+  $('demoTech').href = `https://github.com/alebgl77/ai-factory/blob/main/${lang === 'en' ? 'README.md' : 'README.fr.md'}#technologies`;
   $('demoProjects').textContent = ui('Projects and tasks', 'Projets et tâches');
   $('demoDecision').textContent = ui('Decision Companion', 'Compagnon de décision');
   $('demoDecision').href = language === 'en' ? './companion/index.html?lang=en' : './companion/index.html?lang=fr';
   $('demoFlows').textContent = ui('AI Flow Lab', 'Laboratoire de flux');
   $('demoFlows').href = language === 'en' ? './docs/flow-lab.html?lang=en' : './docs/flow-lab.html?lang=fr';
+  $('demoRoadmap').href = language === 'en' ? './docs/roadmap.html?lang=en' : './docs/roadmap.html?lang=fr';
+  $('demoRoadmap').setAttribute('aria-label', ui(
+    'Roadmap. First, identity and testing. Next, skills and ERP. Explore, cost and browser agents.',
+    'Feuille de route. En premier, identités et tests. Ensuite, compétences et ERP. À explorer, coûts et navigateur.'));
+  $('demoRoadmapTitle').textContent = ui('Roadmap', 'Feuille de route');
+  $('demoRoadmapFirst').textContent = ui('Identity & testing', 'Identités & tests');
+  $('demoRoadmapNext').textContent = ui('Skills & ERP', 'Compétences & ERP');
+  $('demoRoadmapExplore').textContent = ui('Cost & browser agents', 'Coûts & navigateur');
   $('fallbackSpaces').textContent = ui('Browse spaces', 'Consulter les espaces');
   if ($('loading').dataset.scene) renderSceneStatus($('loading').dataset.scene);
   $('tabTeam').textContent = ui('Team', 'Équipe');
   $('tabSpaces').textContent = ui('Spaces', 'Espaces');
   $('tabPilot').textContent = ui('Planning', 'Pilotage');
   $('tabFactory').textContent = ui('Factory', 'Usine');
+  $('cKicker').textContent = ui('AI Factory console', 'Console AI Factory');
+  $('cClose').setAttribute('aria-label', ui('Close console', 'Fermer la console'));
+  $('cTabs').setAttribute('aria-label', ui('Console sections', 'Sections de la console'));
+  $('saveWarn').textContent = ui('not saved', 'non sauvegardé');
+  $('saveWarn').title = ui('Browser storage is unavailable. Changes will be lost when you close the page.', 'Stockage local indisponible. Les modifications seront perdues à la fermeture.');
   $('viewTop').textContent = ui('Floor plan', 'Plan');
   $('viewLabels').textContent = ui('Labels', 'Étiquettes');
   $('pegBtn').querySelector('span').textContent = ui('Visit', 'Visite');
@@ -5331,11 +5449,11 @@ function showTooltip(h, e) {
     html += `<div class="tt-sub" style="opacity:.75">Cliquer pour gérer</div>`;
   } else if (h.kind === 'rack') {
     const d = RACK?.dev, n = RACK?.sensitive || 0;
-    html = `<b>GPU local · inférence des données sensibles</b><div class="tt-sub">${d ? `${esc(gpuName(d))} · ${Math.round(d.util_pct)} % · ${Math.round(d.temp_c)} °C · ${Math.round(d.power_w)} W · ${(+d.mem_used_gb).toFixed(1)}/${(+d.mem_total_gb).toFixed(0)} Go` : 'Pas de télémétrie'}<br>source : ${RACK?.source === 'dcgm' ? 'DCGM (réel)' : 'simulateur'}${n ? ` · ${n} poste${n > 1 ? 's' : ''} Lab sur UC sensible` : ''}</div><div class="tt-sub" style="opacity:.75">Cliquer pour la console Placement</div>`;
+    html = `<b>${ui('Local GPU · sensitive inference', 'GPU local · inférence des données sensibles')}</b><div class="tt-sub">${d ? `${esc(gpuName(d))} · ${Math.round(d.util_pct)} % · ${Math.round(d.temp_c)} °C · ${Math.round(d.power_w)} W · ${(+d.mem_used_gb).toFixed(1)}/${(+d.mem_total_gb).toFixed(0)} ${ui('GB', 'Go')}` : ui('No telemetry', 'Pas de télémétrie')}<br>source : ${RACK?.source === 'dcgm' ? ui('DCGM (live)', 'DCGM (réel)') : ui('simulator', 'simulateur')}${n ? ui(` · ${n} Lab stations on sensitive use cases`, ` · ${n} poste${n > 1 ? 's' : ''} Lab sur UC sensible`) : ''}</div><div class="tt-sub" style="opacity:.75">${ui('Click to open Hybrid placement', 'Cliquer pour ouvrir le Placement hybride')}</div>`;
   } else if (h.kind === 'console') {
     html = `<b>${esc(consoleTitle(h.id))}</b><div class="tt-sub">${ui('Click to open the factory console', 'Cliquer pour ouvrir la console de l’usine')}</div>`;
   } else if (h.kind === 'board') {
-    html = `<b>Board portefeuille AI Factory</b><div class="tt-sub">Use cases par phase et présence des squads — cliquer pour ouvrir le Pilotage</div>`;
+    html = `<b>${ui('AI Factory portfolio board', 'Tableau de bord du portefeuille AI Factory')}</b><div class="tt-sub">${ui('Use cases by stage and squad attendance. Click to open Planning.', 'Use cases par phase et présence des équipes. Cliquer pour ouvrir le Pilotage.')}</div>`;
   } else if (h.kind === 'person') {
     const e = Store.emp(h.id), b = snap.res[h.res]?.booking;
     html = `<b>${esc(e?.name || '')}</b><div class="tt-sub">${esc(e?.role || '')}${b && b.employeeId === h.id ? ` · ${fmt(b.start)}–${fmt(b.end)}` : ''}${b?.ucId && UC[b.ucId] ? `<br>${esc(UC[b.ucId].code)} · ${esc(UC[b.ucId].name)}` : ''}</div><div class="tt-sub" style="opacity:.75">Cliquer pour voir son poste</div>`;
@@ -5455,12 +5573,14 @@ function fillUcSelects(ucId, act) {
     const selected = u.id === ucId;
     return new Option(`${u.sensitive ? 'Sensible · ' : ''}${u.code} · ${u.name}`, u.id, selected, selected);
   });
-  F.uc.replaceChildren(...(Remote.private ? [] : [new Option('Hors use case / interne', '')]), ...options);
+  F.uc.replaceChildren(...(Remote.private ? [] : [new Option(ui('Internal / no use case', 'Hors use case / interne'), '')]), ...options);
   F.act.innerHTML = Object.entries(ACTIVITIES).map(([k, l]) => `<option value="${k}"${k === act ? ' selected' : ''}>${esc(l)}</option>`).join('');
 }
 function updateFormInfo() {
   const u = UC[F.uc.value], r = RES[S.selected];
-  F.info.textContent = u?.sensitive && r?.type === 'desk' && r.zone !== SECURE_ZONE ? `${u.code} manipule des données client sensibles : la politique de l’AI Factory recommande le Lab sécurisé (L1 / L2).` : '';
+  F.info.textContent = u?.sensitive && r?.type === 'desk' && r.zone !== SECURE_ZONE
+    ? ui(`${u.code} handles sensitive customer data. AI Factory policy recommends the secure Lab (L1 / L2).`,
+      `${u.code} manipule des données client sensibles. La politique de l’AI Factory recommande le Lab sécurisé (L1 / L2).`) : '';
 }
 let attendeesSel = new Set();
 const clearErr = () => { F.err.textContent = ''; delete F.err.dataset.pastOk; delete F.err.dataset.visioOk; };
@@ -6041,7 +6161,7 @@ function bindUI() {
   });
   window.onStoreHealth = ok => {
     $('saveWarn').hidden = ok;
-    if (!ok) toast('Sauvegarde locale indisponible : les modifications seront perdues à la fermeture');
+    if (!ok) toast(ui('Browser storage is unavailable. Changes will be lost when you close the page.', 'Stockage local indisponible. Les modifications seront perdues à la fermeture.'));
   };
 }
 
@@ -6183,7 +6303,7 @@ async function boot() {
   } catch (err) {
     console.error(err);
     const l = $('loading'); l.classList.remove('done'); l.classList.add('error');
-    l.querySelector('p').innerHTML = 'Données locales illisibles. <button type="button" class="btn primary" id="wipeBtn">Réinitialiser les données</button>';
+    l.querySelector('p').innerHTML = `${ui('Browser data could not be read.', 'Les données locales sont illisibles.')} <button type="button" class="btn primary" id="wipeBtn">${ui('Reset data', 'Réinitialiser les données')}</button>`;
     $('wipeBtn').onclick = () => { try { localStorage.removeItem(STORE_KEY); } catch (e) {} location.reload(); };
     window.__appReady = true; clearTimeout(window.__bootTimer);
     return;
@@ -6191,10 +6311,14 @@ async function boot() {
   if (demoPortraits()) {
     $('app').dataset.demoEntry = '';
     $('demoEntry').hidden = false;
+    const artwork = $('demoEntryArtwork');
+    artwork.after(artwork.content.cloneNode(true));
   }
   window.onStoreHealth(Store.ok);
-  if (Store.recovered) toast('Données locales illisibles : copie conservée (aiFactoryRef.v2.backup), démo rechargée');
-  else if (Store.dropped) toast(`${Store.dropped} référence(s) à un use case ou une activité inconnus retirée(s) · copie conservée (aiFactoryRef.v2.backup)`);
+  if (Store.recovered) toast(ui('Browser data could not be read. The demo was reloaded and a backup was kept (aiFactoryRef.v2.backup).',
+    'Les données locales sont illisibles. La démo a été rechargée et une copie a été conservée (aiFactoryRef.v2.backup).'));
+  else if (Store.dropped) toast(ui(`${Store.dropped} unknown use-case or activity references were removed. A backup was kept (aiFactoryRef.v2.backup).`,
+    `${Store.dropped} référence(s) à un use case ou une activité inconnus ont été retirées. Une copie a été conservée (aiFactoryRef.v2.backup).`));
   if (apiReachable()) {
     setInterval(() => pollSnapshot(), 30000);
     window.addEventListener('online', () => pollSnapshot());

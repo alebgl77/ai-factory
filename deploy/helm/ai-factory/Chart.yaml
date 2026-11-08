@@ -1,0 +1,7 @@
+apiVersion: v2
+name: ai-factory
+description: Virtual AI Factory dashboard, API, and authentication edge
+type: application
+version: 0.1.0
+appVersion: "source"
+kubeVersion: ">=1.29.0-0"

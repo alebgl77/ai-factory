@@ -1,6 +1,6 @@
 # Architecture
 
-*[English version](../ARCHITECTURE.md)*
+[English](../ARCHITECTURE.md) · **Français** · [Documentation technique](README.md)
 
 Virtual AI Factory, générique et publiable sous licence MIT. Toutes les données de
 démonstration sont fictives et chaque élément (profils, use cases, catalogue, tarifs, seuils,
@@ -24,7 +24,7 @@ technique, de supervision et de collaboration. Les droits de production se confi
 
 [![Plan annoté des dix zones de travail de la Factory](../../dashboard/docs/media/floor-plan.svg)](../../dashboard/docs/media/floor-plan.svg)
 
-Ouvrez [le plan interactif HTML](../../dashboard/docs/architecture.html) dans un navigateur
+Ouvrez [le plan interactif](https://alebgl77.github.io/ai-factory/docs/architecture.html) dans un navigateur
 pour consulter la fiche de chaque zone, la matrice BU et les circuits d’action.
 
 ## Vue d'ensemble
@@ -69,8 +69,8 @@ pour consulter la fiche de chaque zone, la matrice BU et les circuits d’action
 
 1. **Snapshot** : le dashboard appelle `GET /api/v1/snapshot?lang=en|fr`. L'API agrège la configuration
    (`config/`), l'état modifiable (`/data`) et les sources live (Prometheus, Grafana, Langfuse,
-   LiteLLM, Qdrant). Une source injoignable bascule sur le générateur de démo, signalé par
-   `meta.mode` (`demo`, `mixed`, `live`). Chaque texte lisible est rendu dans la langue demandée
+   LiteLLM, Qdrant). En mode `auto`, une source indisponible peut utiliser le générateur de démo.
+   En mode `never`, l’API omet les données indisponibles. Les textes traduisibles sont rendus dans la langue demandée
    (par défaut `FACTORY_DEFAULT_LANG`, lui-même `en` par défaut ; voir
    [CONTRACT.md](../CONTRACT.md), section 9, en anglais). Ouvert en `file://`, le dashboard utilise
    les snapshots de démo embarqués, un par langue (`scripts/build_snapshot.py`).

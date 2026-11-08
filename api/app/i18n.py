@@ -130,8 +130,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "GPU local dégradé : latence accrue acceptée, aucun repli externe",
     },
     "placement.reason.local_down_queued": {
-        "en": "local GPU unavailable: queued, never sent to the cloud or the VPS",
-        "fr": "GPU local indisponible : mise en file d'attente, aucun envoi vers le cloud ou le VPS",
+        "en": "local GPU unavailable. Wait for it to recover before retrying",
+        "fr": "GPU local indisponible. Attendez son rétablissement avant de réessayer",
     },
     "placement.reason.target_down": {"en": "{target} unavailable", "fr": "{target} indisponible"},
     "placement.reason.vps_unknown_size": {
@@ -143,8 +143,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "modèle ≥ {need:g} B requis > {max:g} B max VPS",
     },
     "placement.reason.no_target_queued": {
-        "en": "no target available: queued",
-        "fr": "aucune cible disponible : mise en file d'attente",
+        "en": "no target available. Wait for a target to recover before retrying",
+        "fr": "aucune cible disponible. Attendez le rétablissement d’une cible avant de réessayer",
     },
     "placement.reason.degraded_chosen": {
         "en": "{target} degraded, chosen for lack of a healthy target",

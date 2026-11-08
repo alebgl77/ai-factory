@@ -33,7 +33,7 @@
 # Three.js is vendored by the dashboard image (DASHBOARD_THREE_SOURCE=vendored); only with
 # DASHBOARD_THREE_SOURCE=cdn does the dashboard policy allow https://cdn.jsdelivr.net.
 {
-	admin localhost:2019
+	admin {$FACTORY_CADDY_ADMIN:localhost:2019}
 	log {
 		output stdout
 		format json
@@ -147,9 +147,53 @@
 	import strip_auth_request
 }
 
+(sso-upstream-caddy) {
+}
+
+# Ingress terminates TLS. Use the configured public origin for OAuth, independently of
+# forwarding hints supplied by the browser or an intermediate proxy.
+(sso-upstream-ingress) {
+	header_up X-Forwarded-Proto https
+	header_up X-Forwarded-Host {$FACTORY_HOST:localhost}
+	header_up -X-Forwarded-Port
+	header_up -X-Auth-Request-Redirect
+}
+
+(api-upstream-caddy) {
+}
+
+(api-upstream-ingress) {
+	# API write handlers check Origin against the public scheme and Host.
+	header_up Host {$FACTORY_HOST:localhost}
+	header_up X-Forwarded-Proto https
+	header_up X-Forwarded-Host {$FACTORY_HOST:localhost}
+	header_up -X-Forwarded-Port
+}
+
+(api-origin-caddy) {
+}
+
+(api-origin-ingress) {
+	@foreign_api_origin {
+		method POST PUT PATCH DELETE
+		not header !Origin
+		expression `{http.request.header.Origin} != 'https://{$FACTORY_HOST:localhost}'`
+	}
+	respond @foreign_api_origin 403
+}
+
+(sso-page-redirect-caddy) {
+	redir * /oauth2/sign_in?rd={scheme}://{host}{uri} 302
+}
+
+(sso-page-redirect-ingress) {
+	redir * /oauth2/sign_in?rd=https://{$FACTORY_HOST:localhost}{uri} 302
+}
+
 (sso_forward_auth) {
 	uri /oauth2/auth
 	header_up X-Real-IP {remote_host}
+	import sso-upstream-{$FACTORY_TLS_TERMINATION:caddy}
 	copy_headers {
 		X-Auth-Request-User>X-Forwarded-User
 		X-Auth-Request-Email>X-Forwarded-Email
@@ -168,6 +212,9 @@
 		import csp-{$DASHBOARD_THREE_SOURCE:vendored}
 		reverse_proxy {$SSO_UPSTREAM:oauth2-proxy:4180} {
 			header_up X-Real-IP {remote_host}
+			import sso-upstream-{$FACTORY_TLS_TERMINATION:caddy}
+			header_up -X-Forwarded-Uri
+			header_up -X-Forwarded-Method
 			header_up -X-Forwarded-User
 			header_up -X-Forwarded-Email
 			header_up -X-Forwarded-Groups
@@ -185,7 +232,7 @@
 		import sso_forward_auth
 		@unauthenticated status 401
 		handle_response @unauthenticated {
-			redir * /oauth2/sign_in?rd={scheme}://{host}{uri} 302
+			import sso-page-redirect-{$FACTORY_TLS_TERMINATION:caddy}
 		}
 	}
 }
@@ -217,9 +264,11 @@ http://127.0.0.1:2018 {
 	handle /api/* {
 		# The API's own security headers apply here, not the dashboard CSP (see csp-api).
 		import csp-api
+		import api-origin-{$FACTORY_TLS_TERMINATION:caddy}
 		# api-identity: alias of the API on the edge-identity network (fixed edge address).
 		reverse_proxy {$API_UPSTREAM:api-identity:8000} {
 			header_up X-Real-IP {remote_host}
+			import api-upstream-{$FACTORY_TLS_TERMINATION:caddy}
 		}
 	}
 
@@ -229,7 +278,7 @@ http://127.0.0.1:2018 {
 	}
 	handle {
 		import csp-{$DASHBOARD_THREE_SOURCE:vendored}
-		reverse_proxy dashboard:80 {
+		reverse_proxy {$DASHBOARD_UPSTREAM:dashboard:80} {
 			header_up X-Real-IP {remote_host}
 		}
 	}
@@ -275,23 +324,38 @@ http://127.0.0.1:2018 {
 	}
 }
 
-{$FACTORY_SCHEME:http}://{$FACTORY_HOST:localhost} {
-	import app
+(compose_sites) {
+	{$FACTORY_SCHEME:http}://{$FACTORY_HOST:localhost} {
+		import app
+	}
+	{$FACTORY_SCHEME:http}://grafana.{$FACTORY_HOST:localhost} {
+		import grafana
+	}
+	{$FACTORY_SCHEME:http}://langfuse.{$FACTORY_HOST:localhost} {
+		import langfuse
+	}
+	# Alternate local ports (published on 127.0.0.1 only by docker-compose.yml).
+	http://:3001 {
+		import grafana
+	}
+	http://:3002 {
+		import langfuse
+	}
 }
 
-{$FACTORY_SCHEME:http}://grafana.{$FACTORY_HOST:localhost} {
-	import grafana
+(kubernetes_demo_sites) {
+	http://:8080 {
+		import app
+	}
 }
 
-{$FACTORY_SCHEME:http}://langfuse.{$FACTORY_HOST:localhost} {
-	import langfuse
+(kubernetes_private_sites) {
+	http://{$FACTORY_HOST:localhost}:8080 {
+		import app
+	}
+	http://:8080 {
+		respond 421
+	}
 }
 
-# Alternate local ports (published on 127.0.0.1 only by docker-compose.yml).
-http://:3001 {
-	import grafana
-}
-
-http://:3002 {
-	import langfuse
-}
+import {$FACTORY_CADDY_SITE_LAYOUT:compose_sites}

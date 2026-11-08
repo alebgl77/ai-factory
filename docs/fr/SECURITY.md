@@ -249,9 +249,9 @@ Vérifier : le smoke test contrôle « Grafana token absent from every browser-f
 Les use cases portent une classe de données de C1 (public) à C4 (secret). Les classes C3 et C4 sont
 traitées **uniquement** sur le GPU local :
 
-- **Politique de placement** (`api/app/engines/placement.py`) : une charge C3/C4 va sur le GPU
-  local ; si le GPU est indisponible, elle est **mise en file d'attente**, jamais envoyée au cloud
-  ni au VPS.
+- **Politique de placement** (`api/app/engines/placement.py`) : le simulateur sélectionne le GPU
+  local pour C3/C4. En cas d’indisponibilité, `queued` recommande d’attendre. Le simulateur
+  ne met aucune charge en file.
 - **Application à la passerelle** ([`compose/litellm/factory_callbacks.py`](../../compose/litellm/factory_callbacks.py)) :
   toute requête dont `metadata.sensitivity` vaut C3/C4 est redirigée vers `chat-sensitive`, quel
   que soit le modèle demandé. Cela couvre les complétions chat et texte et les API Responses et

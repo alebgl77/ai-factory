@@ -233,8 +233,9 @@ Verify: smoke test checks "Grafana token absent from every browser-facing respon
 Use cases carry a data class from C1 (public) to C4 (secret). Classes C3 and C4 are processed
 **only** on the local GPU:
 
-- **Placement policy** (`api/app/engines/placement.py`): a C3/C4 workload goes to the local GPU;
-  when the GPU is down it is **queued**, never sent to the cloud or the VPS.
+- **Placement policy** (`api/app/engines/placement.py`): the planner selects the local GPU
+  for C3/C4. During an outage, `queued` is a recommendation to wait. The planner
+  does not enqueue work.
 - **Gateway enforcement** ([`compose/litellm/factory_callbacks.py`](../compose/litellm/factory_callbacks.py)):
   every request whose `metadata.sensitivity` is C3/C4 is rerouted to `chat-sensitive`, whatever
   model it asked for. This covers chat and text completions and the Responses and Messages APIs

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MIT
+{
+	admin off
+	auto_https disable_redirects
+}
+
+https://factory.test:8443 {
+	tls /tls/tls.crt /tls/tls.key
+	reverse_proxy private-ai-factory:8080
+}
