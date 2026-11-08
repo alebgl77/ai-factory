@@ -1305,13 +1305,22 @@ if (!process.env.E2E_BASE_URL) {
           await roadmapInView());
         if (isMobile) {
           await demo.setViewportSize({ width: 320, height: 740 });
-          const compactFit = await roadmapLink.evaluate(link => {
-            const rect = link.getBoundingClientRect();
-            return innerWidth === 320 && document.documentElement.scrollWidth <= innerWidth &&
-              rect.left >= 0 && rect.right <= innerWidth && rect.height >= 44;
+          // Wait for mobile viewport emulation to settle, but report any persistent overflow with its actual bounds.
+          const resized = await demo.waitForFunction(() => innerWidth === 320, null, { timeout: 2000 }).then(() => true, () => false);
+          const bounds = () => roadmapLink.evaluate(async link => {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            const { left, right, top, bottom, height } = link.getBoundingClientRect();
+            return { left, right, top, bottom, height, innerWidth, innerHeight, scrollY,
+              clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth };
           });
-          await roadmapLink.scrollIntoViewIfNeeded();
-          check('the 320px mobile homepage roadmap fits horizontally and scrolls into view', compactFit && await roadmapInView());
+          const before = await bounds();
+          await roadmapLink.evaluate(link => link.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+          const after = await bounds();
+          const fits = box => box.innerWidth === 320 && box.scrollWidth <= box.innerWidth &&
+            box.left >= 0 && box.right <= box.innerWidth && box.height >= 44;
+          const compactVisible = resized && fits(before) && fits(after) && after.top >= -1 && after.bottom <= after.innerHeight + 1;
+          check('the 320px mobile homepage roadmap fits horizontally and scrolls into view', compactVisible,
+            compactVisible ? '' : JSON.stringify({ resized, before, after }));
           await demo.setViewportSize({ width: 390, height: 844 });
           await demo.evaluate(() => window.scrollTo(0, 0));
           await projects.tap();
