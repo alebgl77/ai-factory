@@ -11,7 +11,7 @@ from app.settings import Settings
 from tests.test_bu_access import CONFIG, ROLE_MAP, policy_file
 from tests.test_portfolio import (
     AUTONOMY, BINDINGS, GLOBAL, GROUPS, OPS_LEAD, PORTFOLIO_ROLES, REL, REL_AGENT, REL_ARCHITECT, REL_MANAGER,
-    assign, command, project, snapshot, task,
+    assign, command, post, project, snapshot, task,
 )
 from tests.test_security import proxy, who
 
@@ -225,10 +225,119 @@ def test_audited_workbench_fails_closed_while_journal_is_disabled(tmp_path):
     assert "Assessment report" not in str(events) and "independent" not in str(events)
 
 
-def test_workbench_off_keeps_existing_local_handoff(tmp_path):
-    api = client(tmp_path, mode="off")
-    row = submit_sensitive(api)
-    assert reconcile_portfolio_reviews(api.app) == 0
-    assert api.get(f"{WORKBENCH}/cases", headers=REVIEWER).status_code == 404
-    [waiting] = snapshot(api, REL_MANAGER)["tasks"]
-    assert waiting["id"] == row["id"] and waiting["status"] == "workbench"
+def _ready_sensitive(api, project_id, *, index=3, technical=False, dependencies=None):
+    row = task(api, index, project_id, REL, execution="sensitive", technical=technical,
+               dependency_ids=dependencies or [])
+    return assign(api, row, REL_MANAGER, "agent", "ag-support-supervisor")
+
+
+def _recover(api, row, actor=GLOBAL, *, status=200, revision=None):
+    return post(api, f"/tasks/{row['id']}/recover-workbench", actor,
+                {"revision": row["revision"] if revision is None else revision}, status)
+
+
+@pytest.mark.parametrize("mode", ["off", "protected_demo"])
+def test_workbench_requires_portfolio_mode_at_every_sensitive_gate(tmp_path, mode):
+    enabled = client(tmp_path)
+    project_id = project(enabled, unit=REL)
+    ready = _ready_sensitive(enabled, project_id)
+    active = command(enabled, _ready_sensitive(enabled, project_id, index=4), REL_AGENT, "start")
+    reviewing = command(enabled, _ready_sensitive(enabled, project_id, index=5, technical=True), REL_AGENT, "start")
+    reviewing = command(enabled, reviewing, REL_AGENT, "submit")
+    assert snapshot(enabled, REL_MANAGER)["capabilities"]["workbench_handoff"] is True
+
+    api = client(tmp_path, mode=mode)
+    before = snapshot(api, REL_MANAGER)
+    assert before["capabilities"]["workbench_handoff"] is False
+    for row, actor, action in ((ready, REL_AGENT, "start"), (active, REL_AGENT, "submit"),
+                               (reviewing, REL_ARCHITECT, "approve")):
+        assert row["workbench_required"] is True
+        assert command(api, row, actor, action, status=409)["detail"] == "workbench_handoff_unavailable"
+    assert snapshot(api, REL_MANAGER) == before
+    assert api.app.state.portfolio.pending_workbench_reviews(linked=False, after=0, limit=10) == []
+    rework = command(api, reviewing, REL_ARCHITECT, "request_changes")
+    assert rework["status"] == "ready" and not rework["start_authorized"]
+    with api.app.state.portfolio._transaction(write=False) as db:
+        assert db.execute("SELECT 1 FROM workbench_authors WHERE task_id = ?", (reviewing["id"],)).fetchone() is None
+
+    ordinary = task(api, 6, project_id, REL, execution="read_only", technical=True)
+    ordinary = assign(api, ordinary, REL_MANAGER, "agent", "ag-support-supervisor")
+    ordinary = command(api, ordinary, REL_MANAGER, "authorize_start")
+    ordinary = command(api, ordinary, REL_AGENT, "start")
+    ordinary = command(api, ordinary, REL_AGENT, "submit")
+    assert ordinary["workbench_required"] is False
+    assert command(api, ordinary, REL_ARCHITECT, "approve")["status"] == "done"
+
+
+def _legacy_orphan(api, monkeypatch, *, technical=False, dependencies=None):
+    with monkeypatch.context() as legacy:
+        legacy.setattr(api.app.state.portfolio, "_needs_workbench", lambda db, row, action: False)
+        row = _ready_sensitive(api, project(api, unit=REL), technical=technical, dependencies=dependencies)
+        row = command(api, row, REL_AGENT, "start")
+        return command(api, row, REL_AGENT, "submit", evidence=[
+            {"kind": "work", "label": "Old evidence", "ref": "OLD-01"},
+        ])
+
+
+@pytest.mark.parametrize("technical", [False, True])
+def test_global_admin_resets_only_exact_legacy_orphan_for_fresh_review(tmp_path, monkeypatch, technical):
+    off = client(tmp_path, mode="off")
+    orphan = _legacy_orphan(off, monkeypatch, technical=technical)
+    dependent = task(off, 9, orphan["project_id"], REL, execution="read_only", dependency_ids=[orphan["id"]])
+    assert orphan["status"] == ("review" if technical else "workbench")
+    assert _recover(off, orphan, status=409)["detail"] == "workbench_handoff_unavailable"
+
+    api = client(tmp_path)
+    assert _recover(api, orphan, OPS_LEAD, status=403)["detail"] == "portfolio_forbidden"
+    assert _recover(api, orphan, REL_MANAGER, status=403)["detail"] == "portfolio_forbidden"
+    if technical:
+        before = snapshot(api, REL_MANAGER)
+        assert command(api, orphan, REL_ARCHITECT, "request_changes", status=409)[
+            "detail"
+        ] == "workbench_recovery_required"
+        assert snapshot(api, REL_MANAGER) == before
+    assert _recover(api, orphan, status=409, revision=orphan["revision"] - 1)["detail"] == "revision_conflict"
+    ready = _recover(api, orphan)
+    assert ready["status"] == "ready" and ready["id"] == orphan["id"]
+    assert ready["revision"] == orphan["revision"] + 1 and ready["assignee"] == orphan["assignee"]
+    assert ready["dependency_ids"] == orphan["dependency_ids"]
+    assert ready["evidence"] == [] and ready["start_authorized"] is False
+    assert ready["history"][0]["action"] == "recover_workbench" and ready["history"][0]["actor"] == "Direction"
+    assert not api.app.state.workbench.store.path.exists()
+    assert next(row for row in snapshot(api, REL_MANAGER)["tasks"] if row["id"] == dependent["id"])[
+        "dependency_ids"
+    ] == [orphan["id"]]
+    assert _recover(api, orphan, status=409)["detail"] == "revision_conflict"
+    disabled = client(tmp_path, mode="off")
+    before = snapshot(disabled, REL_MANAGER)
+    assert command(disabled, ready, REL_AGENT, "start", status=409)["detail"] == "workbench_handoff_unavailable"
+    assert snapshot(disabled, REL_MANAGER) == before
+    assert disabled.app.state.portfolio.pending_workbench_reviews(linked=False, after=0, limit=10) == []
+    ready = command(api, ready, REL_AGENT, "start")
+    ready = command(api, ready, REL_AGENT, "submit")
+    if technical:
+        assert ready["status"] == "review"
+        ready = command(api, ready, REL_ARCHITECT, "approve")
+    assert ready["status"] == "workbench"
+    [outbox] = api.app.state.portfolio.pending_workbench_reviews(linked=False, after=0, limit=10)
+    assert outbox.task_revision == ready["revision"]
+
+
+def test_recovery_refuses_existing_author_outbox_and_independent_workbench_case(tmp_path, monkeypatch):
+    off = client(tmp_path, mode="off")
+    orphan = _legacy_orphan(off, monkeypatch)
+    api = client(tmp_path)
+    api.app.state.workbench._ensure_portfolio_review(
+        subject=f"portfolio/{orphan['id']}/{orphan['revision']}", title="Existing review",
+        reason="Durable case in the independent Workbench store.", evidence=[], exclusions=("fixture-author",),
+    )
+    assert _recover(api, orphan, status=409)["detail"] == "workbench_recovery_unavailable"
+
+    project_id = project(api, index=10, unit=REL)
+    valid = command(api, _ready_sensitive(api, project_id, technical=True), REL_AGENT, "start")
+    valid = command(api, valid, REL_AGENT, "submit")
+    assert _recover(api, valid, status=409)["detail"] == "workbench_recovery_unavailable"
+    valid = command(api, valid, REL_ARCHITECT, "approve")
+    assert _recover(api, valid, status=409)["detail"] == "workbench_recovery_unavailable"
+    [outbox] = api.app.state.portfolio.pending_workbench_reviews(linked=False, after=0, limit=10)
+    assert (outbox.task_id, outbox.task_revision) == (valid["id"], valid["revision"])

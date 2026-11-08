@@ -36,7 +36,7 @@ Map these business groups to `[cc-relation]` and put service accounts in a dedic
 - **Human review.** The manager records a one-time start authorization. This is the default for each omitted mode. Reassignment, rescheduling or an API restart invalidates a pending authorization. The manager renews it after restart if the task is still ready. The same rule applies when restoring an earlier policy file.
 - **Blocked.** The BU prevents assigning or starting an agent in this mode.
 
-A submitted technical task goes to an independent architect. A sensitive task moves to **Workbench handoff** after preparation and any required technical review. Enable Portfolio mode to record and reconcile its decision.
+A submitted technical task goes to an independent architect. A sensitive task moves to **Workbench handoff** after preparation and any required technical review. The API requires Workbench Portfolio mode to start or submit sensitive work and to approve its technical review. Read and preparation subtasks of a sensitive parent also pause when this mode is unavailable.
 
 When an agent's evaluation is revoked, the agent loses access to its Portfolio assignments. The BU manager can mark an in-progress task blocked and assign it to an eligible agent under the BU policy.
 
@@ -80,18 +80,21 @@ The Workbench stores the case and decision with their revision. The API reconcil
 
 A Portfolio decision approves submitted work. For external effects, use the approved connector path for the target environment. [Workbench and Companion](https://github.com/alebgl77/ai-factory/blob/main/docs/WORKBENCH.md)
 
+If an older root task reached review or handoff while the mode was disabled, a global administrator can request recovery after enabling Portfolio mode. Read the task ID and current revision in `GET /api/v1/portfolio`, using pagination when needed. Recovery is available only when the API can rule out an existing submission author, handoff or decision. The task keeps its ID, assignment and dependencies. Its evidence and start authorization are cleared and the reset is recorded in the task history. Start and submit the work again through the usual review process.
+
 ## API integration
 
 An external runner can authenticate through the proxy with a service account per agent. It reads authorized assignments, starts work when permitted, executes in its own environment and returns evidence. The API coordinates by state and revision.
 
 | Request | Body or purpose |
 |---|---|
-| `GET /api/v1/portfolio` | Authorized view of goals, projects, tasks, roles and autonomy policies |
+| `GET /api/v1/portfolio` | Authorized goals, projects, tasks, roles and autonomy policies, including the `capabilities.workbench_handoff` mode flag and each task’s `workbench_required` flag |
 | `GET /api/v1/portfolio?limit=50` | Tasks ordered newest first by creation. Pass `next_cursor` as `cursor` with the same limit. |
 | `POST /api/v1/portfolio/tasks/{id}/commands` | `{revision, action: "authorize_start"}` by the manager when authorization is required |
 | `POST /api/v1/portfolio/tasks/{id}/commands` | `{revision, action: "start"}` by the assigned agent |
 | `POST /api/v1/portfolio/tasks/{id}/commands` | `{revision, action: "report_usage", tokens: {input, output}}` during execution |
 | `POST /api/v1/portfolio/tasks/{id}/commands` | `{revision, action: "submit", evidence?, tokens?}` by the assigned person or agent |
+| `POST /api/v1/portfolio/tasks/{id}/recover-workbench` | `{revision}` by a global administrator to reset an eligible legacy task. |
 | `POST /api/v1/portfolio/tasks/{id}/subagents` | `{revision, mode, title, description?, agent_id?}`. Use `manual` with `agent_id` or `automatic` for server selection. The response includes `parent` and `task`. |
 
 Human users see all strategic titles and states. A project outside their BUs returns only `title` and `state`. A goal with no project in their BUs returns only `title` and `status` (`met`, `unmet` or `unmeasured`). Participating BUs and global admins can see details. Agents see the goals and projects attached to their authorized assignments independently of task pagination.

@@ -59,6 +59,7 @@
         typeof row.technical === 'boolean' && array(row.dependency_ids, id) && typeof row.dependencies_ready === 'boolean' &&
         assigned(row.assignee) && STATUSES.includes(row.status) && evidence(row.evidence) && history(row.history) && workbenchDecision(row.workbench_decision) &&
         typeof row.start_authorized === 'boolean' && (row.execution === 'human' ? row.autonomy === null : AUTONOMIES.includes(row.autonomy)) &&
+        (row.workbench_required === undefined || typeof row.workbench_required === 'boolean') &&
         (row.runner_managed === undefined || typeof row.runner_managed === 'boolean') &&
         (row.runner_available === undefined || typeof row.runner_available === 'boolean') &&
         (row.runner_result == null || text(row.runner_result, 4000)) &&
@@ -71,6 +72,7 @@
       !array(data.agents, row => row && ref(row.id) && text(row.label, 512) && ref(row.unit) && typeof row.ready === 'boolean') ||
       ![data.goals, data.projects, data.tasks, data.units].every(distinct) ||
       !c || typeof c.global_admin !== 'boolean' || !optionalRef(c.employee_id) || !optionalRef(c.agent_id) ||
+      (c.workbench_handoff !== undefined && typeof c.workbench_handoff !== 'boolean') ||
       !c.roles_by_unit || typeof c.roles_by_unit !== 'object' || Array.isArray(c.roles_by_unit) ||
       !Object.entries(c.roles_by_unit).every(([key, values]) => ref(key) && Array.isArray(values) && values.every(role => ROLES.includes(role)))) return null;
     return data;
@@ -155,12 +157,15 @@
   const finished = task => ['done', 'cancelled'].includes(task.status);
   const runnerActive = task => task.status === 'in_progress' && task.runner_started_at && !task.runner_finished_at;
   const childrenOf = (data, task) => data.tasks.filter(child => child.parent_task_id === task.id);
+  const handoffEnabled = (data, fictional) => fictional || data.capabilities.workbench_handoff === true;
+  const handoffBlocked = (data, task, fictional) => !handoffEnabled(data, fictional)
+    && (task.execution === 'sensitive' || task.workbench_required === true);
   function delegationOptions(data, task, fictional) {
     const manager = role(data, task.unit, 'manager'), mode = task.execution === 'read_only' ? 'read_only' : 'prepare';
     const policy = data.capabilities.autonomy_by_unit?.[task.unit]?.[mode] || 'human_review';
     const parent = task.assignee?.kind === 'agent' && rowById(data.agents, task.assignee.id);
     if (task.parent_task_id || task.status !== 'in_progress' || !parent?.ready || task.autonomy === 'blocked' ||
-        policy === 'blocked' || childrenOf(data, task).length >= 4) return { modes: [], peers: [] };
+        policy === 'blocked' || handoffBlocked(data, task, fictional) || childrenOf(data, task).length >= 4) return { modes: [], peers: [] };
     const peers = data.agents.filter(agent => agent.ready && agent.unit === task.unit && agent.id !== parent.id);
     // A service principal can delegate automatically without reading the peer roster.
     const modes = manager ? (peers.length ? ['manual', 'automatic'] : [])
@@ -171,7 +176,8 @@
     const actions = [];
     const agent = task.assignee?.kind === 'agent';
     const eligible = !agent || (rowById(data.agents, task.assignee.id)?.ready && task.autonomy !== 'blocked');
-    const canStart = eligible && (!agent || task.autonomy === 'autonomous' || (task.autonomy === 'human_review' && task.start_authorized));
+    const paused = handoffBlocked(data, task, fictional);
+    const canStart = !paused && eligible && (!agent || task.autonomy === 'autonomous' || (task.autonomy === 'human_review' && task.start_authorized));
     if (['planned', 'ready', 'blocked'].includes(task.status) && role(data, task.unit, 'manager') && assignees(data, task).length) actions.push('assign');
     if (task.status === 'ready' && agent && eligible && task.autonomy === 'human_review' && !task.start_authorized && role(data, task.unit, 'manager')) actions.push('authorize_start');
     if (myTask(task, data, fictional)) {
@@ -180,13 +186,16 @@
         actions.push('block');
         if (!task.runner_managed && !runnerActive(task)) {
           if (agent && eligible) actions.push('report_usage');
-          if (eligible && childrenOf(data, task).every(finished)) actions.push('submit');
+          if (!paused && eligible && childrenOf(data, task).every(finished)) actions.push('submit');
         }
       }
       if (task.status === 'blocked' && task.dependencies_ready && eligible) actions.push('unblock');
     }
     if (task.status === 'in_progress' && agent && !eligible && role(data, task.unit, 'manager') && !actions.includes('block')) actions.push('block');
-    if (task.status === 'review' && role(data, task.unit, 'architect') && (fictional || !myTask(task, data, false))) actions.push('approve', 'request_changes');
+    if (task.status === 'review' && role(data, task.unit, 'architect') && (fictional || !myTask(task, data, false))) {
+      if (!paused || task.execution !== 'sensitive') actions.push('approve');
+      actions.push('request_changes');
+    }
     if (task.parent_task_id && !finished(task) && role(data, task.unit, 'manager')) actions.push('cancel');
     return actions;
   }
@@ -275,6 +284,7 @@
     block: ['Block', 'Bloquer'], unblock: ['Unblock', 'Débloquer'], submit: ['Submit', 'Soumettre'], approve: ['Approve', 'Valider'],
     request_changes: ['Request changes', 'Demander des modifications'], cancel: ['Cancel subtask', 'Annuler la sous-tâche'],
     delegate: ['Delegate to a subagent', 'Déléguer à un sous-agent'], report_usage: ['Report cumulative tokens', 'Déclarer les tokens cumulés'],
+    recover_workbench: ['Returned to queue by an administrator', 'Remise en file par un administrateur'],
     workbench_approve: WORKBENCH_DECISION.approve, workbench_reject: WORKBENCH_DECISION.reject,
     runner_start: ['Local execution started', 'Exécution locale démarrée'], runner_block: ['Local execution blocked', 'Exécution locale bloquée'],
     workbench_request_changes: WORKBENCH_DECISION.request_changes };
@@ -546,7 +556,9 @@
     const children = childrenOf(data, task);
     const guided = source === 'demo' && task.id === demoDecisionTask && task.status === 'done';
     const roles = ROLES.filter(name => role(data, task.unit, name)).map(name => l(ROLE, name));
-    const next = !finished(task) && task.autonomy === 'blocked' ? t('The BU policy blocks this agent execution.', 'La politique de la BU bloque cette exécution par agent.')
+    const next = !finished(task) && handoffBlocked(data, task, source === 'demo')
+      ? t('Enable Workbench Portfolio mode before continuing sensitive work.', 'Activer le mode Portefeuille du Workbench avant de poursuivre ce travail sensible.')
+      : !finished(task) && task.autonomy === 'blocked' ? t('The BU policy blocks this agent execution.', 'La politique de la BU bloque cette exécution par agent.')
       : task.status === 'ready' && !task.dependencies_ready ? t('Complete the blocking dependencies first.', 'Terminer d’abord les dépendances bloquantes.')
       : task.status === 'ready' && task.assignee?.kind === 'agent' && task.autonomy === 'human_review' && !task.start_authorized
         ? t('A BU manager must authorize this start.', 'Le manager de la BU doit autoriser ce démarrage.')
@@ -568,7 +580,7 @@
         cancelled: t('The task was cancelled.', 'La tâche a été annulée.'),
       })[task.status];
     const list = (label, rows) => rows.length ? `<div><b>${label}</b><ul>${rows.map(row => `<li>${esc(row)}</li>`).join('')}</ul></div>` : '';
-    return `<article class="portfolio-detail" data-portfolio-detail tabindex="-1">
+    return `<article class="portfolio-detail" data-portfolio-detail="${esc(task.id)}" tabindex="-1">
       <div class="portfolio-caption"><h4>${esc(task.title)}</h4>${button('data-portfolio-action', 'clear', t('Close details', 'Fermer le détail'))}</div>
       <p class="portfolio-note">${esc(project?.title || '')} · ${esc(unit(task.unit))} · ${due(task.due_on)} · ${esc(ownerText(task))}</p>
       ${task.description ? `<p>${esc(task.description)}</p>` : ''}
@@ -600,7 +612,7 @@
         ${!view.pending && role(data, task.unit, 'project_lead') && ['planned', 'ready'].includes(task.status) ? button('data-portfolio-action', `edit:tasks:${task.id}`, t('Replan', 'Replanifier')) : ''}
         ${guided ? `<a class="mini" href="./companion/index.html?lang=${fr(language) ? 'fr' : 'en'}&amp;demo_case=${demoDecision.id}&amp;demo_revision=${demoDecision.revision}">
           ${t('Open the simulated decision', 'Ouvrir la décision simulée')}</a>` : ''}
-        ${task.status === 'workbench' ? `<a class="mini" href="./companion/index.html?lang=${language === 'fr' ? 'fr' : 'en'}" target="_blank" rel="noopener noreferrer">
+        ${task.status === 'workbench' && handoffEnabled(data, source === 'demo') ? `<a class="mini" href="./companion/index.html?lang=${language === 'fr' ? 'fr' : 'en'}" target="_blank" rel="noopener noreferrer">
           ${t('Open Companion', 'Ouvrir Companion')}</a>` : ''}</div></article>`;
   }
 

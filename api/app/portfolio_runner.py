@@ -197,8 +197,11 @@ class PortfolioEngine:
                       ) -> tuple[str, str, str] | None:
         # Scope by bound agent and expected BU before parsing task content. A
         # pending grant is usable only in this process and policy generation.
+        parent_modes = ("read_only", "prepare")
+        if self.service.settings.workbench_mode == "portfolio":
+            parent_modes += ("sensitive",)
         rules = [(binding.agent_id, binding.unit, mode, self._autonomy(binding.unit, mode),
-                  [parent_mode for parent_mode in ("read_only", "prepare", "sensitive")
+                  [parent_mode for parent_mode in parent_modes
                    if self._autonomy(binding.unit, parent_mode) != "blocked"])
                  for binding in bindings.values() for mode in ("read_only", "prepare")
                  if self._autonomy(binding.unit, mode) != "blocked"]
@@ -289,7 +292,8 @@ class PortfolioEngine:
             if (active_agents.get(agent_id) != current["unit"] or parent["status"] != "in_progress"
                     or active_agents.get(row["parent_agent_id"]) != current["unit"]
                     or (parent["assignee"] or {}).get("id") != row["parent_agent_id"]
-                    or started != row["parent_start_revision"]):
+                    or started != row["parent_start_revision"]
+                    or (parent["execution"] == "sensitive" and self.service.settings.workbench_mode != "portfolio")):
                 error = "authorization_changed"
                 usage = None
         tokens = None

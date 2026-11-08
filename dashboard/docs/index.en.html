@@ -28,7 +28,19 @@
     </nav>
   </header>
 
-  <div class="layout">
+  <main class="layout" id="contenu" tabindex="-1">
+    <div class="hero">
+      <p class="eyebrow">AI Factory · Operations handbook</p>
+      <h1>Deploy, govern<br>and operate the Factory.</h1>
+      <p class="lead">Start with a fictional scenario or prepare a private deployment. Follow access controls, agent work, human decisions and incident recovery.</p>
+      <div class="hero-links">
+        <a class="primary" href="#demarrage">Choose a walkthrough</a>
+        <a class="secondary" href="#visual-tour">Explore the visual tour</a>
+        <a class="secondary" href="./architecture.en.html">Open the architecture atlas</a>
+        <a class="secondary" href="./roadmap.html?lang=en">View the roadmap</a>
+      </div>
+    </div>
+
     <nav class="toc" aria-label="Contents">
       <p class="eyebrow">Documentation</p>
       <ol>
@@ -47,18 +59,7 @@
       </ol>
     </nav>
 
-    <main id="contenu" tabindex="-1">
-      <div class="hero">
-        <p class="eyebrow">AI Factory · Operations handbook</p>
-        <h1>Deploy, govern<br>and operate the Factory.</h1>
-        <p class="lead">Start with a fictional scenario or prepare a private deployment. Follow access controls, agent work, human decisions and incident recovery.</p>
-        <div class="hero-links">
-          <a class="primary" href="#demarrage">Choose a walkthrough</a>
-          <a class="secondary" href="#visual-tour">Explore the visual tour</a>
-          <a class="secondary" href="./architecture.en.html">Open the architecture atlas</a>
-          <a class="secondary" href="./roadmap.html?lang=en">View the roadmap</a>
-        </div>
-      </div>
+    <div class="guide-content">
       <form id="guide-search" class="search" role="search" hidden>
         <label for="guide-query">Search the guide</label>
         <div class="search-field">
@@ -348,8 +349,8 @@
         <p>For rollback, disable the runner and retain a snapshot of recent state. For a Kubernetes file archive, save the contents of the volume and preserve the destination PVC root permissions. If the data has migrated, restore a compatible point and reconcile subsequent writes with the operator.</p>
         <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/PORTFOLIO.md">Portfolio and API reference</a></p>
       </section>
-    </main>
-  </div>
+    </div>
+  </main>
   <footer><a href="#contenu">Back to the top</a><span>AI Factory · Operations guide</span></footer>
 </body>
 </html>
