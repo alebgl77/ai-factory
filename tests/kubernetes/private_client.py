@@ -116,7 +116,7 @@ def main(factory_cert, dex_cert):
         request(opener, f"/api/v1/registry/{own}/model-version", 403,
                 payload={"version": "kind-invalid-origin"}, origin="https://attacker.test")
         request(opener, f"/api/v1/registry/{own}/model-version", 200,
-                payload={"version": f"kind-own-{name}"})
+                headers=SPOOF, payload={"version": f"kind-own-{name}"})
         request(opener, "/api/v1/audit", 403, headers=SPOOF)
     print("PASS authentic provider identities, forged privilege denied, cross-BU read and write denied")
 

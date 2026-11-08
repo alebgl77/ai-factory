@@ -170,6 +170,13 @@ spec:
             {{- if $telemetry.grafanaToken.existingSecret }}
             - {name: grafana-token, mountPath: /var/run/factory/grafana, readOnly: true}
             {{- end }}
+            {{- if $telemetry.caBundle.existingSecret }}
+            # httpx uses certifi with trust_env disabled in the API image.
+            - name: telemetry-ca
+              mountPath: /usr/local/lib/python3.12/site-packages/certifi/cacert.pem
+              subPath: ca-bundle.crt
+              readOnly: true
+            {{- end }}
             {{- end }}
         - name: dashboard
           image: {{ include "ai-factory.image" .Values.images.dashboard | quote }}
@@ -280,6 +287,9 @@ spec:
         {{- end }}
         {{- if $telemetry.grafanaToken.existingSecret }}
         {{- include "ai-factory.fileSecret" (dict "volume" "grafana-token" "secret" $telemetry.grafanaToken.existingSecret "key" $telemetry.grafanaToken.key "path" "token") | nindent 8 }}
+        {{- end }}
+        {{- if $telemetry.caBundle.existingSecret }}
+        {{- include "ai-factory.fileSecret" (dict "volume" "telemetry-ca" "secret" $telemetry.caBundle.existingSecret "key" $telemetry.caBundle.key "path" "ca-bundle.crt") | nindent 8 }}
         {{- end }}
         {{- if .Values.sso.providerCA.existingSecret }}
         {{- include "ai-factory.fileSecret" (dict "volume" "provider-ca" "secret" .Values.sso.providerCA.existingSecret "key" .Values.sso.providerCA.key "path" "ca.crt") | nindent 8 }}

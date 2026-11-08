@@ -24,6 +24,7 @@ def test_restarts_rotate_identity_without_leaving_partial_credentials(tmp_path, 
     docker = shutil.which("docker")
     if docker is None or subprocess.run([docker, "info"], capture_output=True, timeout=20).returncode:
         pytest.skip("Docker daemon unavailable")
+    tmp_path.chmod(0o755)  # The restricted container UID must traverse the read-only fixture mount.
     image = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))["services"]["seaweedfs"]["image"]
     compose_dir = ROOT / "compose/seaweedfs"
     script = fixture_file(tmp_path, "factory-entrypoint.sh", (compose_dir / "entrypoint.sh").read_text(encoding="utf-8"))

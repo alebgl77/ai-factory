@@ -65,6 +65,7 @@ def test_helm_values_reuse_the_same_release_inventory(tmp_path):
         "dashboard": {"image": f"{REGISTRY}/dashboard@{DIGEST}", "origin": "release"},
         "edge": {"image": f"caddy:2.11.7-alpine@{UPSTREAM_DIGEST}", "origin": "upstream"},
         "oauth2-proxy": {"image": f"quay.io/oauth2-proxy/oauth2-proxy:v7.15.6@{UPSTREAM_DIGEST}", "origin": "upstream"},
+        "alloy": {"image": f"grafana/alloy:v1.21.3@{UPSTREAM_DIGEST}", "origin": "upstream"},
     }}
     inventory = tmp_path / "release-stack.json"
     inventory.write_text(json.dumps(evidence), encoding="utf-8")
@@ -76,6 +77,7 @@ def test_helm_values_reuse_the_same_release_inventory(tmp_path):
             "caddy": {"repository": "caddy", "digest": UPSTREAM_DIGEST},
             "oauth2Proxy": {"repository": "quay.io/oauth2-proxy/oauth2-proxy", "digest": UPSTREAM_DIGEST},
         },
+        "logging": {"alloy": {"image": {"repository": "grafana/alloy", "digest": UPSTREAM_DIGEST}}},
     }
     evidence["services"]["dashboard"]["image"] = f"{REGISTRY}/api@{DIGEST}"
     inventory.write_text(json.dumps(evidence), encoding="utf-8")

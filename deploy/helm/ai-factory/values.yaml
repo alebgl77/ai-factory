@@ -66,6 +66,9 @@ networkPolicy:
   egressRules: []
 telemetry:
   allowInsecureClusterHTTP: false
+  caBundle:
+    existingSecret: ""
+    key: ca-bundle.crt
   prometheusURL: ""
   grafanaURL: ""
   grafanaPublicURL: ""

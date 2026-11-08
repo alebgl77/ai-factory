@@ -96,26 +96,28 @@ def create_evidence(root, assets, tag, sha, registry, resolve=resolve_registry_d
 def create_helm_values(root):
     """Project the signed release inventory into the chart's image values."""
     evidence = json.loads((root / "release-stack.json").read_text(encoding="utf-8"))
+    services = evidence["services"]
     images = {}
     for name in ("api", "dashboard"):
-        entry = evidence["services"][name]
+        entry = services[name]
         repository, _, digest = entry["image"].partition("@")
         if (entry["origin"] != "release" or not re.fullmatch(rf"ghcr\.io/[a-z0-9][a-z0-9-]*/{name}", repository)
                 or not DIGEST.fullmatch(digest)):
             raise ValueError(f"Invalid first-party release image for {name}.")
         images[name] = {"repository": repository, "digest": digest}
-    for service, name, expected_repository in (
-        ("edge", "caddy", "caddy"),
-        ("oauth2-proxy", "oauth2Proxy", "quay.io/oauth2-proxy/oauth2-proxy"),
-    ):
-        entry = evidence["services"][service]
+    def upstream(service, expected_repository):
+        entry = services[service]
         reference, _, digest = entry["image"].partition("@")
         if (entry["origin"] != "upstream" or reference.split(":", 1)[0] != expected_repository
                 or not DIGEST.fullmatch(digest)):
             raise ValueError(f"Invalid upstream release image for {service}.")
-        images[name] = {"repository": expected_repository, "digest": digest}
+        return {"repository": expected_repository, "digest": digest}
+
+    images["caddy"] = upstream("edge", "caddy")
+    images["oauth2Proxy"] = upstream("oauth2-proxy", "quay.io/oauth2-proxy/oauth2-proxy")
+    values = {"images": images, "logging": {"alloy": {"image": upstream("alloy", "grafana/alloy")}}}
     (root / "deploy" / "helm" / HELM_VALUES_NAME).write_text(
-        json.dumps({"images": images}, indent=2) + "\n", encoding="utf-8",
+        json.dumps(values, indent=2) + "\n", encoding="utf-8",
     )
 
 

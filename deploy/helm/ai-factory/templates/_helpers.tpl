@@ -50,12 +50,17 @@ capabilities:
 {{- end }}
 
 {{- define "ai-factory.peers" -}}
-{{- range . -}}
-  {{- if or (empty .) (and (empty .ipBlock) (empty .namespaceSelector) (empty .podSelector)) -}}
+{{- range $peer := . -}}
+  {{- if or (empty $peer) (and (empty $peer.ipBlock) (empty $peer.namespaceSelector) (empty $peer.podSelector)) -}}
     {{- fail "networkPolicy peers must specify a nonempty namespace selector, pod selector or IP block" -}}
   {{- end -}}
-  {{- if and .ipBlock (or (empty .ipBlock.cidr) (hasSuffix "/0" .ipBlock.cidr)) -}}
+  {{- if and $peer.ipBlock (or (empty $peer.ipBlock.cidr) (hasSuffix "/0" $peer.ipBlock.cidr)) -}}
     {{- fail "networkPolicy IP blocks must specify a CIDR narrower than /0" -}}
+  {{- end -}}
+  {{- $namespace := $peer.namespaceSelector | default dict -}}
+  {{- $pod := $peer.podSelector | default dict -}}
+  {{- if not (or $peer.ipBlock $namespace.matchLabels $namespace.matchExpressions $pod.matchLabels $pod.matchExpressions) -}}
+    {{- fail "networkPolicy peer selectors cannot match every namespace or pod" -}}
   {{- end -}}
 {{- end -}}
 {{- end }}
@@ -90,10 +95,10 @@ capabilities:
   {{- if or $v.ingress.enabled $v.networkPolicy.ingressPeers $v.networkPolicy.dnsPeers $v.networkPolicy.egressRules -}}
     {{- fail "demo is isolated and reachable only with kubectl port-forward; ingress and network policy rules must be empty" -}}
   {{- end -}}
-  {{- if or $v.businessUnits.existingSecret $v.sso.existingSecret $v.api.assistEnabled $v.api.portfolioRunner.existingSecret -}}
+  {{- if or $v.businessUnits.existingSecret $v.sso.existingSecret $v.sso.providerCA.existingSecret $v.api.assistEnabled $v.api.portfolioRunner.existingSecret -}}
     {{- fail "demo cannot use private runtime settings" -}}
   {{- end -}}
-  {{- if or $v.telemetry.prometheusURL $v.telemetry.grafanaURL $v.telemetry.grafanaPublicURL $v.telemetry.langfuseURL $v.telemetry.litellmURL $v.telemetry.qdrantURL -}}
+  {{- if or $v.telemetry.prometheusURL $v.telemetry.grafanaURL $v.telemetry.grafanaPublicURL $v.telemetry.langfuseURL $v.telemetry.litellmURL $v.telemetry.qdrantURL $v.telemetry.caBundle.existingSecret $v.telemetry.grafanaToken.existingSecret $v.telemetry.langfuseCredentials.existingSecret $v.telemetry.litellmCredentials.existingSecret -}}
     {{- fail "demo cannot connect to external telemetry or model services" -}}
   {{- end -}}
   {{- if not (has $workbench (list "off" "demo")) -}}
@@ -105,6 +110,9 @@ capabilities:
       {{- if not $image.digest -}}
         {{- fail (printf "private requires images.%s.digest; allowMutableImagesForLocalTesting is only for local test clusters" $name) -}}
       {{- end -}}
+    {{- end -}}
+    {{- if and $v.logging.enabled (not (regexMatch "^sha256:[a-f0-9]{64}$" ($v.logging.alloy.image.digest | default ""))) -}}
+      {{- fail "private logging requires logging.alloy.image.digest; allowMutableImagesForLocalTesting is only for local test clusters" -}}
     {{- end -}}
   {{- end -}}
   {{- if not (and $v.ingress.enabled $v.ingress.className $v.ingress.tlsSecretName) -}}
@@ -122,6 +130,16 @@ capabilities:
   {{- if or (empty $v.sso.allowedEmailDomains) (and (has "*" $v.sso.allowedEmailDomains) (empty $v.sso.allowedGroups)) -}}
     {{- fail "private requires sso.allowedEmailDomains; a wildcard requires sso.allowedGroups" -}}
   {{- end -}}
+  {{- range $v.sso.allowedEmailDomains -}}
+    {{- if and (ne . "*") (not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$" .)) -}}
+      {{- fail "sso.allowedEmailDomains entries must be individual domain names or * with allowed groups" -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $v.sso.allowedGroups -}}
+    {{- if or (empty (trim .)) (contains "," .) (contains "\n" .) (contains "\r" .) -}}
+      {{- fail "sso.allowedGroups entries must be individual group names" -}}
+    {{- end -}}
+  {{- end -}}
   {{- if not (or $v.api.roleMap $v.api.defaultRole) -}}
     {{- fail "private requires api.roleMap or api.defaultRole: viewer" -}}
   {{- end -}}
@@ -134,8 +152,8 @@ capabilities:
   {{- if and $v.api.assistEnabled (empty $v.api.portfolioRunner.existingSecret) -}}
     {{- fail "api.assistEnabled requires api.portfolioRunner.existingSecret" -}}
   {{- end -}}
-  {{- if and $v.api.portfolioRunner.existingSecret (not (regexMatch "^https?://litellm:[1-9][0-9]*/?$" $v.telemetry.litellmURL)) -}}
-    {{- fail "api.portfolioRunner requires a private LiteLLM Service named litellm and an explicit port in telemetry.litellmURL" -}}
+  {{- if and $v.api.portfolioRunner.existingSecret (not (regexMatch "^https://litellm:[1-9][0-9]*/?$" $v.telemetry.litellmURL)) -}}
+    {{- fail "api.portfolioRunner requires an HTTPS LiteLLM Service named litellm and an explicit port in telemetry.litellmURL" -}}
   {{- end -}}
   {{- if not (and $v.networkPolicy.ingressPeers $v.networkPolicy.dnsPeers $v.networkPolicy.egressRules) -}}
     {{- fail "private requires explicit networkPolicy.ingressPeers, dnsPeers and egressRules" -}}

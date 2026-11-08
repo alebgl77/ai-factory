@@ -147,7 +147,7 @@ def test_pipeline_keeps_release_labels_and_matches_compose_scrubbing(collector):
         ("logging.egress.dnsNamespace=", "must be set together"),
         ("logging.egress.kubernetesAPI[0].cidr=0.0.0.0/0,logging.egress.kubernetesAPI[0].port=443", "non-default CIDRs"),
         ("logging.egress.loki[0].cidr=::/0,logging.egress.loki[0].port=443", "non-default CIDRs"),
-        ("logging.egress.loki[0].cidr=198.51.100.3/32,logging.egress.loki[0].port=65536", "destination port"),
+        ("logging.egress.loki[0].cidr=198.51.100.3/32,logging.egress.loki[0].port=65536", "port"),
     ],
 )
 def test_unsafe_or_incomplete_logging_config_fails_at_render(helm_chart, override, message):

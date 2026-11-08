@@ -60,7 +60,7 @@ Download the deployment bundle with the other release assets and verify it again
 checksum manifest before extracting it. The archive includes the Compose files and configuration
 from this tag, the service inventory with its source commit, and a Compose overlay pinned to all
 service image digests. It also includes a version-matched Helm package and values pinned to
-the API, dashboard, Caddy and oauth2-proxy digests. Use the [Compose guide](https://github.com/$repo/blob/$tag/docs/DEPLOYMENT.md)
+the API, dashboard, Caddy, oauth2-proxy and optional Alloy digests. Use the [Compose guide](https://github.com/$repo/blob/$tag/docs/DEPLOYMENT.md)
 or the [Kubernetes guide](https://github.com/$repo/blob/$tag/docs/KUBERNETES.md).
 
 ## Verify before you run

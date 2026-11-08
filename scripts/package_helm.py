@@ -45,7 +45,7 @@ def tracked_config_paths() -> list[str]:
             raise ValueError(f"duplicate ConfigMap key: {key}")
         keys.add(key)
         selected.append(path)
-    if not allowed_top_level.issubset({PurePosixPath(path).name for path in selected}):
+    if not {f"config/{name}" for name in allowed_top_level}.issubset(selected):
         raise ValueError("tracked config is incomplete")
     return selected
 
