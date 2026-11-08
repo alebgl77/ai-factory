@@ -122,8 +122,7 @@ helm upgrade --install factory "deploy/helm/ai-factory-${TAG#v}.tgz" -n factory 
 kubectl -n factory rollout status deploy/factory-ai-factory
 ```
 
-Before a matching bundle ships, qualify the exact audited source commit. The demonstrated
-baseline is `27800aa798d7bf21e7bec4ab57ffa4461e0465c3`. Stage the chart from that checkout
+Before a matching bundle ships, qualify the exact source commit you plan to deploy. Stage the chart from that checkout
 as for the local demo and use `"$chart_dir/ai-factory"` in place of the packaged chart.
 Replace `values.release.json` with an operator file containing digest-pinned images from
 that build and its approved edge images. Keep this image values file last. [Source qualification](DEPLOYMENT.en.md#qualify-from-source)
@@ -193,7 +192,10 @@ restart, a replacement Pod and restore to a second PVC.
 
 In the private profile the job runs OAuth2 authorization code with PKCE against a TLS-enabled
 Dex fixture, checks the group gate and business-unit isolation, and attempts forged identity and
-forwarding headers before and after sign-in. It checks the API listener from within the Pod
+forwarding headers before and after sign-in. It also checks the Observatory allowlist, team
+visibility and aggregation threshold. A separate private restore test verifies the original
+Workbench checkpoint and resumes a pending synthetic decision on the restored PVC. The job
+checks the API listener from within the Pod
 namespace and exercises NetworkPolicy with an allowed test TLS proxy and a denied client Pod.
 The test TLS proxy represents an Ingress data path. Use your target controller and storage driver
 for the pilot's qualification.

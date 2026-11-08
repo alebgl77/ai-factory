@@ -148,11 +148,12 @@ def main(factory_cert, dex_cert):
     assert landing == BASE + "/" and b"/vendor/three/build/three.module.js" in page
     check_duplicate_origin(ops, context)
     request(finance, "/", 200)
+    request(admin, "/", 200)
     outsider = browser(context, SyntheticIdentity("eve", "outside"))
     _, _, callback = request(outsider, "/", 403)
     assert urllib.parse.urlsplit(callback).path == "/oauth2/callback"
     request(outsider, "/api/v1/registry", 401, headers=SPOOF)
-    print("PASS two Dex sign-ins and an identity rejected by the oauth2-proxy group gate")
+    print("PASS three Dex sign-ins and an identity rejected by the oauth2-proxy group gate")
 
     for opener, name, center, own, foreign in (
         (ops, "alice", "cc-ops", "uc-01", "uc-05"),
