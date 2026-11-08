@@ -45,7 +45,7 @@ images:
     source: https://github.com/prometheus/prometheus
   - service: grafana
     image: grafana/grafana
-    tag: 13.0.12
+    tag: 13.3.0
     spdx: AGPL-3.0-only
     license: "AGPL-3.0 (OSS edition: separate service, unmodified official image, queried through its HTTP API)"
     usage: separate-service
