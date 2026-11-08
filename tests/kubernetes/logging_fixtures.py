@@ -18,7 +18,9 @@ def sink(loki_image, caddy_image):
         [{"name": "fixture", "configMap": {"name": "loki-sink"}},
          {"name": "tls", "secret": {"secretName": "loki-sink-tls", "defaultMode": 0o440}},
          *({"name": name, "emptyDir": {"sizeLimit": size}}
-           for name, size in [("data", "128Mi"), ("tmp", "32Mi"), ("caddy-data", "16Mi"), ("caddy-config", "16Mi")])],
+           # The TLS proxy copies Caddy to /tmp. Use the same bounded capacity as the chart's edge.
+           for name, size in [("data", "128Mi"), ("tmp", "128Mi"),
+                              ("caddy-data", "16Mi"), ("caddy-config", "16Mi")])],
     )
     caddy = pod(
         "proxy", caddy_image, 10001,
