@@ -1,28 +1,48 @@
 # Virtual AI Factory
 
-**English** · [Français](README.fr.md)
+**English** · [Français](README.fr.md) · [MIT license](LICENSE) · [CI status](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml)
 
-[Technical documentation](docs/README.md) · [Interactive guide](https://alebgl77.github.io/ai-factory/docs/index.en.html)
+**An open-source digital twin for operating enterprise AI.**
 
-**Virtual AI Factory — the open-source digital twin of an enterprise AI factory**
+Follow work by people and agents, review decisions with their evidence, and inspect model
+routing and token costs from a 3D workspace. The repository includes a browser demo and a
+self-hosted stack for private pilots.
 
-[![CI](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Live demo](https://img.shields.io/badge/live%20demo-GitHub%20Pages-6D28D9.svg)](https://alebgl77.github.io/ai-factory/)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/alebgl77/ai-factory)
+**[Open the 3D demo](https://alebgl77.github.io/ai-factory/?lang=en)** · [Documentation](docs/README.md) · [Install](#local-quick-start-no-key-at-all) · [Architecture](docs/ARCHITECTURE.md) · [Technologies](#technology-stack)
 
-Virtual AI Factory is a generic, deployable model of how an enterprise runs AI in production,
-rendered as a 3D twin of the office where it happens. Explore **governance** with an indicative
-EU AI Act, NIST AI RMF and ISO/IEC 42001 crosswalk, **FinOps** for token and GPU costs, and an
-**LLMOps and RAG pipeline** with evaluation gates. The demo simulates deployment and rollback.
-In a private installation, authorized producers submit evidence of changes performed in their
-own systems. The dashboard also offers model placement, Agent Ops, a self-service catalog,
-Skills and R&D labs, and a first-person visit mode. The project is MIT-licensed. The demo
-uses YAML configuration and runs without provider keys.
+<img src="dashboard/docs/media/ai-factory-control-floor.webp" width="1200" alt="Isometric AI operations floor with server racks, workstations and a lime path connecting the rooms.">
 
-> All data is **fictional**: people, use cases, cost centers, costs and demo metrics. Everything
-> is configured in `config/`. No fine-tuning, no retraining: the data loop only acts through
-> reindexing, evaluation-set updates or routing changes.
+| Environment | What you can verify |
+|---|---|
+| **Public demo** | Explore a fictional portfolio, approval flow and routing simulation in the browser, without provider keys. [Interactive guide](https://alebgl77.github.io/ai-factory/docs/index.en.html) |
+| **Private pilot** | Configure SSO and business-unit policies, connect approved model targets and collect operating evidence from authorized producers. [Compose](docs/DEPLOYMENT.en.md) · [Kubernetes](docs/KUBERNETES.md) |
+
+<a id="technologies"></a>
+
+## Technology stack
+
+### Reference stack
+
+| Layer | Technologies and roles |
+|---|---|
+| **Interface and API** | <img src="dashboard/docs/media/tech/threejs.svg" width="24" height="24" alt=""> **Three.js** for the 3D twin · <img src="dashboard/docs/media/tech/fastapi.svg" width="24" height="24" alt=""> **FastAPI** for the aggregation API |
+| **Deployment and routing** | **Docker Compose** for the reference stack · <img src="dashboard/docs/media/tech/kubernetes.svg" width="24" height="24" alt=""> **Kubernetes** and <img src="dashboard/docs/media/tech/helm.svg" width="24" height="24" alt=""> **Helm** for an alternative deployment · <img src="dashboard/docs/media/tech/caddy.svg" width="24" height="24" alt=""> **Caddy** for the edge · **LiteLLM** for model routing |
+| **Observability** | <img src="dashboard/docs/media/tech/prometheus.svg" width="24" height="24" alt=""> **Prometheus** for metrics · **Grafana** for dashboards · **Loki** for logs · <img src="dashboard/docs/media/tech/langfuse.svg" width="24" height="24" alt=""> **Langfuse** for model traces |
+| **Retrieval** | <img src="dashboard/docs/media/tech/qdrant.svg" width="24" height="24" alt=""> **Qdrant** for vector storage and collection telemetry in the Compose reference stack |
+
+The Helm deployment uses operator-managed model and telemetry services. See the [environment comparison](docs/README.md#choose-an-environment) for what each deployment includes.
+
+### Optional integrations
+
+| Integration | Scope |
+|---|---|
+| **Model serving** | <img src="dashboard/docs/media/tech/vllm.svg" width="24" height="24" alt=""> **vLLM** for local GPU inference · <img src="dashboard/docs/media/tech/ollama.svg" width="24" height="24" alt=""> **Ollama** for the VPS CPU profile. [Model placement](#compose-model-placement) |
+| **Agent tools** | <img src="dashboard/docs/media/tech/mcp.svg" width="24" height="24" alt=""> **MCP** over local stdio for the adaptive Workbench. [MCP setup](docs/ADAPTIVE_WORKBENCH.md#connect-an-mcp-client) |
+| **CRM** | **Salesforce**, **HubSpot** and <img src="dashboard/docs/media/tech/twenty.svg" width="24" height="24" alt=""> **Twenty** for read-only opportunity and company data. [CRM setup](docs/ADAPTIVE_WORKBENCH.md#connect-salesforce-hubspot-or-twenty) |
+| **ERP** | **Odoo** via a read-only probe. Live draft creation requires an operator-supplied adapter and its own approval flow. [ERP adapter](docs/ADAPTIVE_WORKBENCH.md#connect-a-draft-erp-adapter) |
+| **Usage governance** | **Open Shadow AI** runs separately. The operator bridge imports aggregate evidence into the Observatory. [Observatory setup](docs/SHADOW_AI.md#connect-open-shadow-ai) |
+
+[Logo credits and usage terms](dashboard/docs/media/tech/README.md)
 
 ## See the Factory in action
 
@@ -55,9 +75,9 @@ simulated decision and receipt in the history.
 
 ## Try it
 
-| In 10 seconds | In 2 minutes | On your machine |
+| In your browser | In GitHub Codespaces | On your machine |
 |---|---|---|
-| **[Live demo](https://alebgl77.github.io/ai-factory/)**: the 3D dashboard with the embedded demo snapshot (static, no backend) | **[Open in GitHub Codespaces](https://codespaces.new/alebgl77/ai-factory)**: the full stack starts with the `sim` profile, secrets are generated for you | `docker compose --profile sim up -d --build` (see below) |
+| **[Open the live demo](https://alebgl77.github.io/ai-factory/?lang=en)** with the embedded fictional dataset. | **[Launch Codespaces](https://codespaces.new/alebgl77/ai-factory)**. The dev container generates local secrets and starts the `sim` profile. | **[Start the Compose demo](#local-quick-start-no-key-at-all)** with simulated model providers and GPU telemetry. |
 
 Then, in the dashboard: press `M` (or the **Visit** button) to walk through the factory in first
 person, `U` to open the factory console (register, FinOps, pipeline, data loop, placement,
@@ -115,7 +135,7 @@ operator-managed services. [Install Kubernetes](docs/KUBERNETES.md) · [Operate 
 | P0 | Use-case register, AI Act risk tiers (prohibited, high risk under Annex III / Annex I, limited under Art. 50, minimal), NIST AI RMF cycle (GOVERN, MAP, MEASURE, MANAGE) crosswalked with the AI Act and ISO/IEC 42001, **risk reassessment on every model version change** | `config/usecases/`, `config/frameworks/`, `api/app/engines/risk.py`, "Register" console |
 | P0 | Token and GPU costs per use case, showback / chargeback, 8 waste alert rules | `config/factory.yaml`, `engines/costs.py`, "FinOps" console |
 | P1 | LLMOps / RAG pipeline: ingestion → indexing → versioning → evaluation gates → deployment and rollback receipts from authorized producers. The demo simulates the sequence. | [Operating evidence](docs/OPERATING_EVIDENCE.md), "Pipeline" console |
-| P1 | Data loop on drift: reindexing, evaluation-set updates, routing changes, human review. No retraining | `engines/dataloop.py`, "Data loop" console |
+| P1 | Data loop on drift: reindexing, evaluation-set updates, routing changes, human review. No fine-tuning or retraining | `engines/dataloop.py`, "Data loop" console |
 | P1 | Hybrid placement cloud → VPS → local GPU. Direct C3/C4 requests require a local GPU and fail if it is unavailable. The placement simulator recommends waiting in that case and does not enqueue work | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
 | P2 | Agent Ops room: TTFT, tokens per task, vector latency, SLOs | `engines/agentops.py`, consoles O1/O2, Grafana dashboard `agent-ops` |
 | P2 | Self-service catalog of models, agents, MCP tools and integrated GitHub repositories | `config/catalog/`, "Catalog" console |
@@ -204,10 +224,7 @@ unset). After a change: `python scripts/validate_config.py`, then
 
 ### Security & trust at a glance
 
-[![CodeQL](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/alebgl77/ai-factory/badge)](https://scorecard.dev/viewer/?uri=github.com/alebgl77/ai-factory)
-[![Supply chain: Trivy, pip-audit, SBOM](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml)
-[![Signed images: cosign, SLSA provenance, SBOM](https://img.shields.io/badge/images-cosign%20%C2%B7%20SLSA%20provenance%20%C2%B7%20SBOM-2ea44f)](SECURITY.md#verify-a-release)
+[CodeQL](https://github.com/alebgl77/ai-factory/actions/workflows/codeql.yml) · [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/alebgl77/ai-factory) · [Supply-chain checks](https://github.com/alebgl77/ai-factory/actions/workflows/security.yml) · [Verify a signed release](SECURITY.md#verify-a-release)
 
 Every line below is backed by a test, a CI job or a command you can run yourself.
 

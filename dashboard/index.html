@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Virtual AI Factory</title>
-<meta name="description" content="Jumeau numérique 3D d'une AI Factory en travail hybride : présence des squads, use cases, War Room, focus pods, co-localisation et conformité données sensibles.">
+<meta name="description" content="Jumeau numérique open source pour explorer le pilotage des projets et agents IA, les décisions humaines et les flux de modèles dans une organisation fictive.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Virtual AI Factory">
+<meta property="og:description" content="Un jumeau numérique open source pour explorer le pilotage des projets IA, les décisions et les flux de modèles.">
+<meta property="og:image" content="https://alebgl77.github.io/ai-factory/docs/media/ai-factory-control-floor.webp">
+<meta property="og:image:width" content="2172">
+<meta property="og:image:height" content="724">
+<meta property="og:image:alt" content="Vue isométrique d’une usine IA, avec une salle de serveurs, des espaces de travail et un circuit lumineux vert.">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="exercise/uc04.css">
 <link rel="stylesheet" href="companion/handoff.css">
 <script defer src="exercise/uc04.js"></script>
@@ -74,19 +82,44 @@ button svg{pointer-events:none}
 #app{display:grid;height:100vh;height:100dvh;padding:10px;gap:10px;
   grid-template-columns:300px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;
   grid-template-areas:"top top" "side stage" "time time"}
-#app[data-demo-entry]{grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"top top" "demo demo" "side stage" "time time"}
-.demo-entry{grid-area:demo;display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r)}
+#app[data-demo-entry]{grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-areas:"demo demo" "top top" "side stage" "time time"}
+.demo-entry{
+  grid-area:demo;min-width:0;overflow:hidden;background:#111412;color:#f2f4ec;
+  border:1px solid #3a4238;border-radius:var(--r);
+  --demo-accent:#d7fa68;--demo-muted:#b9c1b4;--demo-line:#3a4238;
+  font-family:"Geist",var(--font)
+}
 .demo-entry[hidden],.view-ctrl[hidden],.legend[hidden],#fallbackSpaces[hidden]{display:none}
-.demo-entry strong{margin-right:4px;font-size:12px}
-.demo-entry .btn{min-height:44px;display:inline-flex;align-items:center;text-align:center;text-decoration:none}
-.demo-roadmap{display:flex;align-items:center;gap:8px 13px;min-height:44px;margin-inline-start:auto;padding:6px 10px;color:var(--text);background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);text-decoration:none}
-.demo-roadmap:hover{border-color:var(--accent);background:var(--accent-soft)}
-.demo-roadmap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.demo-roadmap-title{font-size:12px;font-weight:750;white-space:nowrap}
-.demo-roadmap-phases{display:flex;flex-wrap:wrap;gap:3px 10px;color:var(--muted);font-size:11px}
-.demo-roadmap-phases span{white-space:nowrap}
-.demo-roadmap-phases b{color:var(--accent);font:700 .88em/1 ui-monospace,monospace;margin-inline-end:3px}
-.demo-roadmap-arrow{margin-inline-start:auto;color:var(--accent);font-size:16px}
+.demo-entry-main{position:relative;isolation:isolate;display:grid;gap:11px;padding:16px 20px 14px}
+.demo-entry-main::before{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(90deg,#111412 0%,#111412 33%,rgba(17,20,18,.75) 49%,rgba(17,20,18,0) 78%)
+}
+.demo-entry-art{
+  position:absolute;inset:0 0 0 auto;z-index:-2;display:block;width:min(68%,54rem);height:100%;
+  object-fit:cover;object-position:72% 49%;pointer-events:none
+}
+.demo-entry-intro{max-width:39rem}
+.demo-entry-kicker{display:flex;align-items:center;gap:8px;margin:0 0 4px;color:var(--demo-accent);font:650 10px/1.3 "Geist Mono",ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}
+.demo-entry-kicker::before{content:"";width:7px;height:7px;flex:none;background:currentColor}
+.demo-entry-title{margin:0;font-size:clamp(25px,2.6vw,43px);line-height:1.06;letter-spacing:-.045em;font-weight:680;text-wrap:balance}
+.demo-entry-copy{margin:5px 0 0;color:var(--demo-muted);font-size:13px;line-height:1.35;text-wrap:pretty}
+.demo-entry-actions{display:flex;flex-wrap:wrap;gap:6px}
+.demo-entry .btn{min-height:44px;display:inline-flex;flex:0 1 auto;align-items:center;justify-content:center;text-align:center;text-decoration:none}
+.demo-entry .btn.primary{flex:0 1 auto;background:var(--demo-accent);color:#10140a}
+.demo-entry .btn.ghost{background:#181d18;border-color:#515a4e;color:#f2f4ec}
+.demo-entry .btn.ghost:hover{border-color:var(--demo-accent);background:#252c20}
+.demo-entry-footer{display:flex;justify-content:space-between;align-items:stretch;gap:0 12px;padding-inline:20px;border-top:1px solid var(--demo-line);background:#151915}
+.demo-tech,.demo-roadmap{display:flex;align-items:center;gap:8px;min-height:44px;padding:5px 0;color:var(--demo-muted);text-decoration:none}
+.demo-tech{font-size:12px;font-weight:650}
+.demo-roadmap{gap:8px 14px}
+.demo-tech:hover,.demo-roadmap:hover{color:var(--demo-accent)}
+.demo-entry :is(button,a):focus-visible{outline:2px solid var(--demo-accent);outline-offset:2px}
+.demo-roadmap-title{color:#f2f4ec;font-size:12px;font-weight:750;white-space:nowrap}
+.demo-roadmap-phases{display:flex;flex-wrap:wrap;gap:3px 10px;font-size:11px}
+.demo-roadmap-phases > span{white-space:nowrap}
+.demo-roadmap-phases b{color:var(--demo-accent);font:700 .9em/1 "Geist Mono",ui-monospace,monospace;margin-inline-end:4px}
+.demo-roadmap-arrow{margin-inline-start:auto;color:var(--demo-accent);font-size:16px}
 
 /* ---------- Top bar ---------- */
 .top{grid-area:top;display:flex;align-items:stretch;gap:12px;min-width:0}
@@ -766,17 +799,22 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
   .live-btn{justify-self:end}
 }
 @media (max-width:860px){
-  #app[data-demo-entry]{grid-template-rows:auto auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto;grid-template-areas:"top" "demo" "stage" "time" "side"}
-  .demo-entry strong{width:100%}
-  .demo-entry .btn{flex:1;justify-content:center;white-space:normal}
-  .demo-roadmap{width:100%;margin-inline-start:0}
+  #app[data-demo-entry]{grid-template-rows:auto auto clamp(300px, calc(100dvh - 460px), 62vh) auto auto;grid-template-areas:"demo" "top" "stage" "time" "side"}
   :is(.top-actions,.d-head,.c-head,.help-head) .icon-btn,.timeline .icon-btn{min-width:44px;min-height:44px}
   :is(.top-actions,.tabs,.c-tabs,.timeline,.actions,.encounter-actions) :is(button,a,select),.srow-btn,#slider{min-height:44px}
 }
-@media (max-width:410px){
-  .demo-roadmap{display:grid;grid-template-columns:1fr auto;row-gap:3px}
-  .demo-roadmap-phases{grid-column:1/-1;grid-row:2;justify-content:space-between}
+@media (max-width:640px){
+  .demo-entry-main{padding:12px;gap:10px}
+  .demo-entry-main::before{background:linear-gradient(90deg,#111412 2%,rgba(17,20,18,.72) 50%,rgba(17,20,18,.3))}
+  .demo-entry-art{width:100%;object-position:70% 50%;opacity:.55}
+  .demo-entry-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  .demo-entry .btn{padding:5px 4px;font-size:12px;line-height:1.2}
+  .demo-entry-footer{display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding-inline:12px}
+  .demo-roadmap{display:grid;grid-template-columns:minmax(0,1fr) auto;row-gap:4px;margin:0;padding-block:7px}
+  .demo-roadmap-phases{display:grid;grid-column:1/-1;grid-row:2;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  .demo-roadmap-phases > span{display:flex;align-items:baseline;white-space:normal}
   .demo-roadmap-arrow{grid-column:2;grid-row:1}
+  .demo-tech{justify-content:space-between;border-top:1px solid var(--demo-line)}
 }
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
@@ -838,6 +876,39 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
 </head>
 <body>
 <div id="app">
+  <section class="demo-entry" id="demoEntry" aria-labelledby="demoEntryTitle" hidden>
+    <div class="demo-entry-main">
+      <template id="demoEntryArtwork">
+        <img class="demo-entry-art" id="demoEntryArt" src="./docs/media/ai-factory-control-floor.webp"
+          alt="" width="2172" height="724" decoding="async" fetchpriority="low">
+      </template>
+      <div class="demo-entry-intro">
+        <p class="demo-entry-kicker" id="demoEntryKicker">AI Factory · Démo publique</p>
+        <h2 class="demo-entry-title" id="demoEntryTitle">Le poste de pilotage de l’IA</h2>
+        <p class="demo-entry-copy" id="demoEntryCopy">Explorez les projets, les décisions et les flux d’une organisation fictive.</p>
+      </div>
+      <nav class="demo-entry-actions" id="demoEntryActions" aria-label="Parcours de la démo">
+        <button type="button" class="btn primary" id="demoProjects">Projets et tâches</button>
+        <a class="btn ghost" id="demoDecision" href="./companion/index.html?lang=fr">Compagnon de décision</a>
+        <a class="btn ghost" id="demoFlows" href="./docs/flow-lab.html?lang=fr">Laboratoire de flux</a>
+      </nav>
+    </div>
+    <div class="demo-entry-footer">
+      <a class="demo-roadmap" id="demoRoadmap" href="./docs/roadmap.html?lang=fr" aria-label="Feuille de route. En premier, identités et tests. Ensuite, compétences et ERP. À explorer, coûts et navigateur.">
+        <span class="demo-roadmap-title" id="demoRoadmapTitle">Feuille de route</span>
+        <span class="demo-roadmap-phases">
+          <span><b aria-hidden="true">01</b><span id="demoRoadmapFirst">Identités &amp; tests</span></span>
+          <span><b aria-hidden="true">02</b><span id="demoRoadmapNext">Compétences &amp; ERP</span></span>
+          <span><b aria-hidden="true">03</b><span id="demoRoadmapExplore">Coûts &amp; navigateur</span></span>
+        </span>
+        <span class="demo-roadmap-arrow" aria-hidden="true">↗</span>
+      </a>
+      <a class="demo-tech" id="demoTech" href="https://github.com/alebgl77/ai-factory/blob/main/README.fr.md#technologies">
+        <span id="demoTechLabel">Technologies sur GitHub</span><span class="demo-roadmap-arrow" aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </section>
+
   <header class="top">
     <div class="brand">
       <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9.5 2.5v3M14.5 2.5v3M9.5 18.5v3M14.5 18.5v3M2.5 9.5h3M2.5 14.5h3M18.5 9.5h3M18.5 14.5h3"/><path d="M10 10h4v4h-4z"/></svg></div>
@@ -880,22 +951,6 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
       </div>
     </div>
   </header>
-
-  <nav class="demo-entry" id="demoEntry" aria-labelledby="demoEntryTitle" hidden>
-    <strong id="demoEntryTitle">Explorer la démo</strong>
-    <button type="button" class="btn primary" id="demoProjects">Projets et tâches</button>
-    <a class="btn ghost" id="demoDecision" href="./companion/index.html?lang=fr">Compagnon de décision</a>
-    <a class="btn ghost" id="demoFlows" href="./docs/flow-lab.html?lang=fr">Laboratoire de flux</a>
-    <a class="demo-roadmap" id="demoRoadmap" href="./docs/roadmap.html?lang=fr" aria-label="Feuille de route. En premier, identités et tests. Ensuite, compétences et ERP. À explorer, coûts et navigateur.">
-      <span class="demo-roadmap-title" id="demoRoadmapTitle">Feuille de route</span>
-      <span class="demo-roadmap-phases">
-        <span><b aria-hidden="true">01</b><span id="demoRoadmapFirst">Identités &amp; tests</span></span>
-        <span><b aria-hidden="true">02</b><span id="demoRoadmapNext">Compétences &amp; ERP</span></span>
-        <span><b aria-hidden="true">03</b><span id="demoRoadmapExplore">Coûts &amp; navigateur</span></span>
-      </span>
-      <span class="demo-roadmap-arrow" aria-hidden="true">↗</span>
-    </a>
-  </nav>
 
   <aside class="side" aria-label="Équipe et espaces">
     <div class="tabs" role="tablist">
@@ -5058,7 +5113,13 @@ function setLanguage(lang) {
   $('exerciseLaunch').textContent = ui('UC-04 workshop', 'Atelier UC-04');
   $('exercise2d').textContent = ui('2D workshop', 'Atelier 2D');
   $('exercise2d').href = `exercise/index.html?lang=${lang}`;
-  $('demoEntryTitle').textContent = ui('Explore the demo', 'Explorer la démo');
+  $('demoEntryKicker').textContent = ui('AI Factory · Public demo', 'AI Factory · Démo publique');
+  $('demoEntryTitle').textContent = ui('The AI operations floor', 'Le poste de pilotage de l’IA');
+  $('demoEntryCopy').textContent = ui('Explore projects, decisions and model flows in a fictional organization.',
+    'Explorez les projets, les décisions et les flux d’une organisation fictive.');
+  $('demoEntryActions').setAttribute('aria-label', ui('Demo paths', 'Parcours de la démo'));
+  $('demoTechLabel').textContent = ui('Technologies on GitHub', 'Technologies sur GitHub');
+  $('demoTech').href = `https://github.com/alebgl77/ai-factory/blob/main/${lang === 'en' ? 'README.md' : 'README.fr.md'}#technologies`;
   $('demoProjects').textContent = ui('Projects and tasks', 'Projets et tâches');
   $('demoDecision').textContent = ui('Decision Companion', 'Compagnon de décision');
   $('demoDecision').href = language === 'en' ? './companion/index.html?lang=en' : './companion/index.html?lang=fr';
@@ -6249,6 +6310,8 @@ async function boot() {
   if (demoPortraits()) {
     $('app').dataset.demoEntry = '';
     $('demoEntry').hidden = false;
+    const artwork = $('demoEntryArtwork');
+    artwork.after(artwork.content.cloneNode(true));
   }
   window.onStoreHealth(Store.ok);
   if (Store.recovered) toast(ui('Browser data could not be read. The demo was reloaded and a backup was kept (aiFactoryRef.v2.backup).',
