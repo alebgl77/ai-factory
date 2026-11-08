@@ -17,7 +17,7 @@ device opening them.
 
 | Mode | How to start | Data and access |
 |---|---|---|
-| Offline browser | Open [the companion HTML file](../dashboard/companion/index.html) directly | Fictional cases, decisions and replies live in the current tab. Reloading starts over. |
+| Offline browser | Open `dashboard/companion/index.html` from a source checkout | Fictional cases, decisions and replies live in the current tab. Reloading starts over. |
 | API off | Keep `FACTORY_WORKBENCH_MODE=off`, the default | The workbench API routes are absent. |
 | Connected simulation | Set `FACTORY_WORKBENCH_MODE=demo` | Shared fictional cases and ERP drafts in SQLite. Use a controlled environment if authentication is off. |
 | Protected simulation | Set `FACTORY_WORKBENCH_MODE=protected_demo` with proxy SSO | The same simulated ERP in an authenticated workspace with role checks. |
@@ -27,8 +27,8 @@ relative path `companion/` and explicitly selects the isolated browser simulatio
 carries no session, credential or case ID. API or authentication failures in an online
 workspace are shown in the companion without falling back to a local demo.
 
-Follow the [Compose quick start](../README.md#local-quick-start-no-key-at-all), set the desired
-mode in `.env` and run `docker compose --profile sim up -d --build`. The companion is at
+Copy `.env.example` to `.env`, set the desired mode and run
+`docker compose --profile sim up -d --build` from a source checkout. The companion is at
 `/companion/`. For the protected simulation, follow the [SSO and hardening guide](SECURITY.md),
 configure `FACTORY_AUTH=sso`, `FACTORY_AUTH_MODE=proxy` and `FACTORY_ROLE_MAP`, and start the
 `sso` profile. Serve the companion and API through the same origin.
@@ -127,7 +127,7 @@ staff presence or working hours. It starts with new events and uses the local st
 Optional `FACTORY_WORKBENCH_CHAT_MODE=local` requires `protected_demo`, proxy authentication
 and the internal LiteLLM gateway. The server selects the fixed `chat-sensitive` alias, applies
 C3 metadata, masks inputs and outputs and disables prompt logging for the request. Configure
-the local target as shown in the [deployment guide](../README.md#real-deployment-cloud-first-then-vps-then-local-hardware).
+the local target as shown in the [Compose placement guide](../compose/README.md#cloud-first-placement).
 The model advises without tools. An unavailable local gateway returns an error. The local
 target can itself be simulated under the `sim` profile.
 
@@ -174,7 +174,7 @@ with synthetic observations. Optional companion advice uses the fixed local alia
 
 ## Read-only Odoo probe and synthetic replay
 
-Install the [API dependencies](../README.md#tests-and-checks). Set `FACTORY_ODOO_URL` to an
+Install the [API dependencies](../api/README.md#running-locally). Set `FACTORY_ODOO_URL` to an
 HTTPS origin and provide `FACTORY_ODOO_DATABASE` and `FACTORY_ODOO_API_KEY` in the operator
 process environment. Use an account restricted to reading from the Odoo 19 JSON-2 API.
 

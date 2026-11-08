@@ -4,6 +4,8 @@
 import importlib.util
 import json
 import shutil
+import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,34 @@ SHA = "1" * 40
 DIGEST = "sha256:" + "2" * 64
 UPSTREAM_DIGEST = "sha256:" + "3" * 64
 REGISTRY = "ghcr.io/example"
+
+
+def test_exact_archive_paths_include_the_offline_documentation(tmp_path):
+    manifest = ROOT / ".github/scripts/release_bundle.paths"
+    paths = manifest.read_text(encoding="utf-8").splitlines()
+    archive = tmp_path / "deploy.tar"
+    with archive.open("wb") as output:
+        subprocess.run(["git", "archive", "HEAD", "--", *paths], cwd=ROOT,
+                       stdout=output, check=True, timeout=30)
+    staged = tmp_path / "staged"
+    with tarfile.open(archive) as source:
+        source.extractall(staged, filter="data")
+    # Use edited guides from this checkout too so the check works before commit.
+    for document in staged.rglob("*.md"):
+        document.write_bytes((ROOT / document.relative_to(staged)).read_bytes())
+    bundle.validate_markdown_links(staged)
+
+
+def test_documentation_checker_rejects_a_missing_file(tmp_path):
+    (tmp_path / "operator.md").write_text(
+        "[existing](operator.md#details)\n[anchor](#details)\n[external](https://example.org)\n"
+        "~~~markdown\n[example](illustration-only.md)\n~~~\n"
+        "[French guide](fr/guide.md)\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match=r"operator.md -> fr/guide.md") as error:
+        bundle.validate_markdown_links(tmp_path)
+    assert "illustration-only.md" not in str(error.value)
 
 
 def test_inventory_reuses_the_same_digest_for_identical_upstream_images():

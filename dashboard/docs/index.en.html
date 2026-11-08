@@ -1,0 +1,267 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Run the demo, deploy AI Factory privately on Compose or Kubernetes, and operate it with clear controls.">
+  <title>Operations guide · AI Factory</title>
+  <link rel="alternate" hreflang="fr" href="./index.html">
+  <link rel="stylesheet" href="./guide.css">
+  <script defer src="./guide.js"></script>
+</head>
+<body>
+  <a class="skip" href="#contenu">Skip to the guide</a>
+  <header class="masthead">
+    <a class="brand" href="../index.html?lang=en"><span class="mark" aria-hidden="true">AF</span> AI Factory</a>
+    <nav class="masthead-actions" aria-label="Guide navigation">
+      <a class="back" href="../index.html?lang=en">Back to the Factory <span aria-hidden="true">↗</span></a>
+      <a class="locale-switch" data-guide-language href="./index.html" hreflang="fr" lang="fr" aria-label="Lire en français">FR</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Contents">
+      <p class="eyebrow">Documentation</p>
+      <ol>
+        <li><a href="#apercu">Overview</a></li>
+        <li><a href="#demarrage">Get started</a></li>
+        <li><a href="#environnements">Environments and prerequisites</a></li>
+        <li><a href="#acces">Identity and access scope</a></li>
+        <li><a href="#sous-agents">Subagent runner</a></li>
+        <li><a href="#workbench">Workbench decisions</a></li>
+        <li><a href="#integrations">Models and connectors</a></li>
+        <li><a href="#supervision">Monitoring and incidents</a></li>
+        <li><a href="#production">Prepare for production</a></li>
+        <li><a href="#kubernetes">Kubernetes pilot</a></li>
+        <li><a href="#reprise">Backup and rollback</a></li>
+      </ol>
+    </nav>
+
+    <main id="contenu" tabindex="-1">
+      <div class="hero">
+        <p class="eyebrow">AI Factory · Operations handbook</p>
+        <h1>Deploy, govern<br>and operate the Factory.</h1>
+        <p class="lead">Start with a fictional scenario or prepare a private deployment. Follow access controls, agent work, human decisions and incident recovery.</p>
+        <div class="hero-links">
+          <a class="primary" href="#demarrage">Choose a walkthrough</a>
+          <a class="secondary" href="./architecture.en.html">Open the architecture atlas</a>
+          <a class="secondary" href="./roadmap.html?lang=en">View the roadmap</a>
+        </div>
+      </div>
+      <form id="guide-search" class="search" role="search" hidden>
+        <label for="guide-query">Search the guide</label>
+        <div class="search-field">
+          <input id="guide-query" type="search" maxlength="100" placeholder="E.g. technical review, tokens, restore" autocomplete="off" aria-controls="guide-results">
+          <button type="reset">Clear</button>
+        </div>
+        <p id="guide-status" class="search-status" role="status" aria-live="polite"></p>
+        <ul id="guide-results" class="search-results" hidden></ul>
+      </form>
+
+      <section id="apercu" aria-labelledby="titre-apercu">
+        <h2 id="titre-apercu">Overview</h2>
+        <p>In <strong>Planning → Portfolio and tasks</strong>, connect a Factory objective to its projects and business-unit tasks. The portfolio tracks due dates, ownership, dependencies and evidence.</p>
+        <ol class="flow" aria-label="Work lifecycle">
+          <li><b>Plan</b><span>The project lead creates the tasks.</span></li>
+          <li><b>Assign</b><span>The manager assigns or delegates.</span></li>
+          <li><b>Review</b><span>The architect reviews technical work.</span></li>
+          <li><b>Decide</b><span>Workbench records the sensitive decision.</span></li>
+        </ol>
+        <p class="note">GitHub Pages presents fictional cases. Compose and Kubernetes can host a private deployment with its own identities, data and model services.</p>
+        <p><a href="./architecture.en.html">Explore the architecture diagrams and 2D floor plan</a></p>
+      </section>
+
+      <section id="demarrage" aria-labelledby="titre-demarrage">
+        <h2 id="titre-demarrage">Get started</h2>
+        <div class="paths">
+          <article class="path">
+            <h3>Project lead or manager</h3>
+            <p>Follow a subtask, its attempt and its evidence in the portfolio.</p>
+            <p><a href="#sous-agents">Understand delegation</a></p>
+          </article>
+          <article class="path">
+            <h3>Approver or BU lead</h3>
+            <p>Verify the task revision and the decision-maker’s access scope.</p>
+            <p><a href="#workbench">Prepare a decision</a></p>
+          </article>
+          <article class="path">
+            <h3>Platform engineer or operator</h3>
+            <p>Choose a deployment mode, configure identity and plan recovery.</p>
+            <p><a href="#environnements">Compare environments</a></p>
+          </article>
+        </div>
+        <details open>
+          <summary>Try the public demo</summary>
+          <ol>
+            <li>Open <a href="../index.html?lang=en">the Factory</a> and select <strong>Planning → Portfolio and tasks</strong>.</li>
+            <li>Expand the delegated work summary below an active task.</li>
+            <li>Compare a reported token count with an unknown value. The examples illustrate the interface.</li>
+            <li>Open the <a href="./flow-lab.html?lang=en">AI Flow Lab</a> to simulate a model route and see the impact of an outage or security rule.</li>
+          </ol>
+        </details>
+        <details>
+          <summary>Qualify a private deployment in staging</summary>
+          <ol>
+            <li>Prepare two separate test accounts and synthetic data. Sign in through the SSO proxy.</li>
+            <li>Create an objective, a project and an active parent task. Delegate a short subtask to an enabled agent, such as summarizing three fictional facts.</li>
+            <li>Check the state transitions, result and reported counters. Verify that a technical task goes through review.</li>
+            <li>Submit a sensitive task, decide in the Companion with the authorized account and verify the new state in the portfolio.</li>
+          </ol>
+        </details>
+      </section>
+
+      <section id="environnements" aria-labelledby="titre-environnements">
+        <h2 id="titre-environnements">Environments and prerequisites</h2>
+        <dl class="rules">
+          <div><dt>GitHub Pages</dt><dd>A browser is sufficient. The dashboard, demo Companion and Flow Lab provide fictional scenarios. Some preferences, ideas and simulations stay in the browser.</dd></div>
+          <div><dt>Compose simulation</dt><dd>A Linux Docker engine, Docker Compose and an environment file based on <code>.env.example</code>. The <code>sim</code> profile uses mock providers to check startup and service flows.</dd></div>
+          <div><dt>Private Compose</dt><dd>A Docker engine dedicated to the same trust boundary, verified images, persistent storage, TLS and OIDC, a business-unit policy, operator-managed secrets and validated model routes.</dd></div>
+          <div><dt>Private Kubernetes</dt><dd>Helm, a dedicated namespace with <code>restricted</code> admission, a CNI that enforces <code>NetworkPolicy</code>, HTTPS-enforcing Ingress, OIDC and a qualified storage class. The chart installs the core and optional Alloy.</dd></div>
+        </dl>
+        <p>CI uses fictional identities and data. It checks PostgreSQL restart in Compose and API persistence in Kind after replacing a pod and restoring to a second volume. Qualify your own controllers, storage drivers and external services on the target platform.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/actions/runs/42429975300">Reference CI run for Compose and Kubernetes</a></p>
+      </section>
+
+      <section id="acces" aria-labelledby="titre-acces">
+        <h2 id="titre-acces">Identity and access scope</h2>
+        <p>On Compose, configure <code>FACTORY_AUTH=sso</code>, <code>FACTORY_AUTH_MODE=proxy</code>, <code>FACTORY_TRUSTED_PROXIES</code>, <code>FACTORY_ROLE_MAP</code> and <code>FACTORY_BU_POLICY</code>. On Kubernetes, the private profile enforces the trust boundary inside the pod and mounts the business-unit policy from a referenced secret. Keep the dashboard and API on the same origin. Each group that grants a role must carry the relevant business scope.</p>
+        <dl class="rules">
+          <div><dt>Factory leadership</dt><dd>A global admin group with scope <code>["*"]</code> manages objectives and projects.</dd></div>
+          <div><dt>Business-unit leads</dt><dd><code>project_lead</code> plans, <code>manager</code> assigns, and <code>architect</code> performs technical review.</dd></div>
+          <div><dt>Employees and agents</dt><dd>The policy links the verified identity to its employee record or agent catalog entry. The agent must have a valid evaluation.</dd></div>
+        </dl>
+        <p>Each business unit can allow an agent to start, require human authorization or block execution. Renew pending start grants after restarting the API.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/BU_SECURITY.md">Business-unit groups and access controls</a></p>
+        <p><a href="./architecture.en.html#zone-cafe">Submit ideas at the coffee corner</a></p>
+      </section>
+
+      <section id="sous-agents" aria-labelledby="titre-sous-agents">
+        <h2 id="titre-sous-agents">Subagent runner</h2>
+        <p>The runner handles read and preparation subtasks for configured business units and agents. An active parent can delegate one level deep, with a maximum of four subtasks including cancellations.</p>
+        <ol>
+          <li>Configure a local C3/C4 <code>chat-sensitive</code> use case and an evaluated agent associated with that case in the business unit.</li>
+          <li>Provision a LiteLLM virtual key restricted to that case, alias and chat routes. Bind its fingerprint to the case in the strict policy. Store the raw key in your secret manager.</li>
+          <li>Mount the private runner file read-only. On Compose, add <code>docker-compose.portfolio.yml</code> and set <code>FACTORY_PORTFOLIO_RUNNER_SOURCE</code> to its absolute host path. On Kubernetes, reference an existing secret via <code>api.portfolioRunner.existingSecret</code> and configure <code>telemetry.litellmURL</code> according to the chart guide.</li>
+          <li>Test a denial with a different key or business unit, then run an authorized task with synthetic input.</li>
+        </ol>
+        <details>
+          <summary>View the private file structure</summary>
+          <p>These identifiers are fictional. The key must match the virtual key provisioned for the use case.</p>
+          <pre><code>{
+  "version": 1,
+  "bindings": [{
+    "agent_id": "ag-support-research",
+    "unit": "cc-relation",
+    "usecase_id": "uc-41",
+    "virtual_key": "&lt;virtual key for this use case&gt;"
+  }]
+}</code></pre>
+        </details>
+        <p class="note">Each attempt returns text, with a call bounded to 60 seconds and 512 output tokens. Review the output before using it in a business process.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/GATEWAY_SECURITY.md">Provision the key and LiteLLM route</a></p>
+      </section>
+
+      <section id="workbench" aria-labelledby="titre-workbench">
+        <h2 id="titre-workbench">Workbench decisions</h2>
+        <p>Enable <code>FACTORY_WORKBENCH_MODE=portfolio</code> and <code>FACTORY_WORKBENCH_CYBER_AUDIT=on</code> on the protected deployment. A submitted sensitive task enters <strong>Workbench handoff</strong> after technical review when required. The API links the case to the exact task revision. The security audit remains active through the workflow.</p>
+        <p>An authorized global approver distinct from the other participants opens the <strong>Decision Companion</strong>. The decision covers the task and its evidence. CRM and ERP operations have their own execution workflows.</p>
+        <dl class="rules">
+          <div><dt>Approve</dt><dd>The task becomes <strong>Completed</strong> and may unblock its dependencies.</dd></div>
+          <div><dt>Reject</dt><dd>The task becomes <strong>Cancelled</strong>. Work that requires successful completion remains blocked.</dd></div>
+          <div><dt>Request changes</dt><dd>The task returns to <strong>Ready</strong>. A new submission opens a separate decision.</dd></div>
+        </dl>
+        <p>The portfolio shows the outcome and date. Workbench retains the approver and rationale within its own access scope.</p>
+      </section>
+
+      <section id="integrations" aria-labelledby="titre-integrations">
+        <h2 id="titre-integrations">Models and connectors</h2>
+        <dl class="rules">
+          <div><dt>Models</dt><dd>The runner uses the local <code>chat-sensitive</code> route. Private assistance can use a configured internal model. Flow Lab calculates synthetic scenarios in the browser.</dd></div>
+          <div><dt>CRM</dt><dd>Salesforce, HubSpot and Twenty have read adapters that prepare a Workbench case from an opportunity. Qualify the permissions and required fields in the provider’s sandbox.</dd></div>
+          <div><dt>ERP</dt><dd>Workbench defines an execution contract for a host-supplied connector. Verify ERP-side idempotency, independent readback and reconciliation before a real write.</dd></div>
+          <div><dt>MCP</dt><dd>The local MCP server provides the Workbench operations available to its identity. Keep preparation, approval and execution in their respective scopes.</dd></div>
+        </dl>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/ADAPTIVE_WORKBENCH.md">CRM, MCP and Workbench guide</a> · <a href="https://github.com/alebgl77/ai-factory/blob/main/docs/WORKBENCH.md">Workbench modes and limits</a></p>
+      </section>
+
+      <section id="supervision" aria-labelledby="titre-supervision">
+        <h2 id="titre-supervision">Monitoring and incidents</h2>
+        <p>Check task state, evidence and token totals in the portfolio. Distinguish provider measurements, reported values and counters that are still unknown. A partial total covers the available counts.</p>
+        <details>
+          <summary>A subtask remains ready</summary>
+          <p>Check dependency completion, agent evaluation, use-case binding and autonomy policy. In human-approval mode, ask the manager to issue the start grant.</p>
+        </details>
+        <details>
+          <summary>An execution stalls or times out</summary>
+          <p>Check LiteLLM, the local model, key binding and network rules. After interruption, the runner can take up to two minutes to release the attempt. The manager reviews the cause and reassigns the task to resume.</p>
+          <p>The <code>portfolio.runner_attempt_finished</code> and <code>portfolio.runner_tick_failed</code> events support triage. Authorized users can access the detailed result on the task.</p>
+        </details>
+        <details>
+          <summary>A decision takes time to appear</summary>
+          <p>Check that the decision was recorded on the matching case and that the API can read both databases. Let reconciliation run and reload the view. Record identifiers and timestamps for the incident, then verify access scope before sharing a trace.</p>
+        </details>
+        <details>
+          <summary>The readiness check passes and an integration fails</summary>
+          <p><code>/api/v1/ready</code> checks local paths and API access configuration. Run a functional check against the OIDC provider, model and telemetry destinations. Verify DNS, TLS, network policy and permissions.</p>
+        </details>
+        <details>
+          <summary>Logs do not reach Loki or the SIEM</summary>
+          <p>Check TLS authentication, collector access to the source and network policy. On Kubernetes, verify <code>pods/log</code> access in the intended namespace. Test delivery to your SIEM and access to audit files separately.</p>
+        </details>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/OPERATING_EVIDENCE.md">Metrics, traces and operating evidence</a></p>
+      </section>
+
+      <section id="production" aria-labelledby="titre-production">
+        <h2 id="titre-production">Prepare for production</h2>
+        <ol class="steps">
+          <li><strong>Choose the revision to qualify.</strong> For a private pilot, start from <a href="https://github.com/alebgl77/ai-factory/tree/27800aa798d7bf21e7bec4ab57ffa4461e0465c3">audited revision <code>27800aa</code></a> and build the images locally with the validated configuration. When a signed bundle covers this revision or a later qualified revision, verify the manifest, checksums and image attestations. Use Compose and <code>docker-compose.release-lock.yml</code> from that same bundle. Put every operator policy and Portfolio overlay before the lock file and keep it as the final <code>-f</code> argument. Release <code>v1.1.1</code> and its <code>images.txt</code> are historical references.</li>
+          <li><strong>Prepare the tenant.</strong> Configure TLS, SSO, the business-unit policy, gateway secrets and the local model. Set <code>FACTORY_DEMO_MODE=never</code> and <code>FACTORY_GUARDRAIL_MODE=block</code>. Keep internal services on private networks.</li>
+          <li><strong>Validate the rendered Compose configuration.</strong> Use the exact target profiles and files. The JSON can contain secrets. Pipe it directly to preflight.</li>
+        </ol>
+        <pre><code>docker compose --project-name ai-factory \
+  -f docker-compose.yml -f docker-compose.release-lock.yml \
+  --env-file /secure/ai-factory/production.env --profile sso \
+  config --format json | python scripts/check_production.py</code></pre>
+        <p>This command shows the bundle path. For a source build, use the Compose files from the audited revision and pass the validated configuration to the same preflight. Keep the existing project name to retain its volumes. Add <code>-f docker-compose.portfolio.yml</code> and the runner file only when enabling subagents. Add <code>--profile local-gpu</code> for the bundled GPU service or pass <code>--private-gpu-host NAME</code> to preflight for each approved external private DNS name.</p>
+        <ol class="steps" start="4">
+          <li><strong>Start and check health.</strong> Run <code>up -d --no-build</code> with the verified bundle or <code>up -d --build</code> with the audited source. Keep the files, variables and profiles used for preflight. Inspect services with <code>docker compose ps</code> in the same configuration.</li>
+          <li><strong>Qualify before granting access.</strong> Repeat the private walkthrough. Verify cross-unit denial and independent approval, then simulate a model outage and restart after a decision.</li>
+          <li><strong>Define operations.</strong> Assign on-call responsibilities, set budgets and retention, encrypt backups and rehearse restore in isolation.</li>
+        </ol>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/DEPLOYMENT.en.md">Compose deployment and bundle verification</a> · <a href="https://github.com/alebgl77/ai-factory/blob/main/docs/SECURITY.md#14-production-hardening-guide">Harden the deployment</a></p>
+      </section>
+
+      <section id="kubernetes" aria-labelledby="titre-kubernetes">
+        <h2 id="titre-kubernetes">Kubernetes pilot</h2>
+        <ol class="steps">
+          <li>Choose the <code>demo</code> profile with local port-forwarding for fictional qualification, or <code>private</code> with HTTPS, OIDC, a business-unit policy and existing secrets.</li>
+          <li>If the bundle includes the chart, use its Helm archive and <code>values.release.json</code>. For a source rehearsal, stage the chart with <code>python scripts/package_helm.py</code> and use images compatible with the tested revision.</li>
+          <li>Keep one API replica, a PVC and a replacement strategy without overlap. Plan the upgrade outage and rehearse restore on a separate PVC.</li>
+          <li>Verify a valid sign-in, cross-unit denial and rejection of forged identity headers. Repeat the checks with your Ingress controller, CNI and OIDC provider.</li>
+          <li>For Alloy, provision the destination secret and restrict egress to the Kubernetes API, DNS and the approved Loki endpoint. Qualify delivery to your SIEM as well.</li>
+        </ol>
+        <p>The chart installs the AI Factory core and optional Alloy. Operators run the model and telemetry services and connect them as needed for the private profile.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/KUBERNETES.md">Install the Helm chart</a> · <a href="https://github.com/alebgl77/ai-factory/blob/main/docs/KUBERNETES_OPERATIONS.md">Operate volumes and Alloy</a></p>
+      </section>
+
+      <section id="reprise" aria-labelledby="titre-reprise">
+        <h2 id="titre-reprise">Backup and rollback</h2>
+        <p>Keep the portfolio and Workbench databases and audit files on the private API volume. Suspend writes and processing before taking a consistent backup. Record the matching version and business-unit policy. Copying live SQLite files can miss journal writes.</p>
+        <details>
+          <summary>Restore without replaying operations</summary>
+          <ol>
+            <li>Restore to an isolated target with the qualified version and policies. Keep the runner disabled during verification.</li>
+            <li>Check database integrity, pending decisions and business-unit isolation. Renew any start grants that still apply.</li>
+            <li>Check active tasks and compare the restore point with confirmed events after the backup. The manager decides how to resume work.</li>
+            <li>Enable the runner after qualifying a test task and a Workbench decision.</li>
+          </ol>
+        </details>
+        <p>For rollback, disable the runner and retain a snapshot of recent state. For a Kubernetes file archive, save the contents of the volume and preserve the destination PVC root permissions. If the data has migrated, restore a compatible point and reconcile subsequent writes with the operator.</p>
+        <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/PORTFOLIO.md">Portfolio and API reference</a></p>
+      </section>
+    </main>
+  </div>
+  <footer><a href="#contenu">Back to the top</a><span>AI Factory · Operations guide</span></footer>
+</body>
+</html>

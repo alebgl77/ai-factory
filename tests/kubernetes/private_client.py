@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 """Cookie-jar browser stand-in, as in the Compose SSO test, with strict TLS and two BUs."""
 
+import datetime as dt
 import http.client
 import http.cookiejar
 import json
@@ -13,6 +14,7 @@ import urllib.request
 
 BASE = "https://factory.test"
 DEX = "dex.kube-test.svc.cluster.local"
+OBSERVATORY = "/api/v1/shadow-ai"
 SPOOF = {
     "X-Forwarded-User": "forged",
     "X-Forwarded-Email": "forged@factory.test",
@@ -95,6 +97,29 @@ def check_duplicate_origin(opener, context):
         connection.close()
 
 
+def check_observatory(anonymous, ops, finance, admin):
+    request(anonymous, OBSERVATORY, 401, headers=SPOOF)
+    request(finance, OBSERVATORY, 403, headers=SPOOF)
+    previous_month = dt.datetime.now(dt.timezone.utc).replace(day=1) - dt.timedelta(days=1)
+    request(admin, OBSERVATORY + "/periods", 200, payload={
+        "period": previous_month.strftime("%Y-%m"),
+        "team_usage": [
+            {"team": "operations", "tool": "ops-tool", "kind": "usage", "people": 7, "events": 10},
+            {"team": "operations", "tool": "small-cohort", "kind": "usage", "people": 6, "events": 8},
+            {"team": "finance", "tool": "finance-tool", "kind": "usage", "people": 9, "events": 12},
+        ],
+        "adoption": [],
+    })
+    _, raw, _ = request(ops, OBSERVATORY, 200, headers=SPOOF)
+    visible = json.loads(raw)
+    assert visible["privacy_threshold"] == 7
+    assert [row["tool"] for row in visible["team_usage"]] == ["ops-tool"], visible
+    assert visible["capabilities"] == {"propose": False, "decide": False}
+    _, raw, _ = request(admin, OBSERVATORY, 200)
+    assert {row["tool"] for row in json.loads(raw)["team_usage"]} == {"ops-tool", "finance-tool"}
+    print("PASS private Observatory allowlist, BU scope and privacy threshold")
+
+
 def main(factory_cert, dex_cert):
     context = ssl.create_default_context(cafile=factory_cert)
     context.load_verify_locations(cafile=dex_cert)
@@ -118,15 +143,17 @@ def main(factory_cert, dex_cert):
 
     ops = browser(context, SyntheticIdentity("alice", "ops"))
     finance = browser(context, SyntheticIdentity("carol", "finance"))
+    admin = browser(context, SyntheticIdentity("lea", "admins"))
     _, page, landing = request(ops, "/", 200)
     assert landing == BASE + "/" and b"/vendor/three/build/three.module.js" in page
     check_duplicate_origin(ops, context)
     request(finance, "/", 200)
+    request(admin, "/", 200)
     outsider = browser(context, SyntheticIdentity("eve", "outside"))
     _, _, callback = request(outsider, "/", 403)
     assert urllib.parse.urlsplit(callback).path == "/oauth2/callback"
     request(outsider, "/api/v1/registry", 401, headers=SPOOF)
-    print("PASS two Dex sign-ins and an identity rejected by the oauth2-proxy group gate")
+    print("PASS three Dex sign-ins and an identity rejected by the oauth2-proxy group gate")
 
     for opener, name, center, own, foreign in (
         (ops, "alice", "cc-ops", "uc-01", "uc-05"),
@@ -146,6 +173,7 @@ def main(factory_cert, dex_cert):
                 headers=SPOOF, payload={"version": f"kind-own-{name}"})
         request(opener, "/api/v1/audit", 403, headers=SPOOF)
     print("PASS authentic provider identities, forged privilege denied, cross-BU read and write denied")
+    check_observatory(anonymous, ops, finance, admin)
 
 
 if __name__ == "__main__":

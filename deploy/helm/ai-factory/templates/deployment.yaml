@@ -104,6 +104,11 @@ spec:
             - {name: FACTORY_WORKBENCH_MODE, value: {{ include "ai-factory.workbenchMode" . | quote }}}
             - {name: FACTORY_WORKBENCH_CYBER_AUDIT, value: {{ ternary "on" "off" .Values.api.workbenchCyberAudit | quote }}}
             - {name: FACTORY_ASSIST_ENABLED, value: {{ ternary "on" "off" .Values.api.assistEnabled | quote }}}
+            - {name: FACTORY_SHADOW_AI_ENABLED, value: {{ ternary "on" "off" .Values.api.shadowAI.enabled | quote }}}
+            {{- if .Values.api.shadowAI.enabled }}
+            - {name: FACTORY_SHADOW_AI_GROUPS, value: {{ join "," .Values.api.shadowAI.groups | quote }}}
+            - {name: FACTORY_SHADOW_AI_PRIVACY_THRESHOLD, value: {{ .Values.api.shadowAI.privacyThreshold | quote }}}
+            {{- end }}
             {{- if $private }}
             - {name: FACTORY_BU_POLICY, value: /var/run/factory/business-units/policy.yaml}
             - {name: FACTORY_ROLE_MAP, value: {{ join "," .Values.api.roleMap | quote }}}

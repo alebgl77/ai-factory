@@ -95,6 +95,19 @@
         },
         "workbenchCyberAudit": {"type": "boolean"},
         "assistEnabled": {"type": "boolean"},
+        "shadowAI": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "groups": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[^,\\s](?:[^,\\r\\n]*[^,\\s])?$"}
+            },
+            "privacyThreshold": {"type": "integer", "minimum": 5, "maximum": 100}
+          }
+        },
         "portfolioRunner": {"$ref": "#/$defs/secretFile"}
       }
     },

@@ -2,6 +2,8 @@
 
 **English** · [Français](README.fr.md)
 
+[Technical documentation](docs/README.md) · [Interactive guide](https://alebgl77.github.io/ai-factory/docs/index.en.html)
+
 **Virtual AI Factory — the open-source digital twin of an enterprise AI factory**
 
 [![CI](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/alebgl77/ai-factory/actions/workflows/ci.yml)
@@ -10,14 +12,13 @@
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/alebgl77/ai-factory)
 
 Virtual AI Factory is a generic, deployable model of how an enterprise runs AI in production,
-rendered as a 3D twin of the office where it happens. Behind the 3D scene sits a working stack:
-**governance** (EU AI Act, including the 2026 Digital Omnibus, NIST AI RMF and ISO/IEC 42001,
-with a risk reassessment on every model version), **FinOps** (token and GPU costs, showback and
-chargeback, 8 waste rules), an **LLMOps & RAG pipeline** with evaluation gates and automatic
-rollback, a **data loop that never retrains**, **hybrid placement** (cloud, then VPS, then
-local GPU for sensitive data), an **Agent Ops** room, a **self-service catalog**, **Skills and
-R&D labs**, and a **first-person visit mode** to walk through the twin. Everything is
-configuration in plain YAML, runs without any API key in demo mode, and is MIT-licensed.
+rendered as a 3D twin of the office where it happens. Explore **governance** with an indicative
+EU AI Act, NIST AI RMF and ISO/IEC 42001 crosswalk, **FinOps** for token and GPU costs, and an
+**LLMOps and RAG pipeline** with evaluation gates. The demo simulates deployment and rollback.
+In a private installation, authorized producers submit evidence of changes performed in their
+own systems. The dashboard also offers model placement, Agent Ops, a self-service catalog,
+Skills and R&D labs, and a first-person visit mode. The project is MIT-licensed. The demo
+uses YAML configuration and runs without provider keys.
 
 > All data is **fictional**: people, use cases, cost centers, costs and demo metrics. Everything
 > is configured in `config/`. No fine-tuning, no retraining: the data loop only acts through
@@ -77,7 +78,7 @@ Requirements: Docker 24+ with Compose v2, 4 vCPUs, 8 GB of free RAM, ports 80 an
 
 ```bash
 git clone --recurse-submodules https://github.com/alebgl77/ai-factory.git
-cd virtual-ai-factory
+cd ai-factory
 cp .env.example .env
 # Replace every "change-me" value with a secret of its own, for example:
 #   for v in $(grep -o '^[A-Z_]*=.*change-me[^ ]*' .env | cut -d= -f1); do
@@ -105,7 +106,7 @@ Prometheus → Grafana → API → 3D dashboard.
 the embedded demo snapshots (one in English, one in French) and shows an *Offline demo* badge.
 
 The Helm chart supports a local Kubernetes demo and an authenticated private pilot with
-operator-managed services. See the [Kubernetes deployment guide](docs/KUBERNETES.md).
+operator-managed services. [Install Kubernetes](docs/KUBERNETES.md) · [Operate Kubernetes](docs/KUBERNETES_OPERATIONS.md) · [Deploy with Compose](docs/DEPLOYMENT.en.md)
 
 ## What the factory does
 
@@ -113,14 +114,14 @@ operator-managed services. See the [Kubernetes deployment guide](docs/KUBERNETES
 |---|---|---|
 | P0 | Use-case register, AI Act risk tiers (prohibited, high risk under Annex III / Annex I, limited under Art. 50, minimal), NIST AI RMF cycle (GOVERN, MAP, MEASURE, MANAGE) crosswalked with the AI Act and ISO/IEC 42001, **risk reassessment on every model version change** | `config/usecases/`, `config/frameworks/`, `api/app/engines/risk.py`, "Register" console |
 | P0 | Token and GPU costs per use case, showback / chargeback, 8 waste alert rules | `config/factory.yaml`, `engines/costs.py`, "FinOps" console |
-| P1 | LLMOps / RAG pipeline: ingestion → chunking and indexing → versioning of prompts and agents → evaluation gates (RAGAS, LLM-as-a-judge, red teaming) → deployment → usage feedback → automatic rollback | `engines/pipeline.py`, "Pipeline" console |
+| P1 | LLMOps / RAG pipeline: ingestion → indexing → versioning → evaluation gates → deployment and rollback receipts from authorized producers. The demo simulates the sequence. | [Operating evidence](docs/OPERATING_EVIDENCE.md), "Pipeline" console |
 | P1 | Data loop on drift: reindexing, evaluation-set updates, routing changes, human review. No retraining | `engines/dataloop.py`, "Data loop" console |
-| P1 | Hybrid placement cloud → VPS → local GPU. Classes C3/C4 only go to the local GPU; if it is unavailable, the workload is queued, never sent elsewhere | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
+| P1 | Hybrid placement cloud → VPS → local GPU. Direct C3/C4 requests require a local GPU and fail if it is unavailable. The placement simulator recommends waiting in that case and does not enqueue work | `engines/placement.py`, `compose/litellm/config.yaml`, "Placement" console |
 | P2 | Agent Ops room: TTFT, tokens per task, vector latency, SLOs | `engines/agentops.py`, consoles O1/O2, Grafana dashboard `agent-ops` |
 | P2 | Self-service catalog of models, agents, MCP tools and integrated GitHub repositories | `config/catalog/`, "Catalog" console |
 | P2 | Skills Lab and R&D Lab in 3D, tied to roles and to AI Act Art. 4 (AI literacy, as rewritten in 2026) | `config/skills.yaml`, rooms S1, X1–X3 |
 | + | **Visit mode**, Street View style: drag the character onto the floor, walk in first person (keyboard, click on the floor, touchpad), interact with desks, rooms, people, screens and the rack; minimap with the status of each space | **Visit** button or `M` key |
-| + | **English and French** everywhere: API (`?lang=en\|fr`), configuration (`{en, fr}` mappings), dashboard, docs | [docs/CONTRACT.md](docs/CONTRACT.md), section 9 |
+| + | **English and French** dashboard, localizable API data (`?lang=en\|fr`), configuration (`{en, fr}` mappings) and operator guides | [Interface contract](docs/CONTRACT.md), section 9 |
 | + | Optional visual pack generated in ChatGPT (textures, decor, portraits, mascot) with a procedural fallback | [docs/ASSETS.md](docs/ASSETS.md) |
 
 ## Architecture
@@ -137,12 +138,19 @@ Browser (3D dashboard, no token) ──HTTPS──► edge (Caddy: TLS, optional
                  └─ LiteLLM gateway ──► cloud │ VPS (Ollama) │ local GPU (vLLM)
 ```
 
-The API aggregates `config/`, its mutable state and the live sources; any unreachable source
-falls back to a deterministic demo generator (`meta.mode`: `demo`, `mixed`, `live`). Details,
-flows and rejected alternatives: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Interface contract
-(schemas, API, metrics, services): [docs/CONTRACT.md](docs/CONTRACT.md).
+The API aggregates `config/`, its mutable state and live sources. In `auto` mode, unavailable
+sources can fall back to simulated data for an unscoped view. Business-unit views always omit
+unavailable data and keep telemetry within their scope. Private pilots use
+`FACTORY_DEMO_MODE=never`. [Architecture](docs/ARCHITECTURE.md) · [Interface contract](docs/CONTRACT.md)
 
-## Real deployment: cloud first, then VPS, then local hardware
+<a id="real-deployment-cloud-first-then-vps-then-local-hardware"></a>
+
+## Compose model placement
+
+Use the [private deployment guide](docs/DEPLOYMENT.en.md) for installation, SSO, release
+verification, migration rehearsal and recovery. Before a matching signed bundle ships,
+[qualify from the exact source checkout](docs/DEPLOYMENT.en.md#qualify-from-source).
+The steps below configure the model routes.
 
 1. **Cloud**: in `.env`, replace `CLOUD_API_BASE`, `CLOUD_API_KEY`, `CLOUD_CHAT_MODEL` and
    `CLOUD_SMALL_MODEL` (default: simulated LLM) with those of your OpenAI-compatible provider,
@@ -268,22 +276,13 @@ npm i --no-save playwright three@0.186.1 && THREE_VENDOR_DIR=node_modules/three 
 E2E_BASE_URL=http://localhost node tests/e2e/run.mjs                 # e2e against the deployed stack
 ```
 
-CI (`.github/workflows/ci.yml`) runs these checks on every push, plus a full smoke test of the
-`sim` stack.
+CI runs the core checks on pushes and pull requests. The Compose smoke and Kubernetes jobs run
+on relevant changes or by manual dispatch. [Workflow](.github/workflows/ci.yml) · [Verified scope](docs/README.md#choose-an-environment)
 
 ## Roadmap
 
-Ideas, not commitments; feedback is welcome in the issues.
-
-- A reference MIT repository for RAG ingestion and RAGAS evaluation sets, and a LangGraph
-  multi-agent example (the two gaps identified in
-  [docs/GITHUB_INTEGRATION.md](docs/GITHUB_INTEGRATION.md)).
-- Generated visual pack published with its provenance.
-- Per-application gateway keys with budgets, secret files instead of environment variables,
-  keyed audit chain (see [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md), section 3).
-- Confirmation in the Official Journal of the regulatory points flagged "to verify" in
-  [docs/GOVERNANCE.md](docs/GOVERNANCE.md).
-- More languages: the message catalog and the `{en, fr}` mappings are designed to grow.
+Follow the [enterprise roadmap](https://alebgl77.github.io/ai-factory/docs/roadmap.html?lang=en)
+for delivery stages, prerequisites and validation criteria.
 
 ## Contributing
 
@@ -294,15 +293,9 @@ mappings (with a primary source), code. Read [CONTRIBUTING.md](CONTRIBUTING.md) 
 
 ## Documentation
 
-- [Interactive operations guide](https://alebgl77.github.io/ai-factory/docs/#production) and [portfolio integration reference](docs/fr/PORTFOLIO.md) (in French)
-- [Private deployment and support matrix](docs/DEPLOYMENT.md#périmètre-de-prise-en-charge) (in French)
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): diagram, flows, technical choices
-- [docs/CONTRACT.md](docs/CONTRACT.md): interface contract (schemas, API, metrics, services, i18n)
-- [docs/GOVERNANCE.md](docs/GOVERNANCE.md): register, risk tiers, reassessment, crosswalk, regulatory calendar and sources
-- [docs/FINOPS.md](docs/FINOPS.md), [docs/LLMOPS.md](docs/LLMOPS.md), [docs/SKILLS_RND.md](docs/SKILLS_RND.md)
-- [docs/SECURITY.md](docs/SECURITY.md), [docs/LICENSES.md](docs/LICENSES.md), [docs/GITHUB_INTEGRATION.md](docs/GITHUB_INTEGRATION.md)
-- [docs/ASSETS.md](docs/ASSETS.md): visual pack (ChatGPT prompts, pipeline, provenance)
-- French documentation: [README.fr.md](README.fr.md) and [docs/fr/](docs/fr/ARCHITECTURE.md)
+The [technical documentation](docs/README.md) organizes the guides by role, environment and
+data flow. The [interactive guide](https://alebgl77.github.io/ai-factory/docs/index.en.html)
+covers the dashboard and the path to a private pilot. [Documentation en français](docs/fr/README.md)
 
 ## Author
 

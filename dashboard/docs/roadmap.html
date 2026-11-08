@@ -1,0 +1,215 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Feuille de route publique d’AI Factory pour les agents en entreprise.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Feuille de route · AI Factory</title>
+  <link rel="stylesheet" href="./roadmap.css">
+  <script defer src="./roadmap.js"></script>
+</head>
+<body>
+  <a class="skip" href="#roadmap"><span data-copy lang="fr">Aller à la feuille de route</span><span data-copy lang="en">Skip to the roadmap</span></a>
+  <header class="mast">
+    <div class="mast-inner">
+      <a class="brand" id="roadmap-home" href="../index.html?lang=fr">
+        <span class="brand-mark" aria-hidden="true">AF</span> AI Factory
+      </a>
+      <nav class="mast-nav" id="roadmap-nav" aria-label="Navigation de la feuille de route">
+        <a id="roadmap-guide" href="./index.html"><span data-copy lang="fr">Guide</span><span data-copy lang="en">Guide</span></a>
+        <a href="#signals"><span data-copy lang="fr">Sources</span><span data-copy lang="en">Sources</span></a>
+      </nav>
+      <div class="locales">
+        <a data-language="fr" href="?lang=fr" lang="fr" hreflang="fr" aria-label="Français">FR</a>
+        <a data-language="en" href="?lang=en" lang="en" hreflang="en" aria-label="English">EN</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="roadmap" tabindex="-1">
+    <header class="intro">
+      <p class="index"><span data-copy lang="fr">Dossier produit / agents en entreprise</span><span data-copy lang="en">Product brief / enterprise agents</span></p>
+      <div class="intro-grid">
+        <div>
+          <h1><span data-copy lang="fr">Feuille de route</span><span data-copy lang="en">Roadmap</span></h1>
+          <p class="lead"><span data-copy lang="fr">Six chantiers pour faire passer les agents de la démonstration à un usage vérifiable en entreprise.</span><span data-copy lang="en">Six initiatives for moving agents from demonstration into verifiable enterprise workflows.</span></p>
+        </div>
+        <aside class="status">
+          <p class="index"><span data-copy lang="fr">Statut de la feuille de route</span><span data-copy lang="en">Roadmap status</span></p>
+          <p><span data-copy lang="fr">Propositions à qualifier, ordonnées par dépendances et sans calendrier annoncé. Les sources éclairent les choix de conception.</span><span data-copy lang="en">Proposals for qualification, ordered by dependency, with no announced schedule. The sources inform the design choices.</span></p>
+          <a href="#signals"><span data-copy lang="fr">Signaux des États-Unis et d’Asie</span><span data-copy lang="en">Signals from the United States and Asia</span> <span aria-hidden="true">↓</span></a>
+        </aside>
+      </div>
+    </header>
+
+    <nav class="horizons" id="roadmap-horizons" aria-label="Horizons">
+      <a href="#foundations"><b aria-hidden="true">01</b><span data-copy lang="fr">En premier</span><span data-copy lang="en">First</span><span class="arr" aria-hidden="true">↓</span></a>
+      <a href="#integration"><b aria-hidden="true">02</b><span data-copy lang="fr">Ensuite</span><span data-copy lang="en">Next</span><span class="arr" aria-hidden="true">↓</span></a>
+      <a href="#exploration"><b aria-hidden="true">03</b><span data-copy lang="fr">À explorer</span><span data-copy lang="en">Explore</span><span class="arr" aria-hidden="true">↓</span></a>
+    </nav>
+
+    <section class="phase" id="foundations" aria-labelledby="foundations-title">
+      <header class="phase-heading">
+        <p class="index"><b aria-hidden="true">01</b> <span data-copy lang="fr">En premier</span><span data-copy lang="en">First</span></p>
+        <h2 id="foundations-title"><span data-copy lang="fr">Poser les contrôles d’exécution</span><span data-copy lang="en">Establish execution controls</span></h2>
+      </header>
+      <div class="workstreams">
+        <article id="agent-identity" aria-labelledby="agent-identity-title">
+          <p class="workstream-code" aria-hidden="true">01 / 01</p>
+          <h3 id="agent-identity-title"><a href="#agent-identity"><span data-copy lang="fr">Identités d’agents par BU</span><span data-copy lang="en">Business-unit agent identities</span></a></h3>
+          <dl>
+            <div>
+              <dt><span data-copy lang="fr">Socle actuel</span><span data-copy lang="en">Current foundation</span></dt>
+              <dd><span data-copy lang="fr">Les politiques par BU, les affectations et les autorisations du moteur encadrent déjà l’exécution.</span><span data-copy lang="en">Business-unit policies, assignments and runner grants already constrain execution.</span></dd>
+            </div>
+            <div>
+              <dt><span data-copy lang="fr">Proposition</span><span data-copy lang="en">Proposal</span></dt>
+              <dd><span data-copy lang="fr">Émettre un droit de courte durée pour un agent, une tâche et un outil précis, avec révocation et preuve d’usage dans l’audit.</span><span data-copy lang="en">Issue a short-lived grant for a specific agent, task and tool, with revocation and evidence in the audit trail.</span></dd>
+            </div>
+            <div class="gate">
+              <dt><span data-copy lang="fr">Critère de validation</span><span data-copy lang="en">Acceptance gate</span></dt>
+              <dd><span data-copy lang="fr">Refuser une demande hors BU, expirée ou révoquée avant tout appel à l’outil.</span><span data-copy lang="en">Deny out-of-unit, expired or revoked requests before invoking the tool.</span></dd>
+            </div>
+          </dl>
+          <p class="signal"><span data-copy lang="fr">Le NIST place la sécurité et l’identité des agents dans son programme de recherche. L’IMDA documente le périmètre des actions dans des cas d’usage.</span><span data-copy lang="en">NIST includes agent security and identity in its research initiative. IMDA documents how to bound actions in real deployments.</span> <a href="#source-nist"><span data-copy lang="fr">NIST · États-Unis</span><span data-copy lang="en">NIST · United States</span></a> <a href="#source-imda"><span data-copy lang="fr">IMDA · Singapour</span><span data-copy lang="en">IMDA · Singapore</span></a></p>
+        </article>
+        <article id="safety-gate" aria-labelledby="safety-gate-title">
+          <p class="workstream-code" aria-hidden="true">01 / 02</p>
+          <h3 id="safety-gate-title"><a href="#safety-gate"><span data-copy lang="fr">Banc d’essai avant mise en service</span><span data-copy lang="en">Pre-production safety gate</span></a></h3>
+          <dl>
+            <div>
+              <dt><span data-copy lang="fr">Socle actuel</span><span data-copy lang="en">Current foundation</span></dt>
+              <dd><span data-copy lang="fr">Le Laboratoire de flux rejoue des topologies synthétiques et leurs scénarios de panne.</span><span data-copy lang="en">The Flow Lab replays synthetic topologies and failure scenarios.</span></dd>
+            </div>
+            <div>
+              <dt><span data-copy lang="fr">Proposition</span><span data-copy lang="en">Proposal</span></dt>
+              <dd><span data-copy lang="fr">Ajouter des scénarios d’injection indirecte, de changement d’outil ou de modèle et de refus d’accès. Verser le résultat à la revue Cyber.</span><span data-copy lang="en">Add scenarios for indirect prompt injection, tool or model changes and denied access. Attach the results to Cyber review.</span></dd>
+            </div>
+            <div class="gate">
+              <dt><span data-copy lang="fr">Critère de validation</span><span data-copy lang="en">Acceptance gate</span></dt>
+              <dd><span data-copy lang="fr">Bloquer la promotion si un scénario adverse produit un effet interdit ou perd sa preuve d’exécution.</span><span data-copy lang="en">Block promotion if an adversarial replay produces a forbidden effect or loses its execution evidence.</span></dd>
+            </div>
+          </dl>
+          <p class="signal"><span data-copy lang="fr">Le guide J-AISI élargit les critères d’évaluation aux agents. Le sandbox singapourien étudie des scénarios d’injection et de supervision.</span><span data-copy lang="en">J-AISI expands evaluation criteria to agent systems. Singapore’s sandbox studies injection and oversight scenarios.</span> <a href="#source-jaisi"><span data-copy lang="fr">J-AISI · Japon</span><span data-copy lang="en">J-AISI · Japan</span></a> <a href="#source-csa"><span data-copy lang="fr">CSA · Singapour</span><span data-copy lang="en">CSA · Singapore</span></a></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="phase" id="integration" aria-labelledby="integration-title">
+      <header class="phase-heading">
+        <p class="index"><b aria-hidden="true">02</b> <span data-copy lang="fr">Ensuite</span><span data-copy lang="en">Next</span></p>
+        <h2 id="integration-title"><span data-copy lang="fr">Intégrer les outils et les processus</span><span data-copy lang="en">Connect tools and workflows</span></h2>
+      </header>
+      <div class="workstreams">
+        <article id="portable-skills" aria-labelledby="portable-skills-title">
+          <p class="workstream-code" aria-hidden="true">02 / 01</p>
+          <h3 id="portable-skills-title"><a href="#portable-skills"><span data-copy lang="fr">Catalogue de compétences portables</span><span data-copy lang="en">Portable skills catalog</span></a></h3>
+          <dl>
+            <div>
+              <dt><span data-copy lang="fr">Socle actuel</span><span data-copy lang="en">Current foundation</span></dt>
+              <dd><span data-copy lang="fr">Le Skills Lab et le Catalogue rendent les compétences et modèles visibles. Le Workbench expose un point d’intégration MCP local.</span><span data-copy lang="en">The Skills Lab and Catalog make skills and models visible. Workbench exposes a local MCP integration point.</span></dd>
+            </div>
+            <div>
+              <dt><span data-copy lang="fr">Proposition</span><span data-copy lang="en">Proposal</span></dt>
+              <dd><span data-copy lang="fr">Publier des manifestes de compétences examinés, versionnés et vérifiables par empreinte. Lier chaque outil MCP autorisé à une politique par BU et évaluer un relais A2A.</span><span data-copy lang="en">Publish reviewed, versioned skill manifests pinned by digest. Bind each approved MCP tool to a business-unit policy and evaluate an A2A handoff.</span></dd>
+            </div>
+            <div class="gate">
+              <dt><span data-copy lang="fr">Critère de validation</span><span data-copy lang="en">Acceptance gate</span></dt>
+              <dd><span data-copy lang="fr">Refuser un manifeste altéré et vérifier qu’un transfert conserve le périmètre et le point de validation humain.</span><span data-copy lang="en">Reject a tampered manifest and confirm a handoff preserves scope and the human approval checkpoint.</span></dd>
+            </div>
+          </dl>
+          <p class="signal"><span data-copy lang="fr">L’AAIF accueille Agent Skills et des protocoles ouverts. La publication MCP de juillet renforce l’autorisation.</span><span data-copy lang="en">AAIF hosts Agent Skills and open protocols. The July MCP release strengthens authorization.</span> <a href="#source-aaif"><span data-copy lang="fr">Linux Foundation · San José</span><span data-copy lang="en">Linux Foundation · San José</span></a> <a href="#source-mcp"><span data-copy lang="fr">MCP · Spécification</span><span data-copy lang="en">MCP · Specification</span></a></p>
+        </article>
+        <article id="crm-erp" aria-labelledby="crm-erp-title">
+          <p class="workstream-code" aria-hidden="true">02 / 02</p>
+          <h3 id="crm-erp-title"><a href="#crm-erp"><span data-copy lang="fr">Transactions CRM–ERP supervisées</span><span data-copy lang="en">Supervised CRM–ERP transactions</span></a></h3>
+          <dl>
+            <div>
+              <dt><span data-copy lang="fr">Socle actuel</span><span data-copy lang="en">Current foundation</span></dt>
+              <dd><span data-copy lang="fr">Le Workbench relie une décision à une révision de brouillon et définit un contrat de connecteur ERP avec idempotence et relecture.</span><span data-copy lang="en">Workbench binds a decision to a draft revision and defines an ERP connector contract with idempotency and readback.</span></dd>
+            </div>
+            <div>
+              <dt><span data-copy lang="fr">Proposition</span><span data-copy lang="en">Proposal</span></dt>
+              <dd><span data-copy lang="fr">Qualifier dans un sandbox d’éditeur une chaîne complète depuis un signal CRM jusqu’au reçu ERP, avec approbation et procédure de reprise.</span><span data-copy lang="en">Qualify a full CRM-to-ERP receipt workflow in a vendor sandbox, including approval and a recovery procedure.</span></dd>
+            </div>
+            <div class="gate">
+              <dt><span data-copy lang="fr">Critère de validation</span><span data-copy lang="en">Acceptance gate</span></dt>
+              <dd><span data-copy lang="fr">Rejouer une demande en double sans deuxième écriture et vérifier que le reçu concorde avec la révision approuvée.</span><span data-copy lang="en">Replay a duplicate request and verify a single write and a receipt matching the approved revision.</span></dd>
+            </div>
+          </dl>
+          <p class="signal"><span data-copy lang="fr">L’IMDA documente des points de contrôle humains et l’enquête EDB examine les usages IA dans des entreprises de six marchés d’Asie du Sud-Est.</span><span data-copy lang="en">IMDA documents human checkpoints and the EDB survey examines AI use at firms across six Southeast Asian markets.</span> <a href="#source-imda"><span data-copy lang="fr">IMDA · Singapour</span><span data-copy lang="en">IMDA · Singapore</span></a> <a href="#source-edb"><span data-copy lang="fr">EDB · Asie du Sud-Est</span><span data-copy lang="en">EDB · Southeast Asia</span></a></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="phase" id="exploration" aria-labelledby="exploration-title">
+      <header class="phase-heading">
+        <p class="index"><b aria-hidden="true">03</b> <span data-copy lang="fr">À explorer</span><span data-copy lang="en">Explore</span></p>
+        <h2 id="exploration-title"><span data-copy lang="fr">Mesurer la valeur et isoler l’autonomie</span><span data-copy lang="en">Measure value and isolate autonomy</span></h2>
+      </header>
+      <div class="workstreams">
+        <article id="outcome-cost" aria-labelledby="outcome-cost-title">
+          <p class="workstream-code" aria-hidden="true">03 / 01</p>
+          <h3 id="outcome-cost-title"><a href="#outcome-cost"><span data-copy lang="fr">Coût par résultat validé</span><span data-copy lang="en">Cost per verified outcome</span></a></h3>
+          <dl>
+            <div>
+              <dt><span data-copy lang="fr">Socle actuel</span><span data-copy lang="en">Current foundation</span></dt>
+              <dd><span data-copy lang="fr">Le suivi FinOps fournit déjà des données d’usage et des ventilations par cas d’usage ou BU selon les sources disponibles.</span><span data-copy lang="en">FinOps already reports usage and breakdowns by use case or business unit when sources are available.</span></dd>
+            </div>
+            <div>
+              <dt><span data-copy lang="fr">Proposition</span><span data-copy lang="en">Proposal</span></dt>
+              <dd><span data-copy lang="fr">Rapprocher estimations, consommation observée et factures. Rapporter le coût à un résultat vérifiable comme une décision confirmée.</span><span data-copy lang="en">Reconcile estimates, observed usage and bills. Relate cost to a verifiable outcome such as a confirmed decision.</span></dd>
+            </div>
+            <div class="gate">
+              <dt><span data-copy lang="fr">Critère de validation</span><span data-copy lang="en">Acceptance gate</span></dt>
+              <dd><span data-copy lang="fr">Publier le dénominateur et rapprocher les totaux par BU sur un jeu d’essai, avec écart et données manquantes visibles.</span><span data-copy lang="en">Publish the denominator and reconcile business-unit totals on a test dataset with visible variance and missing inputs.</span></dd>
+            </div>
+          </dl>
+          <p class="signal"><span data-copy lang="fr">Le rapport FinOps 2026 relève des difficultés d’allocation par BU et de mesure de la valeur chez ses répondants.</span><span data-copy lang="en">The 2026 FinOps report finds challenges in business-unit allocation and measuring value among its respondents.</span> <a href="#source-finops"><span data-copy lang="fr">FinOps Foundation · Enquête</span><span data-copy lang="en">FinOps Foundation · Survey</span></a></p>
+        </article>
+        <article id="browser-sandbox" aria-labelledby="browser-sandbox-title">
+          <p class="workstream-code" aria-hidden="true">03 / 02</p>
+          <h3 id="browser-sandbox-title"><a href="#browser-sandbox"><span data-copy lang="fr">Bac à sable d’agents à l’écran</span><span data-copy lang="en">Computer-use agent sandbox</span></a></h3>
+          <dl>
+            <div>
+              <dt><span data-copy lang="fr">Socle actuel</span><span data-copy lang="en">Current foundation</span></dt>
+              <dd><span data-copy lang="fr">La démo possède déjà des scénarios guidés et une boucle de décision humaine.</span><span data-copy lang="en">The demo already has guided scenarios and a human decision loop.</span></dd>
+            </div>
+            <div>
+              <dt><span data-copy lang="fr">Proposition</span><span data-copy lang="en">Proposal</span></dt>
+              <dd><span data-copy lang="fr">Évaluer un navigateur isolé avec données synthétiques, identité jetable et approbation explicite avant tout effet réel.</span><span data-copy lang="en">Evaluate an isolated browser with synthetic data, a disposable identity and explicit approval before any real effect.</span></dd>
+            </div>
+            <div class="gate">
+              <dt><span data-copy lang="fr">Critère de validation</span><span data-copy lang="en">Acceptance gate</span></dt>
+              <dd><span data-copy lang="fr">Vérifier la fermeture de la session et le refus d’une écriture externe sans approbation, même après une injection dans la page.</span><span data-copy lang="en">Verify session teardown and denial of external writes without approval, including after a page injection.</span></dd>
+            </div>
+          </dl>
+          <p class="signal"><span data-copy lang="fr">Le sandbox de Singapour étudie la supervision et l’AAIF accueille OpenSandbox, contribué par Alibaba.</span><span data-copy lang="en">Singapore’s sandbox studies oversight and AAIF hosts OpenSandbox, contributed by Alibaba.</span> <a href="#source-csa"><span data-copy lang="fr">CSA · Singapour</span><span data-copy lang="en">CSA · Singapore</span></a> <a href="#source-aaif"><span data-copy lang="fr">AAIF · OpenSandbox</span><span data-copy lang="en">AAIF · OpenSandbox</span></a></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="phase references" id="signals" aria-labelledby="signals-title">
+      <header class="phase-heading">
+        <p class="index"><span data-copy lang="fr">Repères documentés</span><span data-copy lang="en">Source notes</span></p>
+        <h2 id="signals-title"><span data-copy lang="fr">D’où viennent les signaux</span><span data-copy lang="en">Where the signals come from</span></h2>
+        <p><span data-copy lang="fr">Sources institutionnelles, spécifications et enquêtes originales. L’étude EDB porte sur 330 répondants de six marchés d’Asie du Sud-Est dans des entreprises déclarant utiliser l’IA.</span><span data-copy lang="en">Institutional guidance, specifications and original surveys. The EDB study covers 330 respondents across six Southeast Asian markets at firms reporting AI use.</span></p>
+      </header>
+      <ol class="source-list">
+        <li id="source-nist"><span class="index"><span data-copy lang="fr">États-Unis · NIST</span><span data-copy lang="en">United States · NIST</span> · <span data-copy lang="fr">17 février 2026</span><span data-copy lang="en">17 February 2026</span></span><a href="https://www.nist.gov/news-events/news/2026/02/announcing-ai-agent-standards-initiative-interoperable-and-secure" lang="en">AI Agent Standards Initiative</a></li>
+        <li id="source-imda"><span class="index"><span data-copy lang="fr">Singapour · IMDA</span><span data-copy lang="en">Singapore · IMDA</span> · <span data-copy lang="fr">20 mai 2026</span><span data-copy lang="en">20 May 2026</span></span><a href="https://www.imda.gov.sg/resources/press-releases-factsheets-and-speeches/factsheets/2026/updated-model-ai-governance-framework-for-agentic-ai" lang="en">Updated Model AI Governance Framework for Agentic AI</a></li>
+        <li id="source-csa"><span class="index"><span data-copy lang="fr">Singapour · CSA</span><span data-copy lang="en">Singapore · CSA</span> · <span data-copy lang="fr">20 mai 2026</span><span data-copy lang="en">20 May 2026</span></span><a href="https://www.csa.gov.sg/news-events/press-releases/ai-agents--insights-from-the-singapore-government-and-google-sandbox-/" lang="en">AI Agents: Insights from the Singapore Government and Google Sandbox</a></li>
+        <li id="source-jaisi"><span class="index"><span data-copy lang="fr">Japon · J-AISI</span><span data-copy lang="en">Japan · J-AISI</span> · <span data-copy lang="fr">7 juillet 2026</span><span data-copy lang="en">7 July 2026</span></span><a href="https://aisi.go.jp/output/output_framework/guide_to_evaluation_perspective_on_ai_safety/" lang="en">Guide to Evaluation Perspectives on AI Safety, v1.20</a></li>
+        <li id="source-aaif"><span class="index"><span data-copy lang="fr">Écosystème ouvert · Linux Foundation</span><span data-copy lang="en">Open ecosystem · Linux Foundation</span> · <span data-copy lang="fr">22 octobre 2026</span><span data-copy lang="en">22 October 2026</span></span><a href="https://www.linuxfoundation.org/press/agentic-ai-foundation-announces-four-new-projects-agent-skills-open-responses-openenv-and-opensandbox" lang="en">AAIF expands with Agent Skills, Open Responses, OpenEnv and OpenSandbox</a></li>
+        <li id="source-mcp"><span class="index"><span data-copy lang="fr">Écosystème ouvert · MCP</span><span data-copy lang="en">Open ecosystem · MCP</span> · <span data-copy lang="fr">28 juillet 2026</span><span data-copy lang="en">28 July 2026</span></span><a href="https://blog.modelcontextprotocol.io/posts/2026-07-28/" lang="en">The 2026-07-28 Specification</a></li>
+        <li id="source-finops"><span class="index"><span data-copy lang="fr">Enquête internationale · FinOps Foundation</span><span data-copy lang="en">International survey · FinOps Foundation</span> · <span data-copy lang="fr">édition 2026</span><span data-copy lang="en">2026 edition</span></span><a href="https://data.finops.org/" lang="en">State of FinOps 2026</a></li>
+        <li id="source-edb"><span class="index"><span data-copy lang="fr">Asie du Sud-Est · EDB, McKinsey et Tech in Asia</span><span data-copy lang="en">Southeast Asia · EDB, McKinsey and Tech in Asia</span> · <span data-copy lang="fr">février 2026</span><span data-copy lang="en">February 2026</span></span><a href="https://www.edb.gov.sg/content/dam/edb-en/business-insights/market-and-industry-reports/ai-in-southeast-asia-an-era-of-opportunity/State_of_Ai_SEA_Digital.pdf" lang="en">AI in Southeast Asia: An era of opportunity</a></li>
+      </ol>
+    </section>
+  </main>
+
+  <footer><p>AI Factory <span aria-hidden="true">·</span> <span data-copy lang="fr">Feuille de route publique</span><span data-copy lang="en">Public roadmap</span></p><a href="#roadmap"><span data-copy lang="fr">Haut de la page</span><span data-copy lang="en">Back to top</span> <span aria-hidden="true">↑</span></a></footer>
+</body>
+</html>

@@ -95,7 +95,7 @@ capabilities:
   {{- if or $v.ingress.enabled $v.networkPolicy.ingressPeers $v.networkPolicy.dnsPeers $v.networkPolicy.egressRules -}}
     {{- fail "demo is isolated and reachable only with kubectl port-forward; ingress and network policy rules must be empty" -}}
   {{- end -}}
-  {{- if or $v.businessUnits.existingSecret $v.sso.existingSecret $v.sso.providerCA.existingSecret $v.api.assistEnabled $v.api.portfolioRunner.existingSecret -}}
+  {{- if or $v.businessUnits.existingSecret $v.sso.existingSecret $v.sso.providerCA.existingSecret $v.api.assistEnabled $v.api.portfolioRunner.existingSecret $v.api.shadowAI.enabled -}}
     {{- fail "demo cannot use private runtime settings" -}}
   {{- end -}}
   {{- if or $v.telemetry.prometheusURL $v.telemetry.grafanaURL $v.telemetry.grafanaPublicURL $v.telemetry.langfuseURL $v.telemetry.litellmURL $v.telemetry.qdrantURL $v.telemetry.caBundle.existingSecret $v.telemetry.grafanaToken.existingSecret $v.telemetry.langfuseCredentials.existingSecret $v.telemetry.litellmCredentials.existingSecret -}}
@@ -142,6 +142,20 @@ capabilities:
   {{- end -}}
   {{- if not (or $v.api.roleMap $v.api.defaultRole) -}}
     {{- fail "private requires api.roleMap or api.defaultRole: viewer" -}}
+  {{- end -}}
+  {{- if $v.api.shadowAI.enabled -}}
+    {{- if empty $v.api.shadowAI.groups -}}
+      {{- fail "api.shadowAI.enabled requires api.shadowAI.groups" -}}
+    {{- end -}}
+    {{- $roleGroups := dict -}}
+    {{- range $v.api.roleMap -}}
+      {{- $_ := set $roleGroups (trim (regexReplaceAll ":[^:]+$" . "")) true -}}
+    {{- end -}}
+    {{- range $v.api.shadowAI.groups -}}
+      {{- if not (hasKey $roleGroups .) -}}
+        {{- fail "each api.shadowAI.groups entry requires an explicit api.roleMap mapping" -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
   {{- if not (has $workbench (list "off" "portfolio")) -}}
     {{- fail "private supports api.workbenchMode off or portfolio" -}}

@@ -18,7 +18,7 @@ l’appareil qui les ouvre.
 
 | Mode | Activation | Données et accès |
 |---|---|---|
-| Navigateur hors ligne | Ouvrir directement [le fichier HTML](../../dashboard/companion/index.html) | Dossiers, décisions et réponses fictifs dans l’onglet courant. Un rechargement réinitialise la session. |
+| Navigateur hors ligne | Ouvrir `dashboard/companion/index.html` depuis une copie des sources | Dossiers, décisions et réponses fictifs dans l’onglet courant. Un rechargement réinitialise la session. |
 | API désactivée | Conserver `FACTORY_WORKBENCH_MODE=off`, valeur par défaut | Les routes du Workbench sont absentes. |
 | Simulation connectée | Définir `FACTORY_WORKBENCH_MODE=demo` | Dossiers fictifs et brouillons ERP partagés dans SQLite. Utiliser en environnement contrôlé si l’authentification est désactivée. |
 | Simulation protégée | Définir `FACTORY_WORKBENCH_MODE=protected_demo` avec le proxy SSO | Espace authentifié avec le même ERP simulé et contrôle des rôles. |
@@ -28,8 +28,8 @@ relatif `companion/` et sélectionne explicitement la simulation isolée dans le
 QR ne transporte ni session, ni identifiant de dossier, ni secret. En mode connecté, le
 Compagnon affiche les erreurs d’API ou d’authentification sans basculer vers la démo locale.
 
-Suivez le [démarrage Compose](../../README.fr.md#démarrage-local-sans-aucune-clé), choisissez le
-mode dans `.env`, puis lancez `docker compose --profile sim up -d --build`. Le Compagnon
+Copiez `.env.example` vers `.env`, choisissez le mode et lancez
+`docker compose --profile sim up -d --build` depuis une copie des sources. Le Compagnon
 est à l’adresse `/companion/`. Pour la simulation protégée, suivez le
 [guide SSO et durcissement](SECURITY.md). Configurez `FACTORY_AUTH=sso`,
 `FACTORY_AUTH_MODE=proxy` et `FACTORY_ROLE_MAP`, puis activez le profil `sso`.
@@ -142,7 +142,7 @@ Le mode facultatif `FACTORY_WORKBENCH_CHAT_MODE=local` exige `protected_demo`,
 l’authentification par proxy et la passerelle LiteLLM interne. Le serveur choisit l’alias
 fixe `chat-sensitive`, marque la requête C3, masque les entrées et sorties et désactive la
 journalisation du prompt pour cette requête. Configurez la cible locale en suivant
-[le guide de déploiement](../../README.fr.md#déploiement-réel--cloud-dabord-puis-vps-puis-matériel-local). Le modèle donne un avis sans outil.
+[le guide de placement Compose](../../compose/README.md#cloud-first-placement). Le modèle donne un avis sans outil.
 L’indisponibilité de la passerelle locale produit une erreur. Le profil `sim` peut aussi
 simuler la cible locale.
 
@@ -186,7 +186,7 @@ local fixe pour le conseil facultatif.
 
 ## Sonde Odoo en lecture seule et rejeu synthétique
 
-Installez les [dépendances de l’API](../../README.fr.md#tests-et-vérifications), puis configurez `FACTORY_ODOO_URL`
+Installez les [dépendances de l’API](../../api/README.fr.md#démarrage-local), puis configurez `FACTORY_ODOO_URL`
 avec une origine HTTPS et fournissez `FACTORY_ODOO_DATABASE` et `FACTORY_ODOO_API_KEY` dans
 l’environnement du processus opérateur. Utilisez un compte limité à la lecture pour l’API
 JSON-2 d’Odoo 19.

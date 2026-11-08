@@ -1,5 +1,7 @@
 # Kubernetes operations
 
+**English** · [Français](fr/KUBERNETES_OPERATIONS.md) · [Installation](KUBERNETES.md)
+
 ## Factory state and recovery
 
 The Factory PVC holds the API state directory, including SQLite databases and the
@@ -28,6 +30,52 @@ restored state and, if present, run
 restore duration and data loss window, then complete any application upgrade
 before switching traffic. Restore and verify external systems with their own
 procedures.
+
+### Verify recovered Portfolio decisions
+
+For a private release using `api.workbenchMode: portfolio`, seal the Workbench
+journal from a read-only copy of the quiescent source volume at the backup point.
+Run the following in a separate verification environment with the same API version
+installed. Set `BACKUP_STATE` to the source copy, `RESTORED_STATE` to a consistent
+read-only copy of the restored volume, and `WORKBENCH_STREAM` to the existing
+stream name. Set `CYBER_KEY_FILE`, `CYBER_KEY_ID` and `CHECKPOINT` to the
+restricted HMAC key file, its ID and a new checkpoint path. Keep the checkpoint
+and key in independently administered storage, separate from the backups and
+the API Pod. For later seals, set `PREVIOUS_CHECKPOINT` to the last trusted
+checkpoint for the same stream and key. Follow the key rotation procedure if
+the key changed. [Cyber journal and key rotation](CYBER_SECURITY.md#seal-and-verify-a-journal)
+
+```bash
+previous=()
+if [[ -n ${PREVIOUS_CHECKPOINT:-} ]]; then
+  previous=(--previous "$PREVIOUS_CHECKPOINT")
+fi
+python -m app.cyber seal --kind workbench \
+  --path "$BACKUP_STATE/workbench-portfolio.sqlite3" --stream "$WORKBENCH_STREAM" \
+  --key-file "$CYBER_KEY_FILE" --key-id "$CYBER_KEY_ID" --output "$CHECKPOINT" "${previous[@]}"
+```
+
+Before making any writes to the isolated restore, verify it against that
+independently retained checkpoint. Never generate a fresh checkpoint from the
+restored database for this check.
+
+```bash
+python -m app.cyber verify --kind workbench \
+  --path "$RESTORED_STATE/workbench-portfolio.sqlite3" --stream "$WORKBENCH_STREAM" \
+  --key-file "$CYBER_KEY_FILE" --checkpoint "$CHECKPOINT"
+```
+
+Require `status: verified` and `unsigned_tail: 0` for this matched cold backup.
+Record the verified sequence and head hash. Investigate any failure or
+unexpected tail before switching traffic.
+
+In a recovery rehearsal, leave a synthetic sensitive task awaiting review at
+the backup point. On the isolated restore, use an independent authorized reviewer
+to approve the same case in Decision Companion. Confirm that its Portfolio task
+becomes completed, that its history records the Workbench approval and that an
+account from an unrelated BU cannot read the task details. Use synthetic data and
+leave external execution connectors disabled for the rehearsal.
+[Portfolio roles and review flow](PORTFOLIO.md#workbench-decisions)
 
 ## External telemetry and object storage
 

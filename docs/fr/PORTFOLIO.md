@@ -1,5 +1,7 @@
 # Portefeuille et orchestration du travail
 
+[English](../PORTFOLIO.md) · **Français**
+
 [Guide interactif de mise en production](https://alebgl77.github.io/ai-factory/docs/#production) · [Identités](#déploiement-protégé) · [Moteur intégré](#moteur-intégré) · [Décisions](#décisions-workbench) · [API](#intégration-par-lapi) · [Exploitation](#exploitation)
 
 L’onglet **Portefeuille** relie les objectifs de la Factory aux projets et aux tâches des unités métier (BU). La direction renseigne les indicateurs et leurs cibles. Une cheffe de projet ou un chef de projet planifie les tâches, le manager les attribue, et l’architecte valide les livrables techniques. Les employés retrouvent leurs tâches. Les agents enregistrés reçoivent leurs affectations et, le cas échéant, les sous-tâches qu’ils supervisent.
@@ -78,7 +80,7 @@ Le Workbench conserve le dossier et la décision avec leur révision. L’API ra
 | Refus | Annulée. Une dépendance qui exige la réussite attend toujours. |
 | Demande de modifications | Prête. Fournissez de nouvelles preuves et renouvelez l’autorisation de démarrage si elle est requise. La prochaine soumission ouvre un dossier distinct. |
 
-Une décision de portefeuille valide le travail préparé. Pour une action externe, suivez le circuit approuvé du connecteur et de son environnement. [Workbench et Compagnon](WORKBENCH.md)
+Une décision de portefeuille valide le travail préparé. Pour une action externe, suivez le circuit approuvé du connecteur et de son environnement. [Workbench et Compagnon](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/WORKBENCH.md)
 
 ## Intégration par l’API
 
@@ -100,14 +102,18 @@ Sans `limit`, l’API conserve la vue des 200 tâches les plus récemment mises 
 
 Utilisez le chemin `/api/v1/portfolio` sans barre finale pour le GET. L’API crée les identifiants des tâches et des sous-tâches. Envoyez les mutations en JSON avec la dernière révision reçue. En cas de conflit HTTP 409, rechargez la vue autorisée avant de renvoyer une intention toujours valable.
 
-Les preuves peuvent référencer un fichier, un support ou un travail via `{kind, label, ref}`. Le champ `ref` est un identifiant interne opaque. Les compteurs `input` et `output` déclarés sont des entiers cumulatifs de 0 à un milliard chacun sur l’affectation en cours. Le serveur vérifie qu’ils progressent, calcule le total et indique la provenance `agent_reported`. Le moteur intégré peut produire un relevé `provider_reported`. La soumission conserve le dernier relevé si aucun nouveau relevé ne l’accompagne. Une réaffectation à un autre agent efface le relevé courant. Une valeur absente reste inconnue. Le journal d’activité fournit ses propres mesures. [Mesures et preuves d’exploitation](../OPERATING_EVIDENCE.md)
+Les preuves peuvent référencer un fichier, un support ou un travail via `{kind, label, ref}`. Le champ `ref` est un identifiant interne opaque. Les compteurs `input` et `output` déclarés sont des entiers cumulatifs de 0 à un milliard chacun sur l’affectation en cours. Le serveur vérifie qu’ils progressent, calcule le total et indique la provenance `agent_reported`. Le moteur intégré peut produire un relevé `provider_reported`. La soumission conserve le dernier relevé si aucun nouveau relevé ne l’accompagne. Une réaffectation à un autre agent efface le relevé courant. Une valeur absente reste inconnue. Le journal d’activité fournit ses propres mesures. [Historique du travail et consommation de tokens](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/WORKBENCH.md#historique-du-travail-et-consommation-de-tokens)
 
 ## Exploitation
 
-- Utilisez le [bundle de déploiement signé](../DEPLOYMENT.md#vérifier-et-installer-une-release) s'il accompagne la version. Pour les releases précédentes, vérifiez les [signatures et attestations](../../SECURITY.md#vérifier-une-release). Renseignez `FACTORY_RELEASE_API_SHA256`, `FACTORY_RELEASE_DASHBOARD_SHA256` et `FACTORY_RELEASE_GRAFANA_BOOTSTRAP_SHA256` avec les valeurs vérifiées, chacune sur 64 caractères hexadécimaux, sans préfixe. Ajoutez [docker-compose.release.yml](../../docker-compose.release.yml) pour sélectionner ces trois images et désactiver leur construction locale.
-- Exécutez le [précontrôle de sécurité](SECURITY.md#14-guide-de-durcissement-pour-la-production) avec les mêmes fichiers Compose et profils que la cible. Le JSON peut contenir des secrets. Transmettez-le directement au script.
+- Pour le pilote actuel, utilisez le [bundle signé correspondant](../DEPLOYMENT.md#vérifier-et-installer-une-release) dès sa publication. D’ici là, [qualifiez le clone au commit exact](../DEPLOYMENT.md#qualifier-depuis-les-sources) avec des images construites localement.
+- Exécutez le [précontrôle de sécurité](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/SECURITY.md#14-guide-de-durcissement-pour-la-production) avec les mêmes fichiers Compose et profils que la cible. Le JSON peut contenir des secrets. Transmettez-le directement au script.
 - Qualifiez la séparation des rôles, un refus inter-BU, un succès de sous-agent, une panne de modèle et un redémarrage entre la décision Workbench et son affichage dans le portefeuille. Utilisez des données synthétiques.
 - Sauvegardez le volume `api-state` pendant une fenêtre maîtrisée, avec l’API arrêtée ou un mécanisme d’instantané cohérent pour les deux bases. Conservez le point de restauration, les versions et les politiques ensemble. Testez la restauration sur un réseau isolé avant tout retour en service.
+
+### Installation historique par liste d’images
+
+Utilisez cette procédure uniquement pour reproduire une release antérieure comme référence historique. Vérifiez les [signatures et attestations](../../SECURITY.md#vérifier-une-release). Renseignez `FACTORY_RELEASE_API_SHA256`, `FACTORY_RELEASE_DASHBOARD_SHA256` et `FACTORY_RELEASE_GRAFANA_BOOTSTRAP_SHA256` avec les valeurs vérifiées, chacune sur 64 caractères hexadécimaux, sans préfixe. Ajoutez [docker-compose.release.yml](../../docker-compose.release.yml) pour sélectionner ces trois images et désactiver leur construction locale.
 
 ```sh
 docker compose -f docker-compose.yml -f docker-compose.release.yml \

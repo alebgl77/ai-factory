@@ -388,7 +388,8 @@ of each section. A snapshot with only demo or unavailable telemetry omits the co
                                 "util_pct": 0, "eur_per_1k_tokens": 0, "latency_ms_p95": 0 } ],
                  "workloads": [ { "id": "wl-01", "usecase": "uc-01", "sensitivity": "C3", "target": "local",
                                   "fallback": [], "reasons": ["C3 => local uniquement"], "model_alias": "chat-sensitive" } ] },
-                 // when the local GPU is down a C3/C4 workload gets target "queued" (queued: true, fallback: []): never cloud or VPS
+                 // For C3/C4 with a local GPU outage, "queued" (queued: true, fallback: []) recommends waiting.
+                 // The planner does not enqueue work. Direct C3/C4 gateway requests fail closed.
   "agentops": { "window": "1h",
                 "slo": { "ttft_ms_p95": 1500, "vector_latency_ms_p95": 120, "tokens_per_task_p95": 12000 },
                 "global": { "ttft_ms_p50": 0, "ttft_ms_p95": 0, "tokens_per_task_avg": 0, "tokens_per_task_p95": 0,
