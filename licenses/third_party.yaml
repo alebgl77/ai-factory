@@ -128,6 +128,24 @@ images:
     usage: separate-service
     modified: false
     source: https://github.com/langfuse/langfuse
+  - service: langfuse-web
+    image: langfuse/langfuse
+    tag: 4.72.0
+    spdx: MIT
+    license: "MIT (EE dirs excluded, no license key)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/langfuse/langfuse/tree/v4.72.0
+    note: "Opt-in docker-compose.langfuse-v4.yml overlay; no Enterprise license key is configured."
+  - service: langfuse-worker
+    image: langfuse/langfuse-worker
+    tag: 4.72.0
+    spdx: MIT
+    license: "MIT (EE dirs excluded, no license key)"
+    usage: separate-service
+    modified: false
+    source: https://github.com/langfuse/langfuse/tree/v4.72.0
+    note: "Opt-in docker-compose.langfuse-v4.yml overlay; no Enterprise license key is configured."
   - service: clickhouse
     image: clickhouse/clickhouse-server
     tag: 26.8.36.3

@@ -28,6 +28,10 @@ on:
         description: "Also run the Helm and kind deployment tests"
         type: boolean
         default: false
+      langfuse_v4:
+        description: "Run the full-stack smoke and rehearse the Langfuse v3 to v4 upgrade"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -88,14 +92,16 @@ jobs:
           DETECTION_RESULT: ${{ needs.stack-changes.result }}
           DETECTION_CHANGED: ${{ needs.stack-changes.outputs.changed }}
           DETECTION_KUBERNETES: ${{ needs.stack-changes.outputs.kubernetes }}
+          DETECTION_LANGFUSE_V4: ${{ needs.stack-changes.outputs.langfuse_v4 }}
           SMOKE_RESULT: ${{ needs.smoke.result }}
           SSO_RESULT: ${{ needs.sso-e2e.result }}
           KUBERNETES_RESULT: ${{ needs.kubernetes.result }}
-          EXPECT_SMOKE: ${{ (github.event_name == 'workflow_dispatch' && inputs.smoke) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
+          EXPECT_SMOKE: ${{ (github.event_name == 'workflow_dispatch' && (inputs.smoke || inputs.langfuse_v4)) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
           EXPECT_SSO: ${{ (github.event_name == 'workflow_dispatch' && inputs.sso_e2e) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true') }}
           EXPECT_KUBERNETES: ${{ (github.event_name == 'workflow_dispatch' && inputs.kubernetes) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.kubernetes == 'true') }}
         run: |
-          if [[ "$DETECTION_RESULT" != success || ! "$DETECTION_CHANGED" =~ ^(true|false)$ || ! "$DETECTION_KUBERNETES" =~ ^(true|false)$ ]]; then
+          if [[ "$DETECTION_RESULT" != success || ! "$DETECTION_CHANGED" =~ ^(true|false)$ ||
+                ! "$DETECTION_KUBERNETES" =~ ^(true|false)$ || ! "$DETECTION_LANGFUSE_V4" =~ ^(true|false)$ ]]; then
             echo "::error::Unable to determine which deployment tests are required"
             exit 1
           fi
@@ -307,6 +313,7 @@ jobs:
     outputs:
       changed: ${{ steps.detect.outputs.changed }}
       kubernetes: ${{ steps.detect.outputs.kubernetes }}
+      langfuse_v4: ${{ steps.detect.outputs.langfuse_v4 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -319,7 +326,7 @@ jobs:
 
   smoke:
     name: Full stack (smoke test, sim profile)
-    if: (github.event_name == 'workflow_dispatch' && inputs.smoke) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true')
+    if: (github.event_name == 'workflow_dispatch' && (inputs.smoke || inputs.langfuse_v4)) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.changed == 'true')
     needs: [compose, stack-changes]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -330,10 +337,14 @@ jobs:
         with:
           persist-credentials: false
       - run: cp .env.example .env
-      - name: Disposable full stack and PostgreSQL persistence after recreation
+      - name: Disposable full stack, PostgreSQL persistence and applicable Langfuse rehearsal
         env:
           COMPOSE_PROJECT_NAME: factory-ci-${{ github.run_id }}-${{ github.run_attempt }}
-        run: scripts/smoke_stack.sh --down --verify-persistence
+          VERIFY_LANGFUSE_V4: ${{ (github.event_name == 'workflow_dispatch' && inputs.langfuse_v4) || (github.event_name != 'workflow_dispatch' && needs.stack-changes.outputs.langfuse_v4 == 'true') }}
+        run: |
+          args=(--down --verify-persistence)
+          if [[ "$VERIFY_LANGFUSE_V4" == true ]]; then args+=(--verify-langfuse-v4); fi
+          scripts/smoke_stack.sh "${args[@]}"
 
   sso-e2e:
     name: Single sign-on (end-to-end, sso profile)

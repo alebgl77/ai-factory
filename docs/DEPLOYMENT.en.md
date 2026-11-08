@@ -98,7 +98,7 @@ With the Portfolio runner enabled, check **factory_portfolio_runner_oldest_queue
 
 ## Identify stack versions and protect volumes
 
-The validated baseline uses **PostgreSQL 17.11** with **postgres-data:/var/lib/postgresql/data**, **Langfuse web and worker 3.227.0**, **ClickHouse 26.8.36.3**, **Valkey 8.1.11** and **Grafana 13.0.12**. Retain the Compose project name to keep the volumes. Record the running images, mounts, database versions and applied migrations. If PostgreSQL 18, Langfuse 4 or their dependencies have already written data, suspend the return to older versions and use the qualified restore or forward migration plan.
+The baseline uses **PostgreSQL 17.11** with **postgres-data:/var/lib/postgresql/data** and a matched **Langfuse v3 web and worker** pair. Read the exact ClickHouse, Valkey and Grafana references from the selected source `docker-compose.yml` or the signed `release-stack.json` inventory for a release installation. Retain the Compose project name to keep the volumes. Record the running images, mounts, database versions and applied migrations. If PostgreSQL 18, Langfuse 4 or their dependencies have already written data, suspend the return to older versions and use the qualified restore or forward migration plan.
 
 Freeze writes before a consistent baseline backup. Capture the two service databases and PostgreSQL roles, ClickHouse data and metadata, SeaweedFS/S3 storage, Valkey queues and **api-state**. Stop writing services or use consistent storage snapshots for volume backups. Preserve other service data per recovery policy, together with Compose and operator configuration. Keep encryption and authentication secrets in a separate vault. Check encryption, integrity, permissions and restoration. Keep any real data used for qualification in an isolated enclave under the organization's retention rules. Rehearse on separate volumes. Leave volume deletion and engine cleanup outside the rollback procedure.
 
@@ -127,10 +127,29 @@ Freeze writes before a consistent baseline backup. Capture the two service datab
 
 ## Rehearse Langfuse 4 migration
 
-1. In isolation, restore the consistent PostgreSQL, ClickHouse, S3 and Valkey snapshot. Confirm that Langfuse 3 reads historical traces. Check the vendor's dependency minima. Schedule the PostgreSQL 18 and Valkey changes in separate windows.
-2. Upgrade **langfuse-web** and **langfuse-worker** to the same verified v4 tag. Start both in **legacy** mode to verify migrations and v3 usage. Keep native dual-write propagation enabled and leave the v4 path and backfill disabled for this stage.
-3. Move to **dual** in a separate stage. Check LiteLLM ingestion, AI Factory's **/api/public/observations** reader and the smoke test's **/api/public/traces** reader, C3/C4 masking and token metrics. Monitor worker propagation and ClickHouse capacity.
-4. Move producers and readers, including both above, to API and SDK versions supporting **events_only**. Compare metrics and representative traces. Choose backfill or a transition window based on retention and measured capacity. Qualify **events_only** after these checks. [Langfuse migration guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4)
+1. Use the latest v3 and confirm that every entry in **Background Migrations** is complete. Pause ingestion and quiesce writers, then take a consistent backup of PostgreSQL, ClickHouse, S3 and Valkey. Restore it on isolated volumes in a separate Compose project. Confirm that Langfuse v3 reads historical traces there. Verify the vendor's dependency minima and ClickHouse grants. Schedule PostgreSQL 18 and Valkey changes in separate windows.
+2. From the exact source checkout, use the opt-in overlay to move **langfuse-web** and **langfuse-worker** together to digest-pinned **4.72.0**. It selects **legacy** writes with native OTel propagation and disables the v4 preview read paths and historic backfill. Keep signed installations on their verified release lock. Rehearse using the source checkout and the isolated project's environment file.
+
+   ```bash
+   : "${LANGFUSE_REHEARSAL_ENV:?set the isolated Compose environment file}"
+   : "${LANGFUSE_REHEARSAL_PROJECT:?set the isolated Compose project name}"
+   lf_v4=(docker compose --env-file "$LANGFUSE_REHEARSAL_ENV" --project-name "$LANGFUSE_REHEARSAL_PROJECT"
+     -f docker-compose.yml -f docker-compose.langfuse-v4.yml)
+   "${lf_v4[@]}" config --quiet
+   "${lf_v4[@]}" pull langfuse-web langfuse-worker
+   "${lf_v4[@]}" stop langfuse-web langfuse-worker
+   "${lf_v4[@]}" up -d --wait --wait-timeout 600 langfuse-web langfuse-worker
+   ```
+
+3. Check historical and new traces on the restored project before planning a later move to **dual**. Verify LiteLLM ingestion, AI Factory's **/api/public/observations** reader, **/api/public/traces**, C3/C4 masking and token metrics. Monitor worker propagation and ClickHouse capacity.
+4. Move producers and readers to API and SDK versions supporting **events_only**. Compare metrics and representative traces. Choose backfill or a transition window based on retention and measured capacity. Qualify **events_only** after these checks. After v4 changes the schemas, use the consistent pre-upgrade backup or a vendor schema rollback rehearsed on a copy before starting v3 again. [Langfuse migration guide](https://langfuse.com/self-hosting/upgrade/upgrade-guides/upgrade-v3-to-v4)
+
+On a disposable Docker host, the CI smoke scenario starts with an empty synthetic v3 project, upgrades the pair and checks that the legacy readers can still see traces. It removes the disposable project's volumes at the end.
+
+```bash
+COMPOSE_PROJECT_NAME="factory-ci-langfuse-v4-$(date +%s)" \
+  bash scripts/smoke_stack.sh --verify-langfuse-v4 --down
+```
 
 ## Prepare cutover and rollback
 
