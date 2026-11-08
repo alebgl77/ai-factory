@@ -10,12 +10,17 @@ self-hosted stack for private pilots.
 
 **[Open the 3D demo](https://alebgl77.github.io/ai-factory/?lang=en)** · [Documentation](docs/README.md) · [Install](#local-quick-start-no-key-at-all) · [Architecture](docs/ARCHITECTURE.md) · [Technologies](#technology-stack)
 
-<img src="dashboard/docs/media/ai-factory-control-floor.webp" width="1200" alt="Isometric AI operations floor with server racks, workstations and a lime path connecting the rooms.">
+<img src="dashboard/docs/media/ai-factory-cover.en.jpg" width="1200" alt="AI Factory. The AI operations workspace. An isometric operations floor connects agents, decisions and models.">
 
-| Environment | What you can verify |
+| Explore the public demo | What to try |
 |---|---|
-| **Public demo** | Explore a fictional portfolio, approval flow and routing simulation in the browser, without provider keys. [Interactive guide](https://alebgl77.github.io/ai-factory/docs/index.en.html) |
-| **Private pilot** | Configure SSO and business-unit policies, connect approved model targets and collect operating evidence from authorized producers. [Compose](docs/DEPLOYMENT.en.md) · [Kubernetes](docs/KUBERNETES.md) |
+| **Agents** | Open **Projects and tasks** in the [3D demo](https://alebgl77.github.io/ai-factory/?lang=en). Expand a task to see delegated work and its token usage. |
+| **Decisions** | Review a fictional ERP draft in the [Decision Companion](https://alebgl77.github.io/ai-factory/companion/index.html?lang=en&demo_case=DEMO-104&demo_revision=1). Record a rationale and find the simulated receipt in the history. |
+| **Models** | Run a routing scenario in the [AI Flow Lab](https://alebgl77.github.io/ai-factory/docs/flow-lab.html?lang=en) and inspect the token and latency estimates. |
+
+The demo runs in the browser with fictional data and needs no provider keys. [Visual guide to the five workflows](https://alebgl77.github.io/ai-factory/docs/index.en.html#visual-tour)
+
+**Private pilot.** Configure SSO and business-unit policies, connect approved model targets and collect operating evidence from authorized producers. [Compose](docs/DEPLOYMENT.en.md) · [Kubernetes](docs/KUBERNETES.md)
 
 <a id="technologies"></a>
 
@@ -46,28 +51,30 @@ The Helm deployment uses operator-managed model and telemetry services. See the 
 
 ## See the Factory in action
 
-**01 · Follow delegated work.** Open the portfolio from the 3D twin and unfold a task to see
-its sub-agents, progress and declared token usage.
+These recordings show the browser demo with fictional tasks and decisions.
+
+**01 · From the 3D floor to the portfolio.** Open Planning, see how objectives connect to
+projects, then expand a task to inspect its sub-agents and reported tokens.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.png">
-  <img src="docs/media/ai-factory-pilotage.gif" width="760" alt="Fictional AI Factory dashboard with the team list and 3D workspace.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.en.png">
+  <img src="docs/media/ai-factory-pilotage.en.gif" width="760" alt="The demo opens Planning from the 3D floor, shows objectives in the portfolio and expands a task with delegated work.">
 </picture>
 
-[GIF](docs/media/ai-factory-pilotage.gif) · [Still image](docs/media/ai-factory-pilotage.png) · [Open the live demo](https://alebgl77.github.io/ai-factory/)
+[GIF](docs/media/ai-factory-pilotage.en.gif) · [Still image](docs/media/ai-factory-pilotage.en.png) · [Open the live demo](https://alebgl77.github.io/ai-factory/?lang=en)
 
 <details>
 <summary><strong>02 · Review a decision in the Decision Companion</strong></summary>
 
-Review a proposed ERP draft from a fictional CRM opportunity, enter a rationale and see the
-simulated decision and receipt in the history.
+Compare the fictional ERP draft with its CRM evidence, enter a rationale and open the
+history to find the recorded decision and simulated receipt.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.png">
-  <img src="docs/media/ai-factory-workbench.gif" width="760" alt="The Decision Companion’s fictional CRM and ERP walkthrough shows a simulated receipt and the reason recorded in the decision history.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.en.png">
+  <img src="docs/media/ai-factory-workbench.en.gif" width="760" alt="The Decision Companion’s fictional CRM and ERP walkthrough shows a simulated receipt and the reason recorded in the decision history.">
 </picture>
 
-[GIF](docs/media/ai-factory-workbench.gif) · [Still image](docs/media/ai-factory-workbench.png) · [Workbench guide](docs/WORKBENCH.md)
+[GIF](docs/media/ai-factory-workbench.en.gif) · [Still image](docs/media/ai-factory-workbench.en.png) · [Workbench guide](docs/WORKBENCH.md)
 
 </details>
 
@@ -145,6 +152,8 @@ operator-managed services. [Install Kubernetes](docs/KUBERNETES.md) · [Operate 
 | + | Optional visual pack generated in ChatGPT (textures, decor, portraits, mascot) with a procedural fallback | [docs/ASSETS.md](docs/ASSETS.md) |
 
 ## Architecture
+
+[![Open the interactive architecture atlas. Diagram of the public demo, the private edge, business-unit access, local inference and the Workbench decision flow.](dashboard/docs/media/architecture.en.svg)](https://alebgl77.github.io/ai-factory/docs/architecture.en.html)
 
 ```text
 Browser (3D dashboard, no token) ──HTTPS──► edge (Caddy: TLS, optional auth)

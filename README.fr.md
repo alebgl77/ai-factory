@@ -10,12 +10,17 @@ dépôt propose une démo dans le navigateur et une pile auto-hébergée pour le
 
 **[Ouvrir la démo 3D](https://alebgl77.github.io/ai-factory/?lang=fr)** · [Documentation](docs/fr/README.md) · [Installer](#démarrage-local-sans-aucune-clé) · [Architecture](docs/fr/ARCHITECTURE.md) · [Technologies](#pile-technologique)
 
-<img src="dashboard/docs/media/ai-factory-control-floor.webp" width="1200" alt="Vue isométrique d’un centre d’opérations IA avec des baies de serveurs, des postes de travail et un tracé vert qui relie les salles.">
+<img src="dashboard/docs/media/ai-factory-cover.fr.jpg" width="1200" alt="AI Factory. Le poste de pilotage de l’IA. Un centre d’opérations en vue isométrique relie agents, décisions et modèles.">
 
-| Environnement | Ce que vous pouvez vérifier |
+| Explorer la démo publique | À essayer |
 |---|---|
-| **Démo publique** | Explorez un portefeuille fictif, un circuit de validation et une simulation de routage dans le navigateur, sans clé fournisseur. [Guide interactif](https://alebgl77.github.io/ai-factory/docs/index.html) |
-| **Pilote privé** | Configurez le SSO et les politiques par BU, connectez les modèles autorisés et recueillez les preuves d’exploitation auprès des producteurs habilités. [Compose](docs/DEPLOYMENT.md) · [Kubernetes](docs/fr/KUBERNETES.md) |
+| **Agents** | Ouvrez **Projets et tâches** dans la [démo 3D](https://alebgl77.github.io/ai-factory/?lang=fr). Dépliez une tâche pour suivre le travail délégué et sa consommation de tokens. |
+| **Décisions** | Examinez un brouillon ERP fictif dans le [Compagnon de décision](https://alebgl77.github.io/ai-factory/companion/index.html?lang=fr&demo_case=DEMO-104&demo_revision=1). Saisissez un motif et retrouvez le reçu simulé dans l’historique. |
+| **Modèles** | Lancez un scénario de routage dans le [Laboratoire de flux](https://alebgl77.github.io/ai-factory/docs/flow-lab.html?lang=fr) et consultez les estimations de tokens et de latence. |
+
+La démo utilise des données fictives dans le navigateur et fonctionne sans clé fournisseur. [Guide visuel des cinq circuits](https://alebgl77.github.io/ai-factory/docs/index.html#visual-tour)
+
+**Pilote privé.** Configurez le SSO et les politiques par BU, connectez les modèles autorisés et recueillez les preuves d’exploitation auprès des producteurs habilités. [Compose](docs/DEPLOYMENT.md) · [Kubernetes](docs/fr/KUBERNETES.md)
 
 <a id="technologies"></a>
 
@@ -46,12 +51,13 @@ Le déploiement Helm utilise les services de modèles et de télémétrie géré
 
 ## Voir la Factory en action
 
-**01 · Suivre le travail délégué.** Depuis le jumeau 3D, ouvrez le portefeuille puis dépliez
-une tâche pour voir ses sous-agents, leur avancement et les tokens déclarés.
+**01 · Du jumeau 3D au portefeuille.** Ouvrez le Pilotage, voyez comment les objectifs
+se rattachent aux projets, puis dépliez une tâche pour consulter ses sous-agents et leurs
+tokens déclarés.
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-pilotage.png">
-  <img src="docs/media/ai-factory-pilotage.gif" width="760" alt="Tableau de bord fictif de l’AI Factory, avec la liste de l’équipe et l’espace de travail en 3D.">
+  <img src="docs/media/ai-factory-pilotage.gif" width="760" alt="La démo ouvre le Pilotage depuis la carte 3D, affiche les objectifs du portefeuille et déplie une tâche avec deux sous-agents.">
 </picture>
 
 [GIF](docs/media/ai-factory-pilotage.gif) · [Image fixe](docs/media/ai-factory-pilotage.png) · [Ouvrir la démo](https://alebgl77.github.io/ai-factory/?lang=fr)
@@ -59,8 +65,8 @@ une tâche pour voir ses sous-agents, leur avancement et les tokens déclarés.
 <details>
 <summary><strong>02 · Examiner un dossier dans le Compagnon de décision</strong></summary>
 
-Examinez une proposition de brouillon ERP issue d’une opportunité CRM fictive, saisissez un motif
-et retrouvez la décision et le reçu simulés dans l’historique.
+Comparez le brouillon ERP fictif avec les éléments du CRM, saisissez un motif, puis ouvrez
+l’historique pour retrouver la décision enregistrée et le reçu simulé.
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/media/ai-factory-workbench.png">
@@ -146,6 +152,8 @@ et affiche le badge « Démo hors ligne ».
 | + | Pack visuel facultatif généré dans ChatGPT (textures, décor, portraits, mascotte) avec repli procédural | [docs/fr/ASSETS.md](docs/fr/ASSETS.md) |
 
 ## Architecture
+
+[![Ouvrir l’atlas interactif. Schéma de la démo publique, du proxy privé, des accès par BU, de l’inférence locale et du circuit de décision Workbench.](dashboard/docs/media/architecture.svg)](https://alebgl77.github.io/ai-factory/docs/architecture.html)
 
 ```text
 Navigateur (dashboard 3D, aucun jeton) ──HTTPS──► edge (Caddy : TLS, auth optionnelle)

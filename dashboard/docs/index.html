@@ -6,6 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Guide de la démonstration, du déploiement privé sur Compose ou Kubernetes et de l’exploitation d’AI Factory.">
   <title>Guide d’exploitation · AI Factory</title>
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Guide d’exploitation · AI Factory">
+  <meta property="og:description" content="Explorez la Factory en cinq circuits, puis préparez son déploiement privé et son exploitation.">
+  <meta property="og:image" content="https://alebgl77.github.io/ai-factory/docs/media/ai-factory-cover.fr.jpg">
+  <meta property="og:image:width" content="1774">
+  <meta property="og:image:height" content="887">
+  <meta property="og:image:alt" content="Couverture AI Factory avec une vue isométrique des serveurs et des espaces de travail.">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="alternate" hreflang="en" href="./index.en.html">
   <link rel="stylesheet" href="./guide.css">
   <script defer src="./guide.js"></script>
@@ -25,6 +33,7 @@
       <p class="eyebrow">Documentation</p>
       <ol>
         <li><a href="#apercu">Vue d’ensemble</a></li>
+        <li><a href="#visual-tour">Parcours visuel</a></li>
         <li><a href="#demarrage">Premiers pas</a></li>
         <li><a href="#environnements">Environnements et prérequis</a></li>
         <li><a href="#acces">Identités et périmètres</a></li>
@@ -45,6 +54,7 @@
         <p class="lead">Partez d’un cas fictif ou préparez une installation privée. Suivez les accès, le travail des agents, les décisions humaines et la reprise après incident.</p>
         <div class="hero-links">
           <a class="primary" href="#demarrage">Choisir un parcours</a>
+          <a class="secondary" href="#visual-tour">Parcourir la Factory en images</a>
           <a class="secondary" href="./architecture.html">Consulter l’atlas</a>
           <a class="secondary" href="./roadmap.html?lang=fr">Voir la feuille de route</a>
         </div>
@@ -70,6 +80,84 @@
         </ol>
         <p class="note">GitHub Pages présente des cas fictifs. Compose et Kubernetes peuvent héberger une installation privée avec ses propres identités, données et services de modèles.</p>
         <p><a href="./architecture.html">Explorer les schémas d’architecture et le plan 2D</a></p>
+      </section>
+
+      <section id="visual-tour" class="visual-tour" aria-labelledby="titre-parcours-visuel">
+        <p class="eyebrow">Atlas visuel · 05 circuits</p>
+        <h2 id="titre-parcours-visuel">La Factory en cinq circuits</h2>
+        <p class="tour-intro">Des vues conceptuelles qui mènent à une démo ou à une procédure d’exploitation.</p>
+        <ol class="tour-grid">
+          <li>
+            <figure>
+              <img src="./media/editorial-agents.webp" alt="Un poste de coordination relié à deux espaces de travail par un tracé lumineux." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">01 / Orchestration</p>
+                <h3>Du projet au sous‑agent</h3>
+                <p>Attribuez une tâche, autorisez son lancement selon la politique de la BU et vérifiez les preuves et les tokens remontés.</p>
+                <div class="tour-links">
+                  <a href="../index.html?lang=fr">Ouvrir la Factory <span aria-hidden="true">↗</span></a>
+                  <a href="#sous-agents">Guide de délégation</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-decisions.webp" alt="Une salle de revue où le tracé de la demande aboutit à une table de décision." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">02 / Décisions</p>
+                <h3>Une décision humaine traçable</h3>
+                <p>Vérifiez le dossier et sa révision avec un approbateur indépendant, puis retrouvez le résultat dans le portefeuille.</p>
+                <div class="tour-links">
+                  <a href="../companion/index.html?lang=fr">Essayer le Compagnon <span aria-hidden="true">↗</span></a>
+                  <a href="#workbench">Règles d’approbation</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-models.webp" alt="Trois zones de serveurs reliées par un chemin qui se divise." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">03 / Routage</p>
+                <h3>Tester les flux de modèles</h3>
+                <p>Simulez une route, une panne ou une contrainte de confidentialité. Comparez les destinations, les tokens et les coûts estimés.</p>
+                <div class="tour-links">
+                  <a href="./flow-lab.html?lang=fr">Simuler dans le Laboratoire <span aria-hidden="true">↗</span></a>
+                  <a href="#integrations">Modèles et connecteurs</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-observatory.webp" alt="Une table d’analyse avec des groupes de blocs translucides et un écran de restitution." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">04 / Usages</p>
+                <h3>L’Observatoire des usages IA</h3>
+                <p>Explorez l’adoption par équipe, outil et période à partir de vues agrégées et soumises à un seuil de confidentialité.</p>
+                <div class="tour-links">
+                  <a href="./architecture.html#zone-observatoire">Situer l’Observatoire <span aria-hidden="true">↗</span></a>
+                  <a href="#acces">Périmètres d’accès</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+          <li>
+            <figure>
+              <img src="./media/editorial-security.webp" alt="Un point de contrôle sépare les postes de travail d’une salle de serveurs." width="1448" height="1086" loading="lazy" decoding="async">
+              <figcaption>
+                <p class="tour-index">05 / Exploitation</p>
+                <h3>Protéger et restaurer</h3>
+                <p>Qualifiez les accès et les sorties réseau, puis répétez la reprise en vérifiant le journal de décisions restauré.</p>
+                <div class="tour-links">
+                  <a href="#production">Préparer la production</a>
+                  <a href="#reprise">Répéter une restauration</a>
+                </div>
+              </figcaption>
+            </figure>
+          </li>
+        </ol>
       </section>
 
       <section id="demarrage" aria-labelledby="titre-demarrage">

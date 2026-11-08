@@ -1,15 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: MIT -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1066 903" role="img" aria-labelledby="title description">
+<svg xml:lang="fr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1066 903" role="img" aria-labelledby="title description">
   <title id="title">Plan de repérage des dix zones de la Factory</title>
   <desc id="description">Vue de dessus aux proportions du modèle 3D. En haut, War Room, Lab sécurisé, Coin café et Observatoire. À gauche, R&amp;D Lab. Au centre, Delivery floor. En bas, Skills Lab et Agent Ops. À droite, Focus pods et Entrée avec casiers.</desc>
   <defs>
-    <pattern id="grid" width="37" height="37" x="52" y="124" patternUnits="userSpaceOnUse"><path d="M37 0H0V37" fill="none" stroke="#23465b" stroke-width="1"/></pattern>
+    <pattern id="grid" width="37" height="37" x="52" y="124" patternUnits="userSpaceOnUse"><path d="M37 0H0V37" fill="none" stroke="#34382e" stroke-width="1"/></pattern>
     <style>
-      .label{font:700 16px Consolas,monospace;letter-spacing:1.7px;fill:#7ee8d5}.title{font:700 42px Georgia,serif;fill:#f1faf9}.room{font:700 23px 'Trebuchet MS',sans-serif;fill:#f1faf9}.narrow{font-size:20px}.small{font:17px 'Trebuchet MS',sans-serif;fill:#c1d6e4}.note{font:700 14px Consolas,monospace;fill:#bed4e0}.number{font:700 15px Consolas,monospace;fill:#d6f7f1}.unit{stroke-width:2}.decision{fill:#302d2c;stroke:#d7a163}.delivery{fill:#103a43;stroke:#63b9b1}.shared{fill:#182e43;stroke:#668fa8}.stamp{fill:#14394b;stroke:#4d748a}.tick{stroke:#7795a8;stroke-width:1.5;fill:none}
+      .label{font:700 16px Consolas,monospace;letter-spacing:1.7px;fill:#d7fa68}
+      .title{font:750 42px 'Segoe UI',system-ui,sans-serif;letter-spacing:-1.4px;fill:#f5f4e9}
+      .room{font:700 23px 'Segoe UI',system-ui,sans-serif;fill:#f5f4e9}
+      .narrow{font-size:20px}
+      .small{font:17px 'Segoe UI',system-ui,sans-serif;fill:#c8c9ba}
+      .note{font:700 14px Consolas,monospace;fill:#c5c8b8}
+      .number{font:700 15px Consolas,monospace;fill:#d7fa68}
+      .unit{stroke-width:2}
+      .decision{fill:#302d27;stroke:#d0c7b7;stroke-dasharray:7 4}
+      .delivery{fill:#272e1d;stroke:#d7fa68}
+      .shared{fill:#212520;stroke:#84897a}
+      .stamp{fill:#262d1c;stroke:#84916a}
+      .tick{stroke:#8a9080;stroke-width:1.5;fill:none}
     </style>
   </defs>
-  <rect width="1066" height="903" rx="20" fill="#081b2a"/>
+  <rect width="1066" height="903" rx="20" fill="#101211"/>
   <text class="label" x="52" y="43">AI FACTORY / 02 · REPÉRAGE SPATIAL</text>
   <text class="title" x="50" y="91">Plan 2D des zones</text>
   <g transform="translate(962 50)">
@@ -18,7 +30,7 @@
     <text class="note" x="14" y="30">HAUT</text>
   </g>
 
-  <rect x="52" y="124" width="962" height="666" fill="url(#grid)" stroke="#7795a8" stroke-width="2"/>
+  <rect x="52" y="124" width="962" height="666" fill="url(#grid)" stroke="#8a9080" stroke-width="2"/>
   <g id="war-room">
     <rect class="unit decision" x="52" y="124" width="277.5" height="240.5"/>
     <rect class="stamp" x="68" y="143" width="34" height="24" rx="5"/>
@@ -94,15 +106,15 @@
     <text class="number" x="817" y="537.4">10</text>
     <text class="room" x="808" y="580.4">Entrée · casiers</text>
     <text class="small" x="808" y="610.4">Départ de la visite</text>
-    <circle cx="903" cy="741.9" r="9" fill="#7ee8d5" stroke="#081b2a" stroke-width="3"/>
+    <circle cx="903" cy="741.9" r="9" fill="#d7fa68" stroke="#101211" stroke-width="3"/>
   </g>
 
   <text class="note" x="669" y="425" text-anchor="middle">CIRCULATION</text>
   <path class="tick" stroke-dasharray="5 7" d="M561 443H777"/>
   <path class="tick" d="M52 806V817H1014V806M533 817V825"/>
   <text class="note" x="533" y="845" text-anchor="middle">26 UNITÉS DE SCÈNE · AXE X</text>
-  <path d="M56 871H80" stroke="#d7a163" stroke-width="6"/><text class="small" x="89" y="877">Décision et données</text>
-  <path d="M316 871H340" stroke="#63b9b1" stroke-width="6"/><text class="small" x="349" y="877">Delivery et supervision</text>
-  <path d="M626 871H650" stroke="#668fa8" stroke-width="6"/><text class="small" x="659" y="877">Espaces partagés</text>
+  <path d="M56 871H80" stroke="#d0c7b7" stroke-dasharray="7 4" stroke-width="6"/><text class="small" x="89" y="877">Décision et données</text>
+  <path d="M316 871H340" stroke="#d7fa68" stroke-width="6"/><text class="small" x="349" y="877">Delivery et supervision</text>
+  <path d="M626 871H650" stroke="#84897a" stroke-width="6"/><text class="small" x="659" y="877">Espaces partagés</text>
   <text class="note" x="1014" y="875" text-anchor="end">SOURCE · POV_ZONES</text>
 </svg>
