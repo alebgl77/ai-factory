@@ -9,8 +9,14 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 download() {
-  local url="$1" digest="$2" file="$3"
-  curl --fail --silent --show-error --location --retry 3 --proto '=https' "$url" -o "$work/$file"
+  local url="$1" digest="$2" file="$3" alternate_url="${4:-}"
+  local -a curl_options=(--fail --silent --show-error --location --retry 3
+    --proto '=https' --proto-redir '=https' -o "$work/$file")
+  if ! curl "${curl_options[@]}" "$url"; then
+    [[ -n "$alternate_url" ]] || return 1
+    echo "Release download failed. Retrying via the official GitHub release asset API." >&2
+    curl "${curl_options[@]}" --max-time 60 --header 'Accept: application/octet-stream' "$alternate_url"
+  fi
   printf '%s  %s\n' "$digest" "$work/$file" | sha256sum --check --strict
 }
 
@@ -27,7 +33,8 @@ for tool in "$@"; do
     kind)
       # https://github.com/kubernetes-sigs/kind/releases/expanded_assets/v0.33.0
       download https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64 \
-        aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d kind
+        aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d kind \
+        https://api.github.com/repos/kubernetes-sigs/kind/releases/assets/531396433
       install -m 755 "$work/kind" "$destination/kind"
       ;;
     kubectl)

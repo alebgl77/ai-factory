@@ -164,11 +164,22 @@ await page.keyboard.press('Escape');
   await page.waitForFunction(() => !window.__twin.pov.animating, null, { timeout: 8000 });
   const s0 = await pov();
   const walkStart = await page.evaluate(() => performance.now());
-  await page.keyboard.down('KeyW'); await page.waitForTimeout(1200); await page.keyboard.up('KeyW');
+  await page.keyboard.down('KeyW');
+  try {
+    // The scene caps each frame's movement delta, so a slow renderer needs more wall time to walk half a metre.
+    await page.waitForFunction(({ x, start }) => performance.now() - start >= 1200 && window.__twin.pov.pos.x - x > 0.5,
+      { x: s0.x, start: walkStart }, { timeout: 8000 });
+  } catch (error) {
+    if (error.name !== 'TimeoutError') throw error;
+  } finally {
+    await page.keyboard.up('KeyW');
+  }
   const walkSeconds = await page.evaluate(start => (performance.now() - start) / 1000, walkStart);
   s = await pov();
   const walked = Math.hypot(s.x - s0.x, s.z - s0.z);
-  check('visit mode: W walks forward at a speed bounded by elapsed time', walked > 0.5 && walked < 1.9 * walkSeconds + 0.5, `${walked.toFixed(2)} m in ${walkSeconds.toFixed(2)} s`);
+  // The first key-held frame can include up to one capped delta from before keydown.
+  check('visit mode: W walks forward at a speed bounded by elapsed time',
+    s.x - s0.x > 0.5 && walked < 1.9 * (walkSeconds + 0.25), `${walked.toFixed(2)} m in ${walkSeconds.toFixed(2)} s`);
   await page.evaluate(() => window.__twin.pov.enter(11.6, 7.2, -Math.PI / 2));
   await page.waitForFunction(() => !window.__twin.pov.animating, null, { timeout: 8000 });
   await page.keyboard.down('KeyW'); await page.waitForTimeout(2500); await page.keyboard.up('KeyW');

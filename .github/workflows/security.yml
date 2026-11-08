@@ -5,7 +5,7 @@
 #   - Trivy (Apache-2.0) on the repository: vulnerable dependencies, Dockerfile misconfigurations,
 #     committed credentials (gitleaks also runs in ci.yml, on the full git history);
 #   - Trivy on every image built from this repository (the six images the release publishes);
-#   - SBOMs (syft via anchore/sbom-action, Apache-2.0) of the source tree and of every image, in
+#   - SBOMs (Syft, Apache-2.0) of the source tree and of every image, in
 #     CycloneDX and SPDX JSON, kept as workflow artifacts.
 # Gate policy (blocking): known vulnerabilities rated HIGH or CRITICAL that have a fixed version,
 # misconfigurations and secrets rated HIGH or CRITICAL (gitleaks in ci.yml blocks on any secret).
@@ -30,7 +30,7 @@ concurrency:
 
 env:
   TRIVY_VERSION: v0.76.1 # explicit: the trivy-action default (v0.70.0) is older
-  SYFT_VERSION: v1.55.0
+  SYFT_CHECK_FOR_APP_UPDATE: "false"
   # Code scanning uploads need a token that can write security events, which pull requests
   # from forks never get. Their scans and gate still run and image reports are retained.
   CAN_UPLOAD_SARIF: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -184,26 +184,15 @@ jobs:
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image-${{ matrix.image }}
-      - name: SBOM output directory
-        run: mkdir -p "$RUNNER_TEMP/sbom"
-      - name: SBOM (CycloneDX)
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          image: ${{ env.IMAGE_REF }}
-          syft-version: ${{ env.SYFT_VERSION }}
-          format: cyclonedx-json
-          output-file: ${{ runner.temp }}/sbom/${{ matrix.image }}.cdx.json
-          upload-artifact: false
-          upload-release-assets: false
-      - name: SBOM (SPDX)
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          image: ${{ env.IMAGE_REF }}
-          syft-version: ${{ env.SYFT_VERSION }}
-          format: spdx-json
-          output-file: ${{ runner.temp }}/sbom/${{ matrix.image }}.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
+      - name: Generate image SBOMs (CycloneDX and SPDX)
+        env:
+          SBOM_NAME: ${{ matrix.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sbom"
+          bash .github/scripts/install_syft.sh "$RUNNER_TEMP/syft-bin"
+          "$RUNNER_TEMP/syft-bin/syft" "docker:$IMAGE_REF" \
+            -o "cyclonedx-json=$RUNNER_TEMP/sbom/$SBOM_NAME.cdx.json" \
+            -o "spdx-json@2.3=$RUNNER_TEMP/sbom/$SBOM_NAME.spdx.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-image-${{ matrix.image }}
@@ -254,28 +243,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Written outside the workspace: syft reads SBOM files it finds, the second scan must not
-      # ingest the first one.
-      - name: SBOM output directory
-        run: mkdir -p "$RUNNER_TEMP/sbom"
-      - name: SBOM (CycloneDX)
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          path: .
-          syft-version: ${{ env.SYFT_VERSION }}
-          format: cyclonedx-json
-          output-file: ${{ runner.temp }}/sbom/source.cdx.json
-          upload-artifact: false
-          upload-release-assets: false
-      - name: SBOM (SPDX)
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          path: .
-          syft-version: ${{ env.SYFT_VERSION }}
-          format: spdx-json
-          output-file: ${{ runner.temp }}/sbom/source.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
+      # Keep the outputs outside the scan target so Syft cannot catalog them.
+      - name: Generate source SBOMs (CycloneDX and SPDX)
+        run: |
+          mkdir -p "$RUNNER_TEMP/sbom"
+          bash .github/scripts/install_syft.sh "$RUNNER_TEMP/syft-bin"
+          "$RUNNER_TEMP/syft-bin/syft" dir:. \
+            -o "cyclonedx-json=$RUNNER_TEMP/sbom/source.cdx.json" \
+            -o "spdx-json@2.3=$RUNNER_TEMP/sbom/source.spdx.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-source
