@@ -39,9 +39,10 @@ hash="$(kc exec pod/ingress -- /tmp/caddy-bin hash-password --plaintext "$passwo
 cat > "$work/Caddyfile" <<EOF
 {
   admin off
-  auto_https off
+  auto_https disable_redirects
+  default_sni $loki_host
 }
-https://:8443 {
+https://$loki_host:8443 {
   tls /tls/tls.crt /tls/tls.key
   basic_auth {
     probe $hash
@@ -107,7 +108,21 @@ for _ in {1..20}; do
 done
 curl_tls=(curl --silent --show-error --noproxy '*' --max-time 3 --cacert "$work/loki.crt"
   --resolve "$loki_host:13100:127.0.0.1")
-[[ "$("${curl_tls[@]}" --output /dev/null --write-out '%{http_code}' "https://$loki_host:13100/ready")" == 401 ]]
+ready_url="https://$loki_host:13100/ready"
+proxy_status=""
+for _ in {1..10}; do
+  if proxy_status="$("${curl_tls[@]}" --output /dev/null --write-out '%{http_code}' "$ready_url")" &&
+     [[ "$proxy_status" == 401 ]]; then
+    break
+  fi
+  sleep 1
+done
+[[ "$proxy_status" == 401 ]]
+for _ in {1..15}; do
+  if "${curl_tls[@]}" --fail --user "probe:$password" "$ready_url" > /dev/null; then break; fi
+  sleep 1
+done
+"${curl_tls[@]}" --fail --user "probe:$password" "$ready_url" > /dev/null
 
 marker="factory-kind-$(openssl rand -hex 8)"
 for project in "$release" outside; do
