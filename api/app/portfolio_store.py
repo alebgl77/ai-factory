@@ -76,6 +76,12 @@ _BLOCKERS = """NOT EXISTS (
     JOIN tasks AS predecessor ON predecessor.id = dependency.depends_on
     WHERE dependency.task_id = task.id AND predecessor.status != 'done'
 )"""
+_WORKBENCH_REQUIRED = """(
+    json_extract(task.payload, '$.execution') = 'sensitive' OR EXISTS (
+        SELECT 1 FROM tasks AS parent WHERE parent.id = task.parent_task_id
+          AND json_extract(parent.payload, '$.execution') = 'sensitive'
+    )
+)"""
 _OWN_TASKS = """
     SELECT task.id, task.rowid AS position, task.updated_at, task.unit, task.project_id
     FROM json_each(?) AS assignment
@@ -206,7 +212,8 @@ class PortfolioStore:
                     SELECT * FROM visible AS page
                     WHERE (? IS NULL OR position < (SELECT rowid FROM tasks WHERE id = ?))
                     ORDER BY {order} LIMIT ?
-                ) SELECT page.*, payload, start_policy, {_BLOCKERS} AS dependencies_ready
+                ) SELECT page.*, payload, start_policy, {_BLOCKERS} AS dependencies_ready,
+                         {_WORKBENCH_REQUIRED} AS workbench_required
                   FROM page JOIN tasks AS task ON task.id = page.id
                   ORDER BY {order}
             """, (own, _encode(sorted(managed_units)), before, before, page_size + 1)).fetchall()
@@ -214,6 +221,7 @@ class PortfolioStore:
             page = rows[:page_size]
             histories = self._page_history(db, [row["id"] for row in page])
             tasks = [dict(_task_payload(row, policy_fingerprint), dependencies_ready=bool(row["dependencies_ready"]),
+                          workbench_required=bool(row["workbench_required"]),
                           history=histories.get(row["id"], [])) for row in page]
             data = {"goals": goals, "projects": projects, "tasks": tasks, "truncated": truncated}
             return data if limit is None else {**data, "next_position": page[-1]["id"] if truncated else None}
@@ -375,6 +383,7 @@ class PortfolioStore:
 
     def _project_task(self, db: sqlite3.Connection, task: dict[str, Any]) -> dict[str, Any]:
         return {**task, "dependencies_ready": self._dependencies_ready(db, task["id"]),
+                "workbench_required": self._requires_workbench(db, task["id"]),
                 "history": self._history(db, task["id"])}
 
     @staticmethod
@@ -422,7 +431,8 @@ class PortfolioStore:
 
     def delegate_task(self, parent_id: str, revision: int, child_id: str, data: dict[str, Any],
                       actor: PortfolioActor,
-                      authorize: Callable[[dict[str, Any], Mapping[str, int]], str]) -> dict[str, Any]:
+                      authorize: Callable[[dict[str, Any], Mapping[str, int]], str], *,
+                      workbench_available: bool = False) -> dict[str, Any]:
         with self._transaction(write=True) as db:
             assert db is not None
             parent = self._task(db, parent_id, None)
@@ -435,6 +445,8 @@ class PortfolioStore:
             binding = parent["assignee"] or {}
             if parent["parent_task_id"] or parent["status"] != "in_progress" or binding.get("kind") != "agent":
                 raise PortfolioError("invalid_transition")
+            if parent["execution"] == "sensitive" and not workbench_available:
+                raise PortfolioError("workbench_handoff_unavailable")
             if not selected_agent or selected_agent == binding["id"]:
                 raise PortfolioError("assignee_incompatible", 422)
             if child_count >= _CHILD_LIMIT:
@@ -494,13 +506,63 @@ class PortfolioStore:
             ).fetchone():
                 raise PortfolioError("portfolio_runner_claimed")
             changes = self._transition(db, current, action, command, actor)
+            if workbench_aliases is None and self._needs_workbench(db, current, action):
+                raise PortfolioError("workbench_handoff_unavailable")
             if not changes:
                 return self._project_task(db, current)
             task = self._revised(current, changes)
             self._write_task(db, task, policy_fingerprint if action == "authorize_start" else None)
             self._append_history(db, task, action, actor)
-            if workbench_aliases is not None and task["execution"] == "sensitive":
-                self._record_workbench_transition(db, task, action, workbench_aliases)
+            if task["execution"] == "sensitive" and (workbench_aliases is not None or action == "request_changes"):
+                self._record_workbench_transition(db, task, action, workbench_aliases or ())
+            return self._project_task(db, task)
+
+    @staticmethod
+    def _requires_workbench(db: sqlite3.Connection, task_id: str) -> bool:
+        return bool(db.execute(
+            f"SELECT {_WORKBENCH_REQUIRED} FROM tasks AS task WHERE id = ?", (task_id,),
+        ).fetchone()[0])
+
+    def _needs_workbench(self, db: sqlite3.Connection, task: dict[str, Any], action: str) -> bool:
+        if action not in {"start", "submit", "approve"}:
+            return False
+        if task["execution"] == "sensitive":
+            return True
+        return (action != "approve" and task["parent_task_id"] is not None
+                and self._requires_workbench(db, task["id"]))
+
+    def recover_workbench_task(self, task_id: str, revision: int, actor: PortfolioActor,
+                               authorize: Callable[[dict[str, Any]], None],
+                               has_workbench_case: Callable[[str], bool]) -> dict[str, Any]:
+        """Reset an old root orphan only when both stores rule out a handoff."""
+        with self._transaction(write=True) as db:
+            assert db is not None
+            current = self._task_for_change(db, task_id, revision, authorize)
+            status = current["status"]
+            if (current["execution"] != "sensitive" or current["parent_task_id"] is not None
+                    or (current["assignee"] or {}).get("kind") != "agent"
+                    or status not in {"review", "workbench"}
+                    or (status == "review" and not current["technical"])
+                    or current.get("workbench_decision") is not None):
+                raise PortfolioError("workbench_recovery_unavailable")
+            expected = "approve" if status == "workbench" and current["technical"] else "submit"
+            event = db.execute(
+                "SELECT action, status FROM task_history WHERE task_id = ? AND revision = ?",
+                (task_id, revision),
+            ).fetchone()
+            if (event is None or (event["action"], event["status"]) != (expected, status)
+                    or db.execute("""
+                        SELECT 1 FROM workbench_authors WHERE task_id = ?
+                        UNION ALL SELECT 1 FROM workbench_reviews WHERE task_id = ?
+                        UNION ALL SELECT 1 FROM portfolio_runner_claims WHERE task_id = ?
+                        UNION ALL SELECT 1 FROM task_history WHERE task_id = ? AND action GLOB 'workbench_*'
+                        LIMIT 1
+                    """, (task_id, task_id, task_id, task_id)).fetchone()
+                    or has_workbench_case(task_id)):
+                raise PortfolioError("workbench_recovery_unavailable")
+            task = self._revised(current, {"status": "ready", "evidence": [], "start_authorized": False})
+            self._write_task(db, task)
+            self._append_history(db, task, "recover_workbench", actor)
             return self._project_task(db, task)
 
     @staticmethod
@@ -638,6 +700,10 @@ class PortfolioStore:
             if submitted is None or submitted["actor_ref"] == actor.ref:
                 raise PortfolioError("separation_of_duties", 403)
             if action == "request_changes":
+                if task["execution"] == "sensitive" and db.execute(
+                    "SELECT 1 FROM workbench_authors WHERE task_id = ?", (task["id"],),
+                ).fetchone() is None:
+                    raise PortfolioError("workbench_recovery_required")
                 return {"status": "ready", "start_authorized": False}
             return {"status": "workbench" if task["execution"] == "sensitive" else "done"}
         if action == "cancel" and task["parent_task_id"] and status not in _TERMINAL_TASKS:

@@ -8,18 +8,38 @@ import sqlite3
 
 from fastapi import FastAPI
 
-from ai_factory_workbench import WorkbenchError
+from ai_factory_workbench import Workbench, WorkbenchError
 from ai_factory_workbench.cyberlog import JournalError
+from ai_factory_workbench.service import _PORTFOLIO_SOURCE
+
+from .portfolio_store import PortfolioError
 
 _BATCH_SIZE = 32
 _LOGGER = logging.getLogger("factory.portfolio_workbench")
 
 
+def active_workbench(app: FastAPI) -> Workbench | None:
+    workbench = getattr(app.state, "workbench", None)
+    return workbench if getattr(workbench, "mode", None) == "portfolio" else None
+
+
+def has_workbench_case(workbench: Workbench, task_id: str) -> bool:
+    """Check reserved subjects across revisions without creating a Workbench store."""
+    try:
+        with workbench.store.read_existing() as db:
+            return db is not None and db.execute(
+                "SELECT 1 FROM cases WHERE source = ? AND subject GLOB ? LIMIT 1",
+                (_PORTFOLIO_SOURCE, f"portfolio/{task_id}/*"),
+            ).fetchone() is not None
+    except WorkbenchError:
+        raise PortfolioError("portfolio_unavailable", status=503) from None
+
+
 def reconcile_portfolio_reviews(app: FastAPI) -> int:
     """Run a bounded pass. Both databases independently commit before the next step."""
-    workbench = getattr(app.state, "workbench", None)
+    workbench = active_workbench(app)
     portfolio = getattr(app.state, "portfolio", None)
-    if workbench is None or workbench.mode != "portfolio" or portfolio is None:
+    if workbench is None or portfolio is None:
         return 0
 
     cursors = getattr(app.state, "portfolio_review_cursors", {})

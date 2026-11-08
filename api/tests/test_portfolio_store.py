@@ -37,7 +37,8 @@ def create_task(store, number, **fields):
 
 
 def command(store, task, action, actor=EMPLOYEE, *, authorize=allowed, **fields):
-    return store.command_task(task["id"], task["revision"], {"action": action, **fields}, actor, authorize)
+    return store.command_task(task["id"], task["revision"], {"action": action, **fields}, actor, authorize,
+                              workbench_aliases=(actor.ref,))
 
 
 def assign(store, task, kind="employee", identity="p01"):
@@ -46,7 +47,8 @@ def assign(store, task, kind="employee", identity="p01"):
 
 def delegate(store, parent, number, choose=lambda task, load: "ag-2", mode="automatic"):
     return store.delegate_task(parent["id"], parent["revision"], key(number),
-                               {"title": f"Subtask {number}", "delegation": mode}, AGENT, choose)
+                               {"title": f"Subtask {number}", "delegation": mode}, AGENT, choose,
+                               workbench_available=True)
 
 
 @pytest.fixture

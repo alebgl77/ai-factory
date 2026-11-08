@@ -21,6 +21,7 @@ from .bu_access import PORTFOLIO_AGENT_MODES
 from .i18n import localize_tree
 from .pagination import Cursor, decode_cursor, encode_cursor
 from .portfolio_store import TASK_PAGE_LIMIT, PortfolioActor, PortfolioError, PortfolioStore
+from .portfolio_workbench import active_workbench, has_workbench_case
 from .routers.shadow_ai import _check_origin
 from .security import READ, ROLE_PERMISSIONS, Access, require
 
@@ -179,6 +180,10 @@ class CommandIn(Input):
         if self.action == "report_usage" and self.tokens is None:
             raise ValueError("missing tokens")
         return self
+
+
+class RecoveryIn(Input):
+    revision: Revision
 
 
 class DelegationIn(Input):
@@ -422,6 +427,7 @@ def snapshot(request: Request, access: Reader, limit: Annotated[int, Query(ge=1,
                   if ctx.global_admin or unit in ctx.participating_units],
         "capabilities": {
             "global_admin": ctx.global_admin,
+            "workbench_handoff": active_workbench(request.app) is not None,
             "roles_by_unit": {unit: sorted(roles) for unit, roles in ctx.roles.items()},
             "employee_id": next((identifier for _, kind, identifier in ctx.own if kind == "employee"), None),
             "agent_id": next(iter(own_agents), None),
@@ -540,11 +546,23 @@ def command_task(request: Request, task_id: EntityID, data: CommandIn, access: W
     command = data.model_dump(exclude={"revision"}, exclude_none=True)
     if data.tokens is not None:
         command["tokens"]["total"] = data.tokens.input + data.tokens.output
-    workbench = getattr(request.app.state, "workbench", None)
-    aliases = tuple(sorted(access.principal.ids)) if getattr(workbench, "mode", None) == "portfolio" else None
+    aliases = tuple(sorted(access.principal.ids)) if active_workbench(request.app) is not None else None
     return ctx.project_task(_store(request).command_task(
         task_id, data.revision, command, ctx.actor, authorize, policy_fingerprint=ctx.grant_generation,
         workbench_aliases=aliases))
+
+
+@router.post("/tasks/{task_id}/recover-workbench")
+def recover_workbench_task(request: Request, task_id: EntityID, data: RecoveryIn, access: Writer):
+    ctx = _context(request, access)
+    ctx.require_global()
+    workbench = active_workbench(request.app)
+    if workbench is None:
+        raise PortfolioError("workbench_handoff_unavailable")
+    return ctx.project_task(_store(request).recover_workbench_task(
+        task_id, data.revision, ctx.actor, lambda task: _ensure_visible(ctx, task),
+        lambda identifier: has_workbench_case(workbench, identifier),
+    ))
 
 
 @router.post("/tasks/{parent_id}/subagents", status_code=201)
@@ -584,5 +602,6 @@ def delegate_task(request: Request, parent_id: EntityID, data: DelegationIn, acc
 
     result = _store(request).delegate_task(
         parent_id, data.revision, uuid4().hex,
-        {"title": data.title, "description": data.description, "delegation": data.mode}, ctx.actor, select)
+        {"title": data.title, "description": data.description, "delegation": data.mode}, ctx.actor, select,
+        workbench_available=active_workbench(request.app) is not None)
     return {"parent": ctx.project_task(result["parent"]), "task": ctx.project_task(result["task"])}

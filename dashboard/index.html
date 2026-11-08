@@ -971,7 +971,7 @@ button.portfolio-card:hover,.portfolio-task:hover{border-color:var(--portfolio-i
   <main class="stage" id="stage">
     <div class="canvas-host" id="canvasHost"></div>
     <div class="loading" id="loading"><div class="spinner" aria-hidden="true"></div><p role="status">Chargement de la scène 3D…</p><button type="button" class="btn primary" id="fallbackSpaces" hidden>Consulter les espaces</button></div>
-    <div class="view-ctrl" role="toolbar" aria-label="Contrôles de vue" hidden>
+    <div class="view-ctrl" id="viewToolbar" role="toolbar" aria-label="Contrôles de vue" hidden>
       <button type="button" class="seg" id="view3d" aria-pressed="true">3D</button>
       <button type="button" class="seg" id="viewTop" aria-pressed="false">Plan</button>
       <button type="button" class="seg" id="viewLabels" aria-pressed="true">Étiquettes</button>
@@ -1232,7 +1232,10 @@ const BOOTHS = RESOURCES.filter(r => r.type === 'booth');
 const ROOM = RES.R1;
 const SECURE_ZONE = 'closed'; // the only place where sensitive data classes may be processed
 const agree = (r, w) => (r.g === 'f' ? w + 'e' : w);
-const STATE_FR = { free: 'libre', busy: 'occupé', soon: 'arrivée < 30 min', later: 'réservé plus tard' };
+const AVAILABILITY_LABELS = {
+  free: ['Free', 'Libre'], busy: ['Occupied', 'Occupé'],
+  soon: ['Arrival within 30 min', 'Arrivée sous 30 min'], later: ['Booked later', 'Réservé plus tard'],
+};
 function shortState(r, state) {
   if (state === 'free') return 'Libre';
   if (state === 'busy') return agree(r, 'Occupé');
@@ -1829,9 +1832,11 @@ function floorPatch(x1, z1, x2, z2, material, h = 0.01) {
   m.userData.floorPatch = true;
   return m;
 }
-function zoneLabel(text, x, z) {
-  const el = document.createElement('div'); el.className = 'zone'; el.textContent = text;
-  const o = new CSS2DObject(el); o.position.set(x, 0.05, z); scene.add(o); ZONE_LABELS.push(o);
+function zoneLabel(text, x, z, english = text) {
+  const el = document.createElement('div'); el.className = 'zone'; el.textContent = ui(english, text);
+  const o = new CSS2DObject(el);
+  if (english !== text) o.userData.localeLabel = [english, text];
+  o.position.set(x, 0.05, z); scene.add(o); ZONE_LABELS.push(o);
 }
 function buildShadowObservatory() {
   const screen = makeScreen('shadow', 3.35, 1.44, 760);
@@ -2274,14 +2279,14 @@ function buildBuilding() {
 
   // Zone labels
   zoneLabel('War Room', -9.25, -3.15);
-  zoneLabel('Lab sécurisé', -2.6, -4.1);
+  zoneLabel('Lab sécurisé', -2.6, -4.1, 'Secure Lab');
   buildCoffeeCorner();
   zoneLabel('Focus pods', 11.2, -0.5);
   zoneLabel('Delivery floor', -0.7, 1.45);
   zoneLabel('R&D Lab', -11.6, 4.4);
   zoneLabel('Skills Lab', -2.8, 8.4);
   zoneLabel('Agent Ops', 4.3, 8.4);
-  zoneLabel('Entrée · casiers', 9.6, 6.6);
+  zoneLabel('Entrée · casiers', 9.6, 6.6, 'Entrance · lockers');
 }
 
 function applyTheme() {
@@ -3973,10 +3978,11 @@ function setLens(k, keepFocus = false) {
 }
 function renderLegend() {
   const L = $('legend'), th = effTheme();
-  if (S.lens === 'uc') L.innerHTML = USE_CASES.map(u => `<span class="lg-uc" title="${esc(u.name)}"><i class="sq" style="--u:${u.color}"></i>${esc(u.code)}</span>`).join('') + `<span class="lg-uc"><i class="sq" style="--u:${INTERNAL[th]}"></i>Interne</span><span class="lg-uc"><i class="sq" style="--u:${NEUTRAL[th]}"></i>Inoccupé</span>`;
-  else if (S.lens === 'heat') L.innerHTML = `<span>Part de la journée réservée</span><span>0 %</span><i class="grad" style="--g0:${HEAT[th][0]};--g1:${HEAT[th][1]}"></i><span>100 %</span>`;
-  else L.innerHTML = `<span data-st="free"><i class="dot"></i>Libre</span><span data-st="busy"><i class="dot"></i>Occupé</span><span data-st="soon"><i class="dot"></i>Arrivée sous 30 min</span><span data-st="later"><i class="dot"></i>Réservé plus tard</span>`;
-  L.setAttribute('aria-label', S.lens === 'status' ? 'Légende des états' : S.lens === 'uc' ? 'Légende des use cases' : 'Légende du taux d’occupation');
+  if (S.lens === 'uc') L.innerHTML = USE_CASES.map(u => `<span class="lg-uc" title="${esc(u.name)}"><i class="sq" style="--u:${u.color}"></i>${esc(u.code)}</span>`).join('') + `<span class="lg-uc"><i class="sq" style="--u:${INTERNAL[th]}"></i>${ui('Internal', 'Interne')}</span><span class="lg-uc"><i class="sq" style="--u:${NEUTRAL[th]}"></i>${ui('Unoccupied', 'Inoccupé')}</span>`;
+  else if (S.lens === 'heat') L.innerHTML = `<span>${ui('Share of the day booked', 'Part de la journée réservée')}</span><span>0 %</span><i class="grad" style="--g0:${HEAT[th][0]};--g1:${HEAT[th][1]}"></i><span>100 %</span>`;
+  else L.innerHTML = Object.entries(AVAILABILITY_LABELS).map(([state, label]) => `<span data-st="${state}"><i class="dot"></i>${ui(...label)}</span>`).join('');
+  L.setAttribute('aria-label', S.lens === 'status' ? ui('Availability legend', 'Légende des états')
+    : S.lens === 'uc' ? ui('Use case legend', 'Légende des use cases') : ui('Occupancy legend', 'Légende du taux d’occupation'));
 }
 /* Tabs */
 const TABS = () => [['team', $('tabTeam'), $('teamPanel')], ['spaces', $('tabSpaces'), $('spacePanel')], ['pilot', $('tabPilot'), $('pilotPanel')], ['factory', $('tabFactory'), $('factoryPanel')]];
@@ -5147,8 +5153,24 @@ function setLanguage(lang) {
   $('saveWarn').title = ui('Browser storage is unavailable. Changes will be lost when you close the page.', 'Stockage local indisponible. Les modifications seront perdues à la fermeture.');
   $('viewTop').textContent = ui('Floor plan', 'Plan');
   $('viewLabels').textContent = ui('Labels', 'Étiquettes');
+  $('viewToolbar').setAttribute('aria-label', ui('Map controls', 'Contrôles de vue'));
+  for (const [lens, label, title] of [
+    ['status', ui('Status', 'Statut'), ui('Status view (1)', 'Vue Statut (1)')],
+    ['uc', 'Use cases', ui('Use case view (2)', 'Vue Use cases (2)')],
+    ['heat', ui('Occupancy', 'Occupation'), ui('Daily occupancy view (3)', 'Vue Occupation du jour (3)')],
+  ]) {
+    const button = document.querySelector(`[data-lens="${lens}"]`);
+    button.textContent = label;
+    button.title = title;
+  }
   $('pegBtn').querySelector('span').textContent = ui('Visit', 'Visite');
+  $('pegBtn').title = ui('Visit mode (M). Drag the character onto the floor or click to enter at reception.',
+    'Mode visite (M). Glissez le personnage sur le sol ou cliquez pour entrer par l’accueil.');
   setEncounterLanguage();
+  for (const zone of ZONE_LABELS) {
+    const label = zone.userData.localeLabel;
+    if (label) zone.element.textContent = ui(...label);
+  }
   if ($('shadowMapOpen')) $('shadowMapOpen').textContent = shadowTitle();
   if ($('coffeeMapOpen')) {
     $('coffeeMapOpen').textContent = ui('Coffee corner', 'Coin café');
@@ -5174,6 +5196,7 @@ function applySnapshot(next, source, lang) {
     Prefs.save();
   }
   initDomain(SNAP);
+  if (languageChanged) renderLegend();
   // The deployed catalogue can differ from the demo. Reconcile the in-memory planning copy
   // before drawing against the new IDs, without writing it to the browser or server.
   const idsChanged = roster.size !== EMPLOYEES.length || EMPLOYEES.some(e => !roster.has(e.id)) ||
@@ -5250,7 +5273,7 @@ function statusOfResText(r, st) {
   return Remote.private ? ui('Availability is scoped', 'Disponibilité selon le périmètre') : st.list.length ? 'Libre jusqu’à la fin de journée' : 'Aucune réservation';
 }
 const cssVar = st => `var(--${st})`;
-const dayScope = () => (S.date === todayISO() ? "aujourd'hui" : 'ce jour');
+const dayScope = () => S.date === todayISO() ? ui('today', "aujourd'hui") : ui('that day', 'ce jour');
 
 /* Replace innerHTML only when it changed, and keep keyboard focus on the equivalent control */
 function setHTMLKeepFocus(root, html) {
@@ -5271,42 +5294,49 @@ function renderKpis(sn) {
   const count = k => emps.filter(e => P[e.id].kind === k).length;
   const onsite = count('onsite'), remote = count('remote'), arriving = count('arriving') + count('break'), off = count('off'), left = count('left');
   const pl = (n, w) => `${n} ${w}${n > 1 ? 's' : ''}`;
-  const subParts = [`${remote} télétravail`];
-  if (arriving) subParts.push(pl(arriving, 'attendu'));
-  if (left) subParts.push(pl(left, 'parti'));
-  if (off) subParts.push(`${off} en congé`);
+  const remoteText = ui(`${remote} remote`, `${remote} en télétravail`);
+  const arrivingText = ui(`${arriving} expected`, pl(arriving, 'attendu'));
+  const leftText = ui(`${left} left`, pl(left, 'parti'));
+  const offText = ui(`${off} on leave`, `${off} en congé`);
+  const attendance = [ui(`${onsite} on site`, `${onsite} sur site`), remoteText, arrivingText, leftText, offText];
+  const subParts = [remoteText];
+  if (arriving) subParts.push(arrivingText);
+  if (left) subParts.push(leftText);
+  if (off) subParts.push(offText);
   $('kpiOnsite').innerHTML = `
-    <div class="kpi-label">${icon('users')}Sur site</div>
+    <div class="kpi-label">${icon('users')}${ui('On site', 'Sur site')}</div>
     <div class="kpi-value">${onsite}<small>/ ${emps.length}</small></div>
-    <div class="kpi-sub" title="${onsite} sur site, ${remote} en télétravail, ${arriving} attendu(s), ${left} parti(s), ${off} en congé">${subParts.join(' · ')}</div>`;
+    <div class="kpi-sub" title="${esc(attendance.join(', '))}">${subParts.join(' · ')}</div>`;
   const c = { free: 0, soon: 0, later: 0, busy: 0 };
   for (const r of DESKS) c[sn.res[r.id].state]++;
-  const seg = ['free', 'soon', 'later', 'busy'].map(s => c[s] ? `<i style="--c:${cssVar(s)};width:${(c[s] / DESKS.length) * 100}%" title="${c[s]} ${STATE_FR[s]}"></i>` : '').join('');
+  const seg = ['free', 'soon', 'later', 'busy'].map(s => c[s] ? `<i style="--c:${cssVar(s)};width:${(c[s] / DESKS.length) * 100}%" title="${c[s]} ${ui(...AVAILABILITY_LABELS[s])}"></i>` : '').join('');
   const reservedFree = c.soon + c.later;
   $('kpiDesks').innerHTML = `
-    <div class="kpi-label">${icon('desk')}Postes libres</div>
+    <div class="kpi-label">${icon('desk')}${ui('Free desks', 'Postes libres')}</div>
     <div class="kpi-row"><div class="kpi-value">${c.free}<small>/ ${DESKS.length}</small></div><div class="stack" aria-hidden="true">${seg}</div></div>
-    <div class="kpi-sub" title="${c.busy} occupé(s), ${reservedFree} libre(s) jusqu'à leur réservation">${c.busy} occupé${c.busy > 1 ? 's' : ''} · ${reservedFree} réservé${reservedFree > 1 ? 's' : ''}</div>`;
+    <div class="kpi-sub" title="${ui(`${c.busy} occupied, ${reservedFree} free until booked`, `${pl(c.busy, 'occupé')}, ${pl(reservedFree, 'libre')} jusqu’à leur réservation`)}">${ui(`${c.busy} occupied · ${reservedFree} booked`, `${pl(c.busy, 'occupé')} · ${pl(reservedFree, 'réservé')}`)}</div>`;
   $('kpiBooths').innerHTML = `<div class="kpi-label">${icon('phone')}Focus pods</div>` + BOOTHS.map(r => {
     const st = sn.res[r.id];
-    const w = st.state === 'busy' ? agree(r, 'Occupé') : st.state === 'free' ? 'Libre' : agree(r, 'Réservé');
+    const w = st.state === 'busy' ? ui('Occupied', agree(r, 'Occupé'))
+      : st.state === 'free' ? ui('Free', 'Libre') : ui('Booked', agree(r, 'Réservé'));
     const tm = st.state === 'busy' ? `→ ${fmt(st.until)}` : st.state === 'free' ? '' : fmt(st.booking.start);
-    const txt = st.state === 'free' ? 'Libre' : `<em class="kl">${w} </em>${tm}`;
+    const txt = st.state === 'free' ? w : `<em class="kl">${w} </em>${tm}`;
     return `<div class="srow" data-st="${st.state}" title="${esc(r.name)} — ${esc(w)}${tm ? ' ' + esc(tm) : ''}"><i class="dot" style="--c:${cssVar(st.state)}"></i><b>${esc(r.short)}</b><span>${txt}</span></div>`;
   }).join('');
   const rs = sn.res.R1, rb = rs.booking;
-  const rtxt = rs.state === 'busy' ? `${esc(rb.note || rb.project || 'Réunion')} → ${fmt(rb.end)}`
-    : rs.state === 'free' ? 'Libre' : `Réunion à ${fmt(rb.start)}`;
+  const meetingName = booking => esc(booking.note || booking.project || ui('Meeting', 'Réunion'));
+  const rtxt = rs.state === 'busy' ? `${meetingName(rb)} → ${fmt(rb.end)}`
+    : rs.state === 'free' ? ui('Free', 'Libre') : ui(`Meeting at ${fmt(rb.start)}`, `Réunion à ${fmt(rb.start)}`);
   const nx = rs.state === 'busy' ? rs.list.find(b => b.start >= rb.end) : null;
-  const nextTxt = rs.state === 'busy' ? (nx ? `Suivante ${fmt(nx.start)} · ${esc(nx.note || nx.project || 'Réunion')}` : 'Puis libre')
-    : rb ? esc(rb.note || rb.project || 'Réunion') : `${rs.list.length} réunion${rs.list.length > 1 ? 's' : ''} ${dayScope()}`;
+  const nextTxt = rs.state === 'busy' ? (nx ? `${ui('Next', 'Suivante')} ${fmt(nx.start)} · ${meetingName(nx)}` : ui('Free afterwards', 'Puis libre'))
+    : rb ? meetingName(rb) : `${ui(`${rs.list.length} meeting${rs.list.length === 1 ? '' : 's'}`, pl(rs.list.length, 'réunion'))} ${dayScope()}`;
   $('kpiRoom').innerHTML = `<div class="kpi-label">${icon('video')}War Room</div>
     <div class="srow" data-st="${rs.state}"><i class="dot" style="--c:${cssVar(rs.state)}"></i><span style="color:var(--text)">${rtxt}</span></div>
     <div class="srow"><span>${nextTxt}</span></div>`;
   const sq = squadsOf(sn).filter(x => x.size >= 2), tog = sq.filter(x => x.together);
-  $('kpiSquads').innerHTML = `<div class="kpi-label">${icon('layers')}Squads réunies</div>
+  $('kpiSquads').innerHTML = `<div class="kpi-label">${icon('layers')}${ui('Squads together', 'Squads réunies')}</div>
     <div class="kpi-value">${tog.length}<small>/ ${sq.length}</small></div>
-    <div class="kpi-sub" title="Squad réunie : au moins 75 % de ses membres (min. 2) sur site au même moment">${tog.length ? tog.map(x => `${x.uc.code} ${x.now}/${x.size}`).join(' · ') : 'Aucune squad réunie sur site'}</div>`;
+    <div class="kpi-sub" title="${ui('At least 75% of a squad (minimum 2) on site at the same time', 'Au moins 75 % des membres de la squad (min. 2) sur site au même moment')}">${tog.length ? tog.map(x => `${esc(x.uc.code)} ${x.now}/${x.size}`).join(' · ') : ui('No squads together on site', 'Aucune squad réunie sur site')}</div>`;
   $('demoBadge').hidden = true;  // merged into the source badge (one pill, no overflow on phones)
   $('srcBadge').innerHTML = sourceBadge();
 }
@@ -5316,37 +5346,41 @@ function personLine(e, p) {
   switch (p.kind) {
     case 'onsite': {
       const w = p.where, rr = r(w.resourceId);
-      if (rr.id === 'S1') return { cls: 'onsite', ic: 'users', txt: 'En formation · Skills Lab' };
-      if (rr.type === 'room') return { cls: 'onsite', ic: 'users', txt: `En réunion · ${rr.short}${w.visio ? ' (visio)' : ''}` };
-      if (rr.type === 'booth') return { cls: 'onsite', ic: 'phone', txt: `En ${rr.name.toLowerCase()} · → ${fmt(w.end)}` };
-      return { cls: 'onsite', ic: 'building', txt: `${rr.short} · jusqu'à ${fmt(p.until)}` };
+      if (rr.id === 'S1') return { cls: 'onsite', ic: 'users', txt: ui('In training · Skills Lab', 'En formation · Skills Lab') };
+      if (rr.type === 'room') return { cls: 'onsite', ic: 'users', txt: `${ui('In a meeting', 'En réunion')} · ${rr.short}${w.visio ? ui(' (video)', ' (visio)') : ''}` };
+      if (rr.type === 'booth') return { cls: 'onsite', ic: 'phone', txt: `${ui(`In ${rr.name}`, `En ${rr.name.toLowerCase()}`)} · → ${fmt(w.end)}` };
+      return { cls: 'onsite', ic: 'building', txt: `${rr.short} · ${ui('until', "jusqu'à")} ${fmt(p.until)}` };
     }
     case 'arriving': {
       const soon = p.next.start - S.t <= SOON;
-      return { cls: soon ? 'soon' : '', ic: 'clock', txt: `Arrive à ${fmt(p.next.start)} · ${r(p.next.resourceId).short}` };
+      return { cls: soon ? 'soon' : '', ic: 'clock', txt: `${ui('Arrives at', 'Arrive à')} ${fmt(p.next.start)} · ${r(p.next.resourceId).short}` };
     }
-    case 'break': return { cls: p.next.start - S.t <= SOON ? 'soon' : '', ic: 'clock', txt: `Retour à ${fmt(p.next.start)} · ${r(p.next.resourceId).short}` };
-    case 'remote': return { cls: '', ic: 'home', txt: p.meet ? (p.meet.visio ? 'Télétravail · en visio' : `Sans visio · réunion ${r(p.meet.resourceId).short}`) : 'Télétravail' };
-    case 'off': return { cls: 'off', ic: 'palm', txt: 'Congé / absence' };
-    case 'left': return { cls: 'left', ic: 'exit', txt: `Départ à ${fmt(p.last.end)}` };
+    case 'break': return { cls: p.next.start - S.t <= SOON ? 'soon' : '', ic: 'clock', txt: `${ui('Back at', 'Retour à')} ${fmt(p.next.start)} · ${r(p.next.resourceId).short}` };
+    case 'remote': {
+      const text = !p.meet ? ui('Remote', 'Télétravail') : p.meet.visio ? ui('Remote · video call', 'Télétravail · en visio')
+        : `${ui('No video link · meeting', 'Sans visio · réunion')} ${r(p.meet.resourceId).short}`;
+      return { cls: '', ic: 'home', txt: text };
+    }
+    case 'off': return { cls: 'off', ic: 'palm', txt: ui('On leave / absent', 'Congé / absence') };
+    case 'left': return { cls: 'left', ic: 'exit', txt: `${ui('Left at', 'Départ à')} ${fmt(p.last.end)}` };
   }
   return { cls: '', ic: 'home', txt: '' };
 }
 
 function renderTeam(sn) {
   const groups = [
-    ['onsite', 'Sur site', ['onsite']], ['arriving', 'Attendus', ['arriving', 'break']],
-    ['remote', 'Télétravail', ['remote']], ['away', 'Partis · absents', ['left', 'off']],
+    [ui('On site', 'Sur site'), ['onsite']], [ui('Expected', 'Attendus'), ['arriving', 'break']],
+    [ui('Remote', 'Télétravail'), ['remote']], [ui('Left · absent', 'Partis · absents'), ['left', 'off']],
   ];
   let html = '';
-  for (const [, title, kinds] of groups) {
+  for (const [title, kinds] of groups) {
     const list = Store.employees.filter(e => kinds.includes(sn.people[e.id].kind));
     if (!list.length) continue;
     html += `<div class="grp"><div class="grp-h">${title}<em>${list.length}</em></div><ul class="plist">`;
     for (const e of list) {
       const p = sn.people[e.id], l = personLine(e, p);
-      const toggle = p.kind === 'remote' ? `<button type="button" class="mini" data-flag="${esc(e.id)}" title="Marquer ${esc(e.name)} en congé ce jour">Congé</button>`
-        : p.kind === 'off' ? `<button type="button" class="mini" data-flag="${esc(e.id)}" title="Repasser ${esc(e.name)} en télétravail">Télétravail</button>` : '';
+      const toggle = p.kind === 'remote' ? `<button type="button" class="mini" data-flag="${esc(e.id)}" title="${esc(ui(`Mark ${e.name} as on leave for this day`, `Marquer ${e.name} en congé ce jour`))}">${ui('Set leave', 'Congé')}</button>`
+        : p.kind === 'off' ? `<button type="button" class="mini" data-flag="${esc(e.id)}" title="${esc(ui(`Mark ${e.name} as remote again`, `Repasser ${e.name} en télétravail`))}">${ui('Set remote', 'Télétravail')}</button>` : '';
       html += `<li class="prow"><button type="button" class="pbtn" data-emp="${esc(e.id)}" title="${esc(e.role)}">
         <span class="avatar${p.kind === 'onsite' ? '' : ' dim'}" data-emp="${esc(e.id)}" style="--c:${esc(e.color)}" data-on="${p.kind === 'onsite' ? 1 : 0}">${esc(initials(e.name))}</span>
         <span class="pmain"><span class="pname">${esc(e.name)}</span><span class="pst ${l.cls}">${icon(l.ic)}${esc(l.txt)}</span></span>

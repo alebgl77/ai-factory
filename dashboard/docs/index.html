@@ -28,7 +28,19 @@
     </nav>
   </header>
 
-  <div class="layout">
+  <main class="layout" id="contenu" tabindex="-1">
+    <div class="hero">
+      <p class="eyebrow">AI Factory · Manuel d’exploitation</p>
+      <h1>Déployer, gouverner<br>et exploiter la Factory.</h1>
+      <p class="lead">Partez d’un cas fictif ou préparez une installation privée. Suivez les accès, le travail des agents, les décisions humaines et la reprise après incident.</p>
+      <div class="hero-links">
+        <a class="primary" href="#demarrage">Choisir un parcours</a>
+        <a class="secondary" href="#visual-tour">Parcourir la Factory en images</a>
+        <a class="secondary" href="./architecture.html">Consulter l’atlas</a>
+        <a class="secondary" href="./roadmap.html?lang=fr">Voir la feuille de route</a>
+      </div>
+    </div>
+
     <nav class="toc" aria-label="Sommaire">
       <p class="eyebrow">Documentation</p>
       <ol>
@@ -47,18 +59,7 @@
       </ol>
     </nav>
 
-    <main id="contenu" tabindex="-1">
-      <div class="hero">
-        <p class="eyebrow">AI Factory · Manuel d’exploitation</p>
-        <h1>Déployer, gouverner<br>et exploiter la Factory.</h1>
-        <p class="lead">Partez d’un cas fictif ou préparez une installation privée. Suivez les accès, le travail des agents, les décisions humaines et la reprise après incident.</p>
-        <div class="hero-links">
-          <a class="primary" href="#demarrage">Choisir un parcours</a>
-          <a class="secondary" href="#visual-tour">Parcourir la Factory en images</a>
-          <a class="secondary" href="./architecture.html">Consulter l’atlas</a>
-          <a class="secondary" href="./roadmap.html?lang=fr">Voir la feuille de route</a>
-        </div>
-      </div>
+    <div class="guide-content">
       <form id="guide-search" class="search" role="search" hidden>
         <label for="guide-query">Rechercher dans le guide</label>
         <div class="search-field">
@@ -348,8 +349,8 @@
         <p>Pour un retour arrière, désactivez le moteur et conservez un instantané de l’état récent. Pour une archive de fichiers sur Kubernetes, sauvegardez le contenu du volume et préservez les permissions de la racine du PVC de destination. Si les données ont migré, restaurez un point compatible et réconciliez les écritures postérieures avec l’exploitant.</p>
         <p><a href="https://github.com/alebgl77/ai-factory/blob/main/docs/fr/PORTFOLIO.md">Référence du portefeuille et de l’API</a></p>
       </section>
-    </main>
-  </div>
+    </div>
+  </main>
   <footer><a href="#contenu">Haut du guide</a><span>AI Factory · Guide d’exploitation</span></footer>
 </body>
 </html>

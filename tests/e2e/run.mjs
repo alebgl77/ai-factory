@@ -227,6 +227,17 @@ if (!process.env.E2E_BASE_URL) {
   check('offline EN switch updates the header, source badge and rendered registry immediately',
     switched.lang === 'en' && switched.payload === 'en' && switched.source === 'Offline demo' && switched.registry && switched.name !== frenchName && switched.workshop === 'exercise/index.html?lang=en');
   await page.keyboard.press('Escape');
+  await page.getByRole('tab', { name: 'Team', exact: true }).click();
+  const teamCaptions = await page.locator('#teamPanel .grp-h').evaluateAll(groups => groups.map(group => group.firstChild.textContent));
+  check('switching to English localizes the homepage KPIs, team groups and map legend',
+    await page.locator('#kpiOnsite .kpi-label').textContent() === 'On site' &&
+    await page.locator('#kpiDesks .kpi-label').textContent() === 'Free desks' &&
+    await page.locator('#kpiSquads .kpi-label').textContent() === 'Squads together' &&
+    (await page.locator('#kpiOnsite .kpi-sub').getAttribute('title')).includes('remote') &&
+    teamCaptions.length > 0 && teamCaptions.every(title => ['On site', 'Expected', 'Remote', 'Left · absent'].includes(title)) &&
+    await page.getByRole('toolbar', { name: 'Map controls' }).getByRole('button', { name: 'Status', exact: true }).count() === 1 &&
+    await page.locator('#legend').getAttribute('aria-label') === 'Availability legend' &&
+    await page.locator('#legend [data-st="soon"]').textContent() === 'Arrival within 30 min');
   await shadowMap.focus();
   await page.keyboard.press('Enter');
   check('English map label opens the localized Observatory',
@@ -313,6 +324,7 @@ if (!process.env.E2E_BASE_URL) {
     ideaCard('9', 'cc-ops', 'Opérations', 'Piste historique sur les archives', 'adoption', ['documentation']),
   ];
   let workbenchOutcome = null;
+let portfolioWorkbenchEnabled = true;
   const portfolioId = n => n.toString(16).padStart(32, '0');
   const activityDay = Math.floor(Date.now() / 86400000) * 86400000;
   const activityTime = (age, hour = 0) => new Date(activityDay - age * 86400000 + hour * 3600000).toISOString();
@@ -452,7 +464,8 @@ if (!process.env.E2E_BASE_URL) {
         data.truncated = !cursor;
         data.next_cursor = cursor ? null : pageCursor;
       }
-      data.capabilities = { ...data.capabilities, global_admin: false, roles_by_unit: { delivery: [portfolioRole] } };
+      data.capabilities = { ...data.capabilities, global_admin: false, workbench_handoff: portfolioWorkbenchEnabled,
+        roles_by_unit: { delivery: [portfolioRole] } };
       return route.fulfill({ json: data });
     }
     if (url.pathname === `/api/v1/registry/${reviewTarget.id}/assessment`) {
@@ -826,9 +839,15 @@ if (!process.env.E2E_BASE_URL) {
     delegateWrite?.body?.revision === 1 && delegateWrite.body.mode === 'automatic' && delegateWrite.body.description === '' && !Object.hasOwn(delegateWrite.body, 'id') &&
     taskWrite?.body?.unit === 'delivery' && !Object.hasOwn(taskWrite.body, 'id'));
   workbenchOutcome = 'waiting';
+  portfolioWorkbenchEnabled = false;
   await scoped.clock.fastForward(20000);
   await planTask(protectedPortfolio, 23).click();
   const decisionDetail = protectedPortfolio.locator('[data-portfolio-detail]');
+  await decisionDetail.getByText(/Activer le mode Portefeuille du Workbench/).waitFor();
+  check('portfolio hides the Companion link when Workbench handoff is unavailable',
+    await decisionDetail.getByRole('link', { name: 'Ouvrir Companion' }).count() === 0);
+  portfolioWorkbenchEnabled = true;
+  await scoped.clock.fastForward(20000);
   await decisionDetail.getByRole('link', { name: 'Ouvrir Companion' }).waitFor();
   workbenchOutcome = 'approve';
   await scoped.clock.fastForward(20000);
@@ -1490,6 +1509,14 @@ if (!process.env.E2E_BASE_URL) {
           await demo.locator('html').getAttribute('lang') === targetLocale && await demo.locator('.workstreams article').count() === 6 &&
           await demo.locator('#roadmap-home').getAttribute('href') === `../index.html?lang=${targetLocale}` &&
           await demo.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        if (isMobile) check('the roadmap loads both self-hosted fonts on the Pages subpath', await demo.evaluate(async () => {
+          try {
+            const loaded = await Promise.all([document.fonts.load('400 16px "Geist"'), document.fonts.load('700 16px "Geist Mono"')]);
+            return loaded.every(faces => faces.some(face => face.status === 'loaded'));
+          } catch {
+            return false;
+          }
+        }));
         check(`${mode}: public shortcuts need no API and raise no JavaScript error`,
           !requests.some(url => new URL(url).pathname.includes('/api/')) && failures.length === 0, failures.join(' | '));
       } finally {
@@ -1610,7 +1637,23 @@ await guide.close();
 const staticGuideContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 320, height: 740 } });
 try {
   const staticGuide = await staticGuideContext.newPage();
+  const guideStartsWithPurpose = async () => {
+    const introduction = await staticGuide.evaluate(() => {
+      const lead = document.querySelector('.hero .lead');
+      const toc = document.querySelector('.toc');
+      return Boolean(lead.compareDocumentPosition(toc) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+        lead.getBoundingClientRect().bottom <= Math.min(toc.getBoundingClientRect().top, innerHeight) &&
+        document.documentElement.scrollWidth <= innerWidth;
+    });
+    await staticGuide.locator('.hero-links a').last().focus();
+    await staticGuide.keyboard.press('Tab');
+    return introduction && await staticGuide.locator('.toc a').first().evaluate(link => link === document.activeElement);
+  };
+  await staticGuide.goto(new URL('docs/index.html', base).href);
+  const frenchPurposeFirst = await guideStartsWithPurpose();
   await staticGuide.goto(new URL('docs/index.en.html', base).href);
+  check('both mobile guides show the introduction before the contents in visual and keyboard order without JavaScript',
+    frenchPurposeFirst && await guideStartsWithPurpose());
   await staticGuide.getByRole('navigation', { name: 'Contents' }).getByRole('link', { name: 'Kubernetes pilot' }).click();
   check('operations guide keeps native navigation and content without JavaScript',
     new URL(staticGuide.url()).hash === '#kubernetes' &&

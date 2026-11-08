@@ -38,7 +38,7 @@ Affectez chacun de ces groupes métier à `[cc-relation]` et donnez aux comptes 
 - **Validation humaine.** Le manager enregistre une autorisation de démarrage à usage unique. C’est la valeur par défaut de chaque mode absent. Une réaffectation, une replanification ou un redémarrage de l’API invalide l’autorisation en attente. Après un redémarrage, le manager la renouvelle si la tâche est toujours prête. Cette règle s’applique aussi au retour à un fichier de politique antérieur.
 - **Bloqué.** La BU interdit l’affectation et le démarrage des agents dans ce mode.
 
-Une tâche technique soumise passe en revue auprès d’un architecte distinct. Une tâche sensible termine sa préparation au statut **Relais Workbench**, après revue technique si elle en requiert une. Activez le mode dédié pour enregistrer et répercuter une décision sur cette tâche.
+Une tâche technique soumise passe en revue auprès d’un architecte distinct. Une tâche sensible termine sa préparation au statut **Relais Workbench**, après revue technique si elle en requiert une. L’API exige le mode Portefeuille du Workbench pour démarrer ou soumettre un travail sensible et pour approuver sa revue technique. Les sous-tâches de lecture et de préparation d’un parent sensible sont également mises en pause quand ce mode est indisponible.
 
 Si l’évaluation d’un agent est révoquée, l’agent perd l’accès à ses affectations dans le portefeuille. Le manager de sa BU peut mettre la tâche en cours en état bloqué puis l’attribuer à un agent éligible selon la politique de la BU.
 
@@ -82,18 +82,21 @@ Le Workbench conserve le dossier et la décision avec leur révision. L’API ra
 
 Une décision de portefeuille valide le travail préparé. Pour une action externe, suivez le circuit approuvé du connecteur et de son environnement. [Workbench et Compagnon](https://github.com/alebgl77/ai-factory/blob/main/docs/fr/WORKBENCH.md)
 
+Si une ancienne tâche racine est entrée en revue ou en relais alors que le mode était désactivé, un administrateur global peut demander sa remise en file après activation du mode Portefeuille. Relevez l’identifiant et la révision actuelle via `GET /api/v1/portfolio`, en parcourant les pages si nécessaire. La remise en file est réservée aux tâches pour lesquelles l’API peut établir l’absence d’un auteur de soumission vérifié, d’un relais et d’une décision. La tâche conserve son identifiant, son affectation et ses dépendances. Ses preuves et son autorisation de démarrage sont effacées. L’historique consigne cette opération. Démarrez et soumettez ensuite le travail selon le circuit habituel.
+
 ## Intégration par l’API
 
 Un moteur externe peut utiliser un compte de service par agent et s’authentifier auprès du proxy. Il consulte ses affectations, démarre les tâches autorisées, effectue le travail dans son environnement et retourne des preuves. L’API coordonne ces opérations par état et révision.
 
 | Requête sous `/api/v1/portfolio` | Corps ou usage |
 |---|---|
-| `GET /` | Vue autorisée des objectifs, projets, tâches, rôles et politiques d’autonomie |
+| `GET /` | Vue autorisée des objectifs, projets, tâches, rôles et politiques d’autonomie, dont l’indicateur `capabilities.workbench_handoff` et l’indicateur `workbench_required` par tâche |
 | `GET /?limit=50` | Vue paginée des tâches, de la plus récemment créée à la plus ancienne. Reprenez `next_cursor` dans le paramètre `cursor` avec la même limite. |
 | `POST /tasks/{id}/commands` | `{revision, action: "authorize_start"}` par le manager si une autorisation est requise |
 | `POST /tasks/{id}/commands` | `{revision, action: "start"}` par l’agent affecté |
 | `POST /tasks/{id}/commands` | `{revision, action: "report_usage", tokens: {input, output}}` pendant l’exécution |
 | `POST /tasks/{id}/commands` | `{revision, action: "submit", evidence?, tokens?}` par la personne ou l’agent affecté |
+| `POST /tasks/{id}/recover-workbench` | `{revision}` par un administrateur global pour remettre en file une ancienne tâche éligible. |
 | `POST /tasks/{id}/subagents` | `{revision, mode, title, description?, agent_id?}`. Les modes sont `manual` avec `agent_id` et `automatic` avec sélection par le serveur. La réponse contient `parent` et `task`. |
 
 Les utilisateurs humains voient tous les titres et états stratégiques. Pour un projet extérieur à leurs BU, la réponse contient uniquement `title` et `state`. Pour un objectif sans projet dans leurs BU, elle contient uniquement `title` et `status` (`met`, `unmet` ou `unmeasured`). Les BU participantes et les administrateurs globaux accèdent aux fiches détaillées. Les agents voient les objectifs et projets liés à leurs affectations autorisées, quelle que soit la page.

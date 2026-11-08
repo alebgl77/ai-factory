@@ -38,13 +38,14 @@ BINDINGS = {"doc-agent-subject": "ag-doc-research", "support-agent-subject": "ag
 AUTONOMY = {OPS: {"read_only": "autonomous"}, REL: {"prepare": "blocked", "sensitive": "autonomous"}}
 
 
-def make_client(tmp_path, **policy):
+def make_client(tmp_path, *, mode="protected_demo", **policy):
     path = policy_file(tmp_path, **{"groups": GROUPS, "portfolio_roles": PORTFOLIO_ROLES,
                                    "portfolio_agents": BINDINGS, "portfolio_autonomy": AUTONOMY, **policy})
     roles = ROLE_MAP + ("finance-admin:admin",) + tuple(f"{group}:viewer" for group in GROUPS
                                                        if group.startswith(("ops-", "relation-")))
     return proxy(tmp_path, config_dir=str(CONFIG), role_map=roles, bu_policy_path=path,
-                 workbench_mode="protected_demo")
+                 demo_mode="never" if mode == "portfolio" else "always", workbench_mode=mode,
+                 workbench_cyber_audit="on" if mode == "portfolio" else "off")
 
 
 def identifier(value):
@@ -307,6 +308,7 @@ def test_agent_binding_autonomy_and_policy_restart(tmp_path):
     autonomous = command(api, autonomous, OPS_AGENT, "start")
     assert command(api, autonomous, OPS_AGENT, "submit")["status"] == "done"
 
+    api = make_client(tmp_path, mode="portfolio")
     sensitive = task(api, 24, relation_project, REL, execution="sensitive", technical=True)
     assign(api, sensitive, REL_MANAGER, "agent", "ag-support-writer", 422)
     sensitive = assign(api, sensitive, REL_MANAGER, "agent", "ag-support-supervisor")

@@ -424,3 +424,26 @@ def test_local_ollama_model_qualification(setup):
     result = row(api, child["id"])
     assert result["status"] == "done" and result["runner_result"].strip()
     assert result["tokens"]["total"] > 0 and result["tokens"]["source"] == "provider_reported"
+
+
+def test_sensitive_parent_pauses_runner_claim_and_late_result_when_workbench_is_off(setup):
+    build, config_for, _ = setup
+
+    def unexpected_call(request):
+        pytest.fail("runner must not make an inference call while Workbench is unavailable")
+
+    enabled = build(unexpected_call, settings=replace(config_for(), workbench_mode="portfolio",
+                                                      workbench_cyber_audit="on"))
+    _, child = queue(enabled, execution="sensitive")
+    assert child["execution"] == "prepare" and child["workbench_required"] is True
+    disabled = build(unexpected_call)
+    off_engine = disabled.app.state.portfolio_engine
+    assert off_engine._select() is None
+    assert off_engine.oldest_queue_age_seconds() == 0.0
+
+    claim = enabled.app.state.portfolio_engine._select()
+    assert claim is not None and claim.task["id"] == child["id"]
+    off_engine._complete(claim, WORK, {"input": 17, "output": 9}, None)
+    blocked = row(disabled, child["id"])
+    assert blocked["status"] == "blocked" and blocked["runner_error"] == "authorization_changed"
+    assert blocked["runner_result"] is None and blocked["evidence"] == []

@@ -80,7 +80,7 @@ a:hover { text-decoration-thickness: .14em; }
 .layout {
   display: grid;
   grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
-  gap: clamp(2rem, 6vw, 6rem);
+  column-gap: clamp(2rem, 6vw, 6rem);
   width: min(100% - 2.5rem, 72rem);
   margin: clamp(2rem, 6vw, 5.5rem) auto;
   align-items: start;
@@ -116,8 +116,8 @@ a:hover { text-decoration-thickness: .14em; }
 .toc a::before { content: counter(toc, decimal-leading-zero); color: var(--accent); font: .72rem Consolas, monospace; }
 .toc a:hover, .toc a[aria-current] { background: var(--wash); }
 
-main { min-width: 0; }
-.hero { padding-bottom: clamp(1.8rem, 5vw, 3.5rem); }
+.guide-content { min-width: 0; }
+.hero { grid-column: 1 / -1; padding-bottom: clamp(1.8rem, 5vw, 3.5rem); }
 h1, h2 { margin: 0; font-weight: 760; letter-spacing: -.045em; }
 h1 { font-size: clamp(2.35rem, 6.5vw, 5.25rem); line-height: .99; }
 h2 { font-size: clamp(1.7rem, 4.8vw, 2.7rem); line-height: 1.1; }
@@ -277,7 +277,8 @@ details > :not(summary) { margin-inline: .5rem; }
 footer { padding-block: 1.4rem; border-top: 1px solid var(--line); border-bottom: 0; color: var(--muted); font-size: .85rem; }
 
 @media (max-width: 48rem) {
-  .layout { grid-template-columns: 1fr; gap: 1.8rem; }
+  .layout { grid-template-columns: minmax(0, 1fr); row-gap: 1.8rem; }
+  .hero { padding-bottom: 0; }
   .toc { position: static; max-height: none; }
   .toc ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .5rem; }
 }

@@ -14,14 +14,14 @@ the local model and reconcile a Workbench decision against the exact task revisi
 In portfolio mode, Workbench reviews submitted work. CRM and ERP connector actions follow their own
 approval flow.
 
-[![Public and private flows from the browser to the API, portfolio, Workbench and local model](../dashboard/docs/media/architecture.svg)](../dashboard/docs/media/architecture.svg)
+[![Public and private flows from the browser to the API, portfolio, Workbench and local model](../dashboard/docs/media/architecture.en.svg)](../dashboard/docs/media/architecture.en.svg)
 
 ## 2D floor plan
 
 The plan shows ten fictional work areas for delivery, technical review, supervision and
 collaboration. Production permissions are configured through [business-unit groups and roles](BU_SECURITY.md).
 
-[![Annotated plan of the Factory’s ten work areas](../dashboard/docs/media/floor-plan.svg)](../dashboard/docs/media/floor-plan.svg)
+[![Annotated plan of the Factory’s ten work areas](../dashboard/docs/media/floor-plan.en.svg)](../dashboard/docs/media/floor-plan.en.svg)
 
 Open [the interactive architecture page](https://alebgl77.github.io/ai-factory/docs/architecture.en.html)
 for the zone details, business-unit matrix and action paths.
