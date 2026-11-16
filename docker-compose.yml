@@ -78,7 +78,7 @@ services:
   # Root with CHOWN and DAC_READ_SEARCH only, no network, read-only root filesystem; a no-op
   # when ownership is already right (fresh volumes).
   volume-init:
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.8-alpine
     <<: *hardening
     restart: "no"
     user: "0:0"
@@ -97,7 +97,7 @@ services:
     logging: *logging
 
   edge:
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.8-alpine
     <<: *hardening
     restart: unless-stopped
     user: "10001:10001"
@@ -1050,7 +1050,7 @@ services:
   # profiling metrics, and the hardening could not be tested without a GPU here.
   dcgm-exporter:
     profiles: [local-gpu]
-    image: nvidia/dcgm-exporter:4.6.1-4.8.4
+    image: nvidia/dcgm-exporter:4.9.0
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
