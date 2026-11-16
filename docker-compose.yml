@@ -812,7 +812,7 @@ services:
     logging: *logging
 
   seaweedfs:
-    image: chrislusf/seaweedfs:4.52
+    image: chrislusf/seaweedfs:4.53
     <<: *hardening
     restart: unless-stopped
     # uid/gid 1000 = seaweed user of the image: the image entrypoint skips its root step.
