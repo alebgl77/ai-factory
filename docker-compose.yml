@@ -319,7 +319,7 @@ services:
 
   # ===================================================================== observability
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     <<: *hardening
     restart: unless-stopped
     read_only: true
