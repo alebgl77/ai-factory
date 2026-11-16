@@ -530,7 +530,7 @@ services:
 
   # ============================================================== gateway & vector DB
   litellm:
-    image: ${LITELLM_IMAGE:-litellm/litellm-non_root:v1.106.7}
+    image: ${LITELLM_IMAGE:-litellm/litellm-non_root:v1.108.3}
     <<: *hardening
     restart: unless-stopped
     read_only: true
