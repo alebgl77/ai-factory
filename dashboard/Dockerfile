@@ -12,7 +12,7 @@ ARG THREE_VERSION=0.186.1
 ARG THREE_INTEGRITY=sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==
 
 # Base images pinned by digest (multi-arch index); the tags stay for Dependabot, which updates both.
-FROM node:26.13.0-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS vendor
+FROM node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS vendor
 ARG THREE_VERSION
 ARG THREE_INTEGRITY
 ARG DASHBOARD_THREE_SOURCE=vendored
@@ -72,7 +72,7 @@ RUN set -eu; \
 
 # This unprivileged nginx image uses UID 101 and includes Alpine fixes for CVE-2026-107891
 # (musl and musl-utils) and CVE-2026-85091 (zlib).
-FROM nginx/nginx-unprivileged:1.31.8-alpine-slim@sha256:633f37ad70b9fd48d4da573db1ebc9111a9ad174e5178e83bd2ef45381fde5e2
+FROM nginx/nginx-unprivileged:1.31.8-alpine-slim@sha256:b19233c62309c8e620732244f9d0d0008678854cb9c6c47898817e8dec93a9e3
 # Targeted Alpine security update for CVE-2026-4738 in the pinned image.
 USER root
 RUN apk add --no-cache 'zlib=1.4-r0'

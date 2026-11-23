@@ -3,7 +3,7 @@
 # One-shot job: Viewer service account + token for the aggregation API.
 # Python standard library only; the base image is shared with the simulators.
 # Base image pinned by digest (multi-arch index); the tag stays for Dependabot, which updates both.
-FROM python:3.12.16-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e
+FROM python:3.12.16-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 
 # Apply Debian DSA-6613-1 to the pinned Trixie base.
 RUN apt-get update \
