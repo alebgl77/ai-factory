@@ -88,7 +88,7 @@ def test_other_registry_object_never_creates_a_version_tag(registry, image):
     other_id = docker("image", "inspect", tag, "--format", "{{.Id}}")
     try:
         other_digest = publisher.push_image(other_id, registry, [registry + ":other-candidate"])
-        with pytest.raises(ValueError, match="registry image differs"):
+        with pytest.raises(ValueError, match=r"registry (?:image differs from the scanned image|manifest differs from the scanned platform manifest)\."):
             publisher.push_image(image_id, registry, [registry + ":wrong-version"], other_digest)
         missing = subprocess.run(["docker", "buildx", "imagetools", "inspect", registry + ":wrong-version"],
                                  capture_output=True, timeout=60)

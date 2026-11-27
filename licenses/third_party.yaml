@@ -286,6 +286,15 @@ vendored:
 
 # Verification tools (CI, scripts): never shipped in the stack images.
 tools:
+  - name: distribution-registry
+    image: registry
+    tag: 3.0.0
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "Disposable loopback registry for the release image identity CI test; never shipped in the stack"
+    source: https://github.com/distribution/distribution
+    check: {file: tests/deployment/test_release_registry.py, pattern: "registry:([0-9.]+)@sha256:"}
   - name: trivy
     image: aquasec/trivy
     tag: 0.76.1
