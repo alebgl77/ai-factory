@@ -742,7 +742,7 @@ services:
     logging: *logging
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.10.3.7
+    image: clickhouse/clickhouse-server:26.10.8.34
     <<: *hardening
     restart: unless-stopped
     user: "101:101"
