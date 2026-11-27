@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import hashlib
 import hmac
 import json
 import logging
@@ -100,7 +101,7 @@ class _Claim:
     revision: int
 
 
-def _load_bindings(path: str, master_key: str | None) -> dict[str, _Binding]:
+def _load_bindings(path: str, admin_key_sha256: str | None) -> dict[str, _Binding]:
     try:
         with Path(path).open("rb") as secret:
             data = secret.read(65537)
@@ -122,7 +123,8 @@ def _load_bindings(path: str, master_key: str | None) -> dict[str, _Binding]:
                        for name in ("agent_id", "unit", "usecase_id")):
                 raise ValueError
             key = row["virtual_key"]
-            if (not isinstance(key, str) or not _VIRTUAL_KEY.fullmatch(key) or key == master_key
+            if (not isinstance(key, str) or not _VIRTUAL_KEY.fullmatch(key)
+                    or hashlib.sha256(key.encode()).hexdigest() == admin_key_sha256
                     or key in keys or row["agent_id"] in bindings):
                 raise ValueError
             keys.add(key)
@@ -145,7 +147,10 @@ class PortfolioEngine:
         self.generation = generation
         self.endpoint = _gateway_endpoint(settings.litellm_url)
         self.transport = transport
-        self.bindings = _load_bindings(settings.portfolio_runner_file, settings.litellm_master_key)
+        self.bindings = _load_bindings(settings.portfolio_runner_file, settings.litellm_admin_key_sha256)
+        if any(binding.virtual_key in {settings.litellm_telemetry_key, settings.litellm_inference_key}
+               for binding in self.bindings.values()):
+            raise ValueError("Portfolio bindings require credentials distinct from API telemetry and chat")
         self.subjects = {agent_id: subject for subject, agent_id in service.bu_policy.portfolio_agents.items()}
         bindings, _ = self._eligibility(service.config.get(), require_evaluation=False)
         if bindings.keys() != self.bindings.keys():

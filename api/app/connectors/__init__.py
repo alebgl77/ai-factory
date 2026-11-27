@@ -31,7 +31,7 @@ class Connectors:
                                      settings.grafana_public_url, **kw)
         self.langfuse = LangfuseClient(settings.langfuse_host, settings.langfuse_public_key,
                                        settings.langfuse_secret_key, **kw)
-        self.litellm = LiteLLMClient(settings.litellm_url, settings.litellm_master_key, **kw)
+        self.litellm = LiteLLMClient(settings.litellm_url, settings.litellm_telemetry_key, **kw)
         self.qdrant = QdrantClient(settings.qdrant_url, **kw)
         self._ttl = health_ttl_s
         self._lock = threading.Lock()

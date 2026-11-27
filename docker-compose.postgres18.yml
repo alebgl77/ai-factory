@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+# Opt-in PostgreSQL 18 target. Restore a verified PostgreSQL 17 logical backup first.
+# The original postgres-data volume is never attached to this target.
+services:
+  postgres:
+    image: postgres:18.4-alpine@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes: !override
+      - ./compose/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - postgres18-data:/var/lib/postgresql
+
+volumes:
+  postgres18-data:

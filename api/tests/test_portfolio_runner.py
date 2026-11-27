@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import json
+import hashlib
 import os
 import shutil
 import threading
@@ -58,7 +59,7 @@ def setup(tmp_path):
         return Settings(config_dir=str(config), state_dir=str(tmp_path / "state"), demo_mode="never",
                         demo_date=TODAY.isoformat(), auth_mode="proxy", trusted_proxies=("10.0.0.0/24",),
                         role_map=roles, bu_policy_path=policy, portfolio_runner_file=str(secret),
-                        litellm_url="http://litellm:4000", litellm_master_key=MASTER)
+                        litellm_url="http://litellm:4000", litellm_admin_key_sha256=hashlib.sha256(MASTER.encode()).hexdigest())
 
     def build(handler, *, mode="autonomous", settings=None):
         app = create_app(settings or config_for(mode), clock=lambda: clock[0],
@@ -366,15 +367,15 @@ def test_master_invalid_file_and_external_gateway_fail_at_boot(setup, tmp_path):
         build(completion, settings=replace(cfg, litellm_url="https://outside.example:443"))
     file = Path(cfg.portfolio_runner_file)
     with pytest.raises(ValueError, match="RUNNER_FILE") as error:
-        _load_bindings(str(file), KEY)
+        _load_bindings(str(file), hashlib.sha256(KEY.encode()).hexdigest())
     assert KEY not in str(error.value)
     bad = tmp_path / "bad.json"
     bad.write_text('{"version":1,"version":1,"bindings":[]}', encoding="utf-8")
     with pytest.raises(ValueError, match="RUNNER_FILE"):
-        _load_bindings(str(bad), MASTER)
+        _load_bindings(str(bad), hashlib.sha256(MASTER.encode()).hexdigest())
     bad.write_bytes(b"a" * 65537)
     with pytest.raises(ValueError, match="RUNNER_FILE"):
-        _load_bindings(str(bad), MASTER)
+        _load_bindings(str(bad), hashlib.sha256(MASTER.encode()).hexdigest())
 
 
 @pytest.mark.parametrize(("response", "reason"), [

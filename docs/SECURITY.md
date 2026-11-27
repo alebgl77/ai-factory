@@ -219,7 +219,8 @@ edit and rehash, delete, reorder, garbage, truncation), `test_offline_verifier_c
   Grafana, LiteLLM or Langfuse and holds no token or key.
 - The Grafana token (a *Viewer* service account created by `grafana-bootstrap`) is written to a
   volume mounted read-only into the API and read server side from `GRAFANA_TOKEN_FILE`. The
-  LiteLLM master key and the Langfuse keys stay in the API's server-side settings.
+  scoped LiteLLM telemetry and optional inference keys and the Langfuse keys stay in the API's
+  server-side settings. The API refuses the LiteLLM administrative credential.
 - **Restricted Grafana proxy**: `GET` only, to an allowlist of Grafana paths, and only *named*
   PromQL queries defined server side. The browser cannot send arbitrary PromQL.
 - No endpoint returns a secret: the LiteLLM and Grafana answers are rebuilt field by field.
@@ -392,7 +393,10 @@ without a read-only root filesystem and were not runtime-tested here (no GPU).
 - **Signed releases.** Images `ghcr.io/alebgl77/<name>` are signed keyless with Sigstore cosign
   and carry SLSA build provenance and SBOM attestations; release checksums are signed too. Before
   building, the release requires successful latest CI, security and CodeQL `push` runs on the
-  default branch for the exact tagged commit. [Release verification](../SECURITY.md#verify-a-release)
+  default branch for the exact tagged commit. Each image is built once and scanned by local
+  image ID, then pushed under a quarantine tag and scanned by verified registry digest.
+  Signature and attestation verification precedes promotion of that digest to version tags.
+  [Release verification](../SECURITY.md#verify-a-release)
 - **Licence policy.** Only permissive licences in the code we ship; AGPL services (Grafana, Loki)
   run as separate, unmodified containers. `scripts/check_licenses.py` (CI job `licenses`) checks
   every dependency, image and submodule against `licenses/third_party.yaml`.
@@ -469,12 +473,29 @@ Apply in this order. Each step says how to check it.
    start with `sk-`). Keep them in a secrets manager (HashiCorp Vault, a cloud key vault...) and
    render `.env` at deploy time, owned by root, mode `0600`. Never commit it. Check:
    `grep -c change-me .env` returns 0.
+   Before upgrading an existing API, remove `LITELLM_MASTER_KEY` and `LITELLM_MASTER_KEY_FILE`
+   from its environment. Provision `LITELLM_TELEMETRY_KEY` for read-only telemetry and, if local
+   advisory chat is enabled, a distinct `LITELLM_INFERENCE_KEY`. Each may instead use its
+   `_FILE` variable with a read-only secret mount. Configure `LITELLM_ADMIN_KEY_SHA256` whenever
+   these keys or Portfolio runner bindings are present. Compute the fingerprint without a
+   trailing newline or a `Bearer` prefix, then store it in the deployment configuration.
+
+   ```sh
+   python3 -c 'import getpass,hashlib; print(hashlib.sha256(getpass.getpass("Gateway administrative key: ").encode("utf-8")).hexdigest())'
+   ```
+
+   Startup refuses administrative-key reuse, duplicate keys and a direct value combined with
+   its `_FILE` variable. Portfolio bindings also require keys distinct from telemetry and
+   inference. Validate route and model restrictions on the gateway before enabling the API.
+   [Provisioning and denial tests](GATEWAY_SECURITY.md)
 4. **Key rotation.** Rotate at least every 90 days, at each departure of a person who had access,
    and immediately on suspicion:
 
    | Secret | How to rotate | Effect |
    |---|---|---|
-   | `LITELLM_MASTER_KEY`, provider API keys (`CLOUD_API_KEY`...) | new value in `.env` (and at the provider), `docker compose up -d litellm api` | none for users |
+   | `LITELLM_MASTER_KEY` | rotate in gateway administration, replace `LITELLM_ADMIN_KEY_SHA256`, restart `litellm` and `api` | API startup verifies scoped keys against the new fingerprint |
+   | `LITELLM_TELEMETRY_KEY`, `LITELLM_INFERENCE_KEY`, Portfolio binding keys | provision a scoped replacement, update the secret or private binding file and restart `api`, then revoke the old key | validate denied routes and local-model access before reopening |
+   | provider API keys (`CLOUD_API_KEY`...) | new value in the secret manager and at the provider, restart `litellm` | depends on the provider's rotation window |
    | `SSO_CLIENT_SECRET` | new secret in the identity provider, then `.env`, restart `oauth2-proxy` | none |
    | `SSO_COOKIE_SECRET` | new value, restart `oauth2-proxy` | every user signs in again (also the way to revoke all sessions) |
    | database, Valkey, ClickHouse, S3 passwords | change in the service, then `.env`, restart the dependants | short restart |

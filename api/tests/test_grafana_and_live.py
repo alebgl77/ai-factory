@@ -132,7 +132,7 @@ def live_settings(token_file, **flags):
         s.update(langfuse_host="http://langfuse:3000", langfuse_public_key="pk-lf-PUBLICKEY-xyz",
                  langfuse_secret_key="sk-lf-SECRETKEY-xyz")
     if flags.get("litellm"):
-        s.update(litellm_url="http://litellm:4000", litellm_master_key="sk-master-SECRET-123")
+        s.update(litellm_url="http://litellm:4000", litellm_admin_key_sha256="0" * 64, litellm_telemetry_key="sk-master-SECRET-123")
     if flags.get("qdrant"):
         s["qdrant_url"] = "http://qdrant:6333"
     return s
@@ -301,6 +301,8 @@ def test_litellm_spend_logs_fallback(make_client, token_file, spend, rate, eur):
         def __call__(self, request):
             if request.url.host == "litellm" and request.url.path == "/spend/logs":
                 assert request.headers["authorization"] == "Bearer sk-master-SECRET-123"
+                assert request.url.params["summarize"] == "false"
+                assert request.url.params["end_date"] == "2026-11-04"
                 return httpx.Response(200, json=[
                     {"startTime": "2026-11-02T10:00:00Z", "spend": spend, "prompt_tokens": 1000,
                      "completion_tokens": 100, "metadata": {"usecase": "uc-02"}, "api_key": "hashed"}])

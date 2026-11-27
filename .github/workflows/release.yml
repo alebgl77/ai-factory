@@ -4,11 +4,11 @@
 #      CHANGELOG.md has a section for it, and the latest CI, security and CodeQL push runs
 #      for that exact commit succeeded;
 #   2. for each image built from this repository (api, dashboard, mock-llm, traffic, gpu-sim,
-#      grafana-bootstrap): build, Trivy gate (no known fixable HIGH/CRITICAL vulnerability, no
-#      secret) BEFORE anything is pushed, push to ghcr.io/<owner>/<name>, SBOM (syft, SPDX and
+#      grafana-bootstrap): build once, gate the immutable local image, push a quarantine tag,
+#      verify its identity and scan its digest, then produce SBOMs (syft, SPDX and
 #      CycloneDX), SLSA build provenance and SBOM attestations (actions/attest, stored by GitHub
 #      and pushed to the registry), keyless cosign signature, then verification of all of it
-#      with .github/scripts/verify_image.sh, the script users run;
+#      with .github/scripts/verify_image.sh, the script users run, before promoting version tags;
 #   3. GitHub release: notes from CHANGELOG.md, images pinned by digest, SBOMs and attestation
 #      bundles as assets, a version-matched deployment bundle, SHA256SUMS signed keyless.
 # Verify a release: see the release notes, or .github/scripts/verify_image.sh IMAGE@DIGEST.
@@ -122,6 +122,18 @@ jobs:
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.preflight.outputs.prerelease == 'false' }}
+          labels: |
+            org.opencontainers.image.title=Virtual AI Factory ${{ matrix.image }}
+            org.opencontainers.image.vendor=Digitalizor
+            org.opencontainers.image.licenses=MIT
+
       # ---- gate: nothing is pushed unless the image passes
       - name: Build (local candidate, not pushed)
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -134,13 +146,20 @@ jobs:
           provenance: false
           sbom: false
           tags: ${{ env.CANDIDATE }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - id: candidate
+        name: Record the immutable local image
+        run: |
+          image_id=$(docker image inspect "$CANDIDATE" --format '{{.Id}}')
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
       - name: Gate (fixable HIGH/CRITICAL vulnerabilities, secrets)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           version: ${{ env.TRIVY_VERSION }}
           cache: "false" # no cache in the release workflow (cache poisoning)
           scan-type: image
-          image-ref: ${{ env.CANDIDATE }}
+          image-ref: ${{ steps.candidate.outputs.image_id }}
           scanners: vuln,secret
           trivy-config: .github/trivy/trivy.yaml
           severity: HIGH,CRITICAL
@@ -148,39 +167,33 @@ jobs:
           exit-code: "1"
           format: table
 
-      # ---- publish
-      - id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.preflight.outputs.prerelease == 'false' }}
-          labels: |
-            org.opencontainers.image.title=Virtual AI Factory ${{ matrix.image }}
-            org.opencontainers.image.vendor=Digitalizor
-            org.opencontainers.image.licenses=MIT
-          annotations: |
-            org.opencontainers.image.title=Virtual AI Factory ${{ matrix.image }}
-            org.opencontainers.image.vendor=Digitalizor
-            org.opencontainers.image.licenses=MIT
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      # ---- publish only this object, then scan its immutable registry reference
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: push
-        name: Build and push (same builder and layers as the scanned candidate)
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        name: Push and verify the quarantine image
+        env:
+          SCANNED_IMAGE_ID: ${{ steps.candidate.outputs.image_id }}
+          QUARANTINE_TAG: ${{ env.IMAGE }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
+        run: python3 .github/scripts/push_scanned_image.py "$SCANNED_IMAGE_ID" "$IMAGE" --tags "$QUARANTINE_TAG"
+      - name: Gate the published digest (fixable HIGH/CRITICAL vulnerabilities, secrets)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_IMAGE_SRC: remote
         with:
-          context: ${{ matrix.context }}
-          platforms: ${{ env.PLATFORMS }}
-          push: true
-          provenance: false # provenance comes from actions/attest below (signed, verifiable)
-          sbom: false       # SBOMs come from syft below (SPDX and CycloneDX, attested)
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
+          skip-setup-trivy: true
+          cache: "false"
+          scan-type: image
+          image-ref: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
+          scanners: vuln,secret
+          trivy-config: .github/trivy/trivy.yaml
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
 
       # ---- SBOMs of the pushed digest
       - name: Generate release SBOMs (CycloneDX and SPDX)
@@ -220,7 +233,7 @@ jobs:
           push-to-registry: true
 
       # ---- keyless signature, then verification of everything that was published
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
       - name: Sign (cosign keyless, Sigstore public-good instance)
@@ -233,6 +246,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_REPO: ${{ github.repository }}
         run: .github/scripts/verify_image.sh "$IMAGE@$DIGEST"
+
+      - name: Promote the verified digest to version tags
+        env:
+          SCANNED_IMAGE_ID: ${{ steps.candidate.outputs.image_id }}
+          VERIFIED_DIGEST: ${{ steps.push.outputs.digest }}
+          RELEASE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          python3 .github/scripts/push_scanned_image.py "$SCANNED_IMAGE_ID" "$IMAGE" \
+            --tags "$RELEASE_TAGS" --expected-digest "$VERIFIED_DIGEST"
 
       - name: Collect release assets
         env:
@@ -274,7 +296,7 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: ${{ runner.temp }}/release
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
       - name: Install integrity-verified Helm

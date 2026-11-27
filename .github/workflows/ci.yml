@@ -304,6 +304,30 @@ jobs:
       - name: Mobile Companion and QR handoff
         run: node tests/e2e/companion.mjs
 
+  release-integrity:
+    name: Release image identity (local registry)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.76.1
+          cache: "false"
+      - run: pip install --require-hashes -r api/requirements-dev.txt
+      - name: Local publication, digest mismatch and secret rejection
+        env:
+          RELEASE_REGISTRY_TEST: "1"
+        run: python -m pytest -q tests/deployment/test_release_image.py tests/deployment/test_release_registry.py
+
   stack-changes:
     name: Detect deployment changes
     runs-on: ubuntu-latest
@@ -345,6 +369,10 @@ jobs:
           args=(--down --verify-persistence)
           if [[ "$VERIFY_LANGFUSE_V4" == true ]]; then args+=(--verify-langfuse-v4); fi
           scripts/smoke_stack.sh "${args[@]}"
+      - name: PostgreSQL 17 to 18 restore rehearsal
+        env:
+          UPGRADE_PROJECT: factory-ci-postgres18-${{ github.run_id }}-${{ github.run_attempt }}
+        run: bash scripts/rehearse_postgres_upgrade.sh "$UPGRADE_PROJECT"
 
   sso-e2e:
     name: Single sign-on (end-to-end, sso profile)

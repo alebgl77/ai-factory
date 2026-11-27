@@ -1,7 +1,7 @@
 # Revue de sécurité avant un déploiement en entreprise
 
-Revue du 6 novembre 2026, fondée sur le dépôt et les règles GitHub en vigueur au début de
-l'audit. La pile est exploitable en démonstration. Avant une exposition en entreprise, les
+Revue initiale du 6 novembre 2026. État des corrections actualisé le 27 novembre 2026.
+La pile est exploitable en démonstration. Avant une exposition en entreprise, les
 contrôles de configuration et de publication doivent s'accompagner d'une recette sur le tenant
 cible et de preuves de reprise. Cette revue couvre la pile Compose et les releases `linux/amd64`.
 
@@ -12,7 +12,8 @@ cible et de preuves de reprise. Cette revue couvre la pile Compose et les releas
   SSO, et conserver `EDGE_ALT_BIND` sur une adresse de boucle locale. Le précontrôle vérifie
   notamment le réseau de confiance du proxy, le groupe ou domaine autorisé, les cookies,
   les secrets de remplacement, les ports et le blocage du routage C3/C4 vers le cloud.
-  Il exige `FACTORY_DEMO_MODE=never`, `FACTORY_WORKBENCH_MODE=off` et l'absence du profil `sim`.
+  Il exige `FACTORY_DEMO_MODE=never`, l'absence du profil `sim` et un Workbench désactivé ou en
+  mode `portfolio` avec ses politiques. Le chat générique reste désactivé en mode `portfolio`.
   Il exige aussi des politiques de BU et de routage des clés montées en lecture seule.
   La politique de BU ferme les accès Grafana et Langfuse à l’edge. [Guide du routage](GATEWAY_SECURITY.md)
   Il rejette aussi les modes réseau non autorisés ainsi que les destinations GPU de simulation
@@ -61,16 +62,30 @@ par le job de configuration en CI. [Guide de durcissement](fr/SECURITY.md#14-gui
 
 ## Conditions encore à remplir
 
+Au 27 novembre, le code de préparation de la v1.2.0 remplace la clé maître de l'API par
+`LITELLM_TELEMETRY_KEY` et la clé facultative `LITELLM_INFERENCE_KEY`, avec variantes `_FILE`.
+`LITELLM_ADMIN_KEY_SHA256` est exigé avec ces clés ou les liaisons Portfolio. Le démarrage
+refuse la clé administrative et les clés réutilisées. Le workflow construit chaque image une
+fois, analyse son identifiant local, vérifie et analyse le digest de quarantaine, puis vérifie
+signatures et attestations avant la promotion du même manifeste. Les nouvelles preuves de
+clés limitées et d'identité de publication attendent encore leur exécution CI sur Ubuntu.
+La validation du tenant réel et la publication de v1.2.0 restent à effectuer.
+
+Les réglages GitHub actifs imposent 21 contrôles et une branche `main` à jour. Les tags `v*`
+sont protégés contre la modification et la suppression. Les alertes et correctifs automatiques
+Dependabot sont activés. Les releases et leurs pièces jointes restent modifiables, selon le
+périmètre de protection retenu. Vérifier les signatures et les digests à chaque téléchargement.
+
 | Priorité | Écart et conséquence | Preuve attendue |
 | --- | --- | --- |
 | Avant exposition | Le mode SSO et les contrôles TLS sont configurables. Le dépôt ne peut pas vérifier la politique MFA, les groupes et l'émetteur du tenant réel, la validité des certificats ou les règles de sortie du pare-feu. | Tester sur la cible le refus sans identité ou groupe autorisé, l'absence d'accès direct aux services internes, les certificats et le rejet d'une sortie C3/C4 vers le cloud. |
 | Avant exposition | Avec Docker Engine antérieur à 28.0.0, un autre hôte sur le même segment de niveau 2 peut atteindre des ports publiés sur la boucle locale. | Utiliser une version maintenue de Docker Engine à partir de 28.0.0. Depuis un autre hôte sur le même segment, vérifier que les ports réservés à la boucle locale restent injoignables. [Ports Docker](https://docs.docker.com/engine/network/port-publishing/) |
-| Avant production | L'API reçoit la clé maître LiteLLM même quand le Workbench est désactivé. Une compromission de l'API pourrait donner accès aux opérations d'administration ou à des modèles distants. | Remplacer la clé maître de l'API par des clés distinctes et à privilèges limités pour la télémétrie et l'inférence. Vérifier que les deux refusent l'administration et les alias distants, et que la télémétrie ne peut pas lancer d'inférence. |
-| Avant activation du Workbench | Une demande escaladée peut conserver le message brut dans le dossier partagé de démonstration. | Maintenir le Workbench hors production. Avant une activation, isoler l'accès aux dossiers, appliquer la minimisation et la rétention, puis tester les refus d'accès et l'absence de données sensibles dans les traces. |
-| Avant première release d'entreprise | Trivy contrôle un build local, puis le workflow reconstruit et pousse l'image. Les SBOM et attestations portent sur le digest poussé. La preuve Trivy ne lie pas actuellement ce digest au résultat du scan. | Construire une fois, scanner et vérifier le digest candidat, puis promouvoir ce même digest. Tester qu'un échec Trivy ou une divergence empêche la publication. |
+| Avant production | Les nouvelles clés limitées doivent être provisionnées sur la passerelle cible. | Migrer les secrets de l'API et les liaisons Portfolio. Vérifier que les clés refusent l'administration et les alias distants et que la télémétrie ne peut pas lancer d'inférence. [Configuration](GATEWAY_SECURITY.md) |
+| Avant activation d'une démonstration Workbench | Le mode `protected_demo` peut conserver le message brut d'une demande escaladée dans un dossier partagé de démonstration. | Réserver ce mode aux données synthétiques. Pour le parcours privé `portfolio`, appliquer les politiques de BU, la minimisation et la rétention, puis tester les refus inter-BU et l'absence de données sensibles dans les traces. |
+| Avant première release d'entreprise | La construction unique et la promotion du digest vérifié sont implémentées. La preuve complète de cette nouvelle chaîne attend une exécution de publication. | Vérifier le succès CI puis les scans, signatures et attestations du candidat v1.2.0. Conserver les digests et les preuves de refus en cas de divergence. |
 | Avant première release d'entreprise | Les tests `sim` de la pile et SSO avec IdP de test sont déclenchés manuellement. Un succès antérieur ne couvre pas le commit ou les images d'une release ultérieure. | Exiger ces tests sur le candidat et conserver leurs résultats avec les digests publiés. Le [run historique](https://github.com/alebgl77/ai-factory/actions/runs/42110756671) valide le scénario de test sur un commit antérieur. |
 | Avant déploiement reproductible | Les images tierces de Compose sont référencées par des tags modifiables. La CI Trivy des images couvre les six images du projet et le bilan tiers documenté n'inclut pas vLLM. | Verrouiller les références de production par digest, scanner celles des profils retenus, dont vLLM si activé, et valider une installation sans reconstruction. |
-| Gouvernance du dépôt | Le dépôt est maintenu par une seule personne. Le règlement de `main` impose une PR et des contrôles, avec zéro approbation exigée. Aucun règlement de tags de release n'était actif lors de l'audit. Un tag pointant vers un ancien commit accessible depuis `main` peut déclencher une version du workflow qui précède le nouveau contrôle. | Désigner un second mainteneur avant d'exiger sa revue, limiter les créateurs de tags aux responsables des releases et refuser les commits qui précèdent le contrôle. Empêcher la modification ou la suppression des tags hors procédure. |
+| Gouvernance du dépôt | Les contrôles stricts de `main` et la protection des tags sont actifs. Le dépôt reste maintenu par une seule personne et les releases restent modifiables. Un tag créé sur un ancien commit peut utiliser un workflow antérieur. | Désigner un second mainteneur avant d'exiger sa revue, limiter les créateurs de tags aux responsables des releases et ne publier que depuis le commit qualifié avec les contrôles actuels. Vérifier les artefacts signés lors de chaque installation. |
 | Exploitation | La chaîne de hachage de l'audit aide à détecter une altération. La conservation, l'export protégé et la restauration dépendent de l'exploitant. | Définir la rétention des journaux et dossiers, envoyer les événements au SIEM, sauvegarder hors site avec immutabilité pour l'audit, puis restaurer et vérifier la chaîne avec `python -m app.audit verify`. Conserver une preuve de restauration et les délais mesurés. |
 
 Éléments examinés dans le dépôt et sur GitHub.

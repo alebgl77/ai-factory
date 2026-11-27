@@ -26,9 +26,13 @@ For the simulated stack, follow the [Compose quick start](https://github.com/ale
 
 ## Verify and install a release
 
+The next target is **v1.2.0**, after its commit passes CI on `main`. Until that release and its
+signed assets are published, use the source qualification path below. For an existing API,
+migrate to scoped LiteLLM credentials before starting the new image. [Credential migration](SECURITY.md#14-production-hardening-guide)
+
 When the release includes **ai-factory-deploy-${TAG}.tar.gz**, download all its assets into one directory. The archive contains the release commit's Compose files and configuration, **release-stack.json** and **docker-compose.release-lock.yml**. The inventory records the commit, tag, platform and exact service images, including optional profiles. The overlay pins the six signed AI Factory images and the resolved third-party manifest digests. The signed checksums cover the archive and its inventory. Verify image signatures and attestations separately.
 
-Set **TAG** to the downloaded version. Use Bash, Cosign v3, GNU Coreutils and the GitHub CLI with `gh attestation`. Sign in with `gh auth login` or provide `GH_TOKEN` through your secret manager for the image verification script.
+Set **TAG** to the downloaded version, for example `TAG=v1.2.0` once that release exists. Use Bash, Cosign v3, GNU Coreutils and the GitHub CLI with `gh attestation`. Sign in with `gh auth login` or provide `GH_TOKEN` through your secret manager for the image verification script.
 
 ```sh
 set -euo pipefail
@@ -67,7 +71,8 @@ Before a matching signed bundle ships, qualify the exact source commit in an iso
 
 ```sh
 set -euo pipefail
-git switch --detach 27800aa798d7bf21e7bec4ab57ffa4461e0465c3
+: "${FACTORY_SOURCE_COMMIT:?Set the exact candidate commit to qualify}"
+git switch --detach "$FACTORY_SOURCE_COMMIT"
 : "${FACTORY_COMPOSE_PROJECT:?Set the stable Compose project name}"
 factory=(docker compose --project-name "$FACTORY_COMPOSE_PROJECT"
   --env-file /secure/ai-factory/production.env --profile sso
@@ -103,6 +108,17 @@ The baseline uses **PostgreSQL 17.11** with **postgres-data:/var/lib/postgresql/
 Freeze writes before a consistent baseline backup. Capture the two service databases and PostgreSQL roles, ClickHouse data and metadata, SeaweedFS/S3 storage, Valkey queues and **api-state**. Stop writing services or use consistent storage snapshots for volume backups. Preserve other service data per recovery policy, together with Compose and operator configuration. Keep encryption and authentication secrets in a separate vault. Check encryption, integrity, permissions and restoration. Keep any real data used for qualification in an isolated enclave under the organization's retention rules. Rehearse on separate volumes. Leave volume deletion and engine cleanup outside the rollback procedure.
 
 ## Rehearse PostgreSQL 18 migration
+
+The default stack keeps PostgreSQL 17 and its existing volume. The opt-in
+`docker-compose.postgres18.yml` target uses the PostgreSQL 18 data layout and a separate
+`postgres18-data` volume. Add this overlay before the release lock when qualifying PostgreSQL 18.
+Do not start the target against an existing PostgreSQL 17 data directory.
+
+On a disposable qualification engine, run
+`bash scripts/rehearse_postgres_upgrade.sh factory-ci-postgres18-qualification`.
+The script refuses existing resources, restores synthetic roles and data from 17 into 18,
+recreates the target container and verifies persistence. It removes only the containers and
+volumes it created. A real cutover still requires the application and backup checks below.
 
 1. From PostgreSQL 17, freeze writes and export the databases and roles. **factory** uses the exact source Compose arguments. **BACKUP_RECIPIENT** holds the public Age key.
 

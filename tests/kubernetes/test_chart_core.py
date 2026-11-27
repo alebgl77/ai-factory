@@ -57,6 +57,10 @@ def test_staging_keeps_existing_output_intact(chart):
     ({"api": {"shadowAI": {"enabled": True, "groups": ["ops,admins"]}}}, "does not match pattern"),
     ({"api": {"shadowAI": {"enabled": True, "groups": ["ops"], "privacyThreshold": 4}}}, "minimum"),
     ({"api": {"shadowAI": {"enabled": True, "groups": ["ops"], "privacyThreshold": 101}}}, "maximum"),
+    ({"telemetry": {"litellmURL": "https://llm.company.internal", "litellmCredentials": {"existingSecret": "read-only"}}},
+     "scoped LiteLLM keys require telemetry.litellmAdminKeySHA256"),
+    ({"telemetry": {"litellmURL": "https://llm.company.internal"}},
+     "requires a scoped telemetry.litellmCredentials secret"),
 ])
 def test_private_guard_rejects_insecure_values(chart, tmp_path: Path, override, reason):
     values = tmp_path / "override.yaml"
@@ -105,6 +109,8 @@ def test_private_runner_mounts_only_key_references(chart, tmp_path: Path):
         "api": {"assistEnabled": True, "portfolioRunner": {"existingSecret": "runner"}},
         "telemetry": {
             "litellmURL": "https://litellm:4000",
+            "litellmAdminKeySHA256": "a" * 64,
+            "litellmCredentials": {"existingSecret": "gateway-telemetry", "key": "telemetry-key"},
             "caBundle": {"existingSecret": "private-model-ca"},
         },
     }), encoding="utf-8")
@@ -117,6 +123,10 @@ def test_private_runner_mounts_only_key_references(chart, tmp_path: Path):
     volumes = {volume["name"]: volume for volume in pod["volumes"]}
     assert env["FACTORY_ASSIST_ENABLED"] == "on"
     assert env["LITELLM_URL"] == "https://litellm:4000"
+    assert "LITELLM_MASTER_KEY" not in env and "LITELLM_INFERENCE_KEY" not in env
+    assert env["LITELLM_ADMIN_KEY_SHA256"] == "a" * 64
+    scoped = next(entry for entry in api["env"] if entry["name"] == "LITELLM_TELEMETRY_KEY")
+    assert scoped["valueFrom"]["secretKeyRef"] == {"name": "gateway-telemetry", "key": "telemetry-key"}
     assert "--no-proxy-headers" in api["command"]
     assert volumes["portfolio-runner"]["secret"]["secretName"] == "runner"
     assert volumes["telemetry-ca"]["secret"]["secretName"] == "private-model-ca"

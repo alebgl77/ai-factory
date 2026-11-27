@@ -15,7 +15,29 @@ En mode strict, la détection d’injection couvre tous les rôles, y compris `s
 
 ## Exploitation
 
-Quand une politique BU est activée, l’edge bloque les accès directs à Grafana et à Langfuse, y compris les ports alternatifs. L’accès d’exploitation aux deux services passe par un réseau privé réservé. `/metrics` reste interne. La clé maître demeure réservée à la gestion du proxy et à la collecte interne de télémétrie. L’inférence stricte utilise exclusivement les clés virtuelles liées aux dossiers.
+Quand une politique BU est activée, l’edge bloque les accès directs à Grafana et à Langfuse, y compris les ports alternatifs. L’accès d’exploitation aux deux services passe par un réseau privé réservé. `/metrics` reste interne. La clé maître reste dans la passerelle et dans le processus d’administration qui provisionne ses clés. L’inférence stricte utilise exclusivement les clés virtuelles liées aux dossiers.
+
+## Séparer les credentials de la passerelle
+
+L’API refuse de démarrer si son environnement contient `LITELLM_MASTER_KEY` ou `LITELLM_MASTER_KEY_FILE`. Elle utilise une clé distincte pour la collecte et une autre, facultative, pour le chat local historique. Le runner conserve ses clés par dossier et par BU.
+
+| Usage | Propriétaire LiteLLM | `allowed_routes` | `models` | Configuration de l’API |
+| --- | --- | --- | --- | --- |
+| Télémétrie | compte de service avec rôle `proxy_admin_viewer` | `/model/info`, `/spend/logs` | liste vide | `LITELLM_TELEMETRY_KEY` |
+| Chat local en `protected_demo` | compte de service avec rôle `internal_user` | `/v1/chat/completions` | `chat-sensitive` | `LITELLM_INFERENCE_KEY` |
+| Runner | compte de service sans rôle administrateur, lié au dossier | routes exactes de la liaison | alias exact du dossier | fichier privé du runner |
+
+Depuis un poste d’administration, créer les propriétaires avec `POST /user/new`, en définissant un `user_id` stable, le `user_role` indiqué et `auto_create_key` à `false`. Créer ensuite chaque clé avec `POST /key/generate`, en renseignant `user_id`, `allowed_routes`, `models`, une durée limitée, `rpm_limit` et `max_parallel_requests`. Ne pas fournir `key_type`, qui peut remplacer la liste des routes par un préréglage. Conserver les réponses dans le gestionnaire de secrets. Ces opérations sont réalisées depuis le poste d’administration. Les restrictions de routes sont vérifiées par LiteLLM avant les droits du propriétaire. [Authentification LiteLLM](https://github.com/BerriAI/litellm/blob/v1.108.3/litellm/proxy/auth/auth_checks.py)
+
+Configurer `LITELLM_ADMIN_KEY_SHA256` avec SHA-256 des octets UTF-8 de la clé administrative, sans espace ni retour à la ligne. Cette empreinte non secrète permet à l’API de refuser la réutilisation de la clé administrative dans la télémétrie, le chat ou une liaison du runner. Après rotation de la clé administrative, remplacer aussi son empreinte et redémarrer l’API. Les clés de télémétrie, de chat et du runner doivent rester distinctes.
+
+Les clés de l’API peuvent être fournies par `LITELLM_TELEMETRY_KEY_FILE` et `LITELLM_INFERENCE_KEY_FILE` à la place de leur variable directe. Monter chaque fichier en lecture seule sous `/run/secrets`. Un fichier et une valeur directe pour le même usage sont refusés. Les fichiers sont lus au démarrage, leur taille est bornée et leurs valeurs restent absentes des réponses et diagnostics. Le précontrôle vérifie le montage, puis l’API vérifie le contenu. Avec Helm, `telemetry.litellmCredentials` référence le secret contenant `telemetry-key` et `telemetry.litellmAdminKeySHA256` fournit l’empreinte.
+
+La démonstration accepte les deux clés vides. La vérification de disponibilité de la passerelle continue de fonctionner, mais sa collecte de modèles et de coûts signale l’absence de credential. Le mode local exige sa clé d’inférence. La configuration de production exige sa clé de télémétrie.
+
+La collecte des coûts demande les journaux individuels avec `summarize=false`, conserve l’attribution au dossier et compte la dernière journée UTC entière. La version LiteLLM épinglée limite cet endpoint à 10 000 lignes. Une réponse tronquée, une synthèse journalière ou des champs de comptage invalides rendent cette source indisponible pour la fenêtre demandée. Le tableau de bord signale alors l’absence de preuve complète de coût au lieu de présenter un total partiel.
+
+Sur une pile simulée, `bash compose/litellm/test_scoped_keys.sh` crée des identités temporaires, vérifie les lectures de télémétrie, l’inférence locale et les refus des routes administratives et du modèle cloud, puis supprime les clés et les comptes. Le test affiche seulement ses résultats. Le smoke test appelle ce contrôle automatiquement. Sur la cible, répéter les refus avec les clés réellement provisionnées avant d’activer la collecte et l’inférence.
 
 Le précontrôle vérifie les adresses GPU privées et exige des noms de modèles `openai/` explicites. Le proxy strict utilise le client HTTP asynchrone prévu par LiteLLM pour ces adaptateurs. Ce client vérifie les certificats avec les autorités de confiance du système, ignore les variables de proxy et refuse de suivre les redirections HTTP, y compris 307 et 308. Configurer l’URL finale du GPU et ajouter l’autorité de certification privée au magasin de confiance du conteneur lorsque nécessaire.
 

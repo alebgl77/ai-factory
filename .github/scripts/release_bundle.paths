@@ -1,6 +1,7 @@
 .env.example
 .github/dependabot.yml
 .github/scripts/verify_image.sh
+.github/scripts/push_scanned_image.py
 .github/trivy/trivyignore.yaml
 .github/workflows/ci.yml
 .github/workflows/codeql.yml
@@ -22,6 +23,7 @@ config
 deploy/helm/ai-factory/values-logging.example.yaml
 docker-compose.yml
 docker-compose.portfolio.yml
+docker-compose.postgres18.yml
 docker-compose.release.yml
 docs/ADAPTIVE_WORKBENCH.md
 docs/BU_SECURITY.md
@@ -57,3 +59,4 @@ examples/crm-sources.example.json
 examples/cyber-inventory.example.json
 licenses
 scripts/check_production.py
+scripts/rehearse_postgres_upgrade.sh

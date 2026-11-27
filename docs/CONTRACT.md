@@ -266,7 +266,10 @@ Environment (all optional, see `.env.example`):
 | `GRAFANA_TOKEN_FILE` | file holding a Viewer service-account token (written by `grafana-bootstrap`) |
 | `GRAFANA_PROM_DS_UID` | UID of the provisioned Prometheus datasource (`prometheus`) |
 | `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | Langfuse public API |
-| `LITELLM_URL`, `LITELLM_MASTER_KEY` | gateway (server side only) |
+| `LITELLM_URL` | gateway URL, used server side |
+| `LITELLM_TELEMETRY_KEY`, `LITELLM_TELEMETRY_KEY_FILE` | separate read-only gateway key for model and cost telemetry, supplied directly or through a read-only secret file |
+| `LITELLM_INFERENCE_KEY`, `LITELLM_INFERENCE_KEY_FILE` | optional separate key for local advisory inference, required when local chat is enabled |
+| `LITELLM_ADMIN_KEY_SHA256` | non-secret lowercase SHA-256 of the administrative key's UTF-8 bytes, required when API keys or Portfolio runner bindings are configured |
 | `QDRANT_URL` | vector DB |
 | `GRAFANA_PUBLIC_URL` | prefix of the dashboard links returned to the browser (path or absolute URL, e.g. `http://grafana.localhost`) |
 | `FACTORY_DEMO_DATE` | fixed anchor date of the demo (`YYYY-MM-DD`, default: today Europe/Paris) |
@@ -279,6 +282,11 @@ Environment (all optional, see `.env.example`):
 | `FACTORY_RATE_LIMIT_PER_MIN`, `FACTORY_RATE_LIMIT_BURST` | write rate limit per actor, or per client IP without authentication (default 60 and 20; 0 disables) |
 | `FACTORY_CONNECTOR_TIMEOUT_S`, `FACTORY_CACHE_TTL_S` | connector timeout and TTL of raw telemetry and assembled snapshots |
 | `FACTORY_COST_FX` | positive finite rate from LiteLLM price unit to EUR, shared by gateway metrics and API spend fallback |
+
+The API rejects `LITELLM_MASTER_KEY` and `LITELLM_MASTER_KEY_FILE`. A direct key and a file
+for the same purpose cannot be combined. Telemetry, inference and each Portfolio runner binding
+use distinct keys, and none may match the administrative fingerprint. The administrative key
+remains with gateway administration. [Gateway credential configuration](GATEWAY_SECURITY.md)
 
 Endpoints (JSON, read endpoints are GET):
 
@@ -532,7 +540,9 @@ Requests carry `metadata.usecase` (and `metadata.agent`) for cost attribution.
   compiled from `requirements*.in` by pip-compile, `pip install --require-hashes`); Dockerfile
   base images and the Dockerfile frontend are pinned as `tag@sha256:digest`.
 - Releases (tag `v*`) require successful latest `push` runs of CI, security and CodeQL on the
-  default branch for the exact tagged commit. Images built from this repository are published as
+  default branch for the exact tagged commit. Each image is built once, scanned by local image
+  ID, pushed to a quarantine tag and scanned again by verified registry digest. Version tags are
+  promoted only after signatures and attestations for that digest pass verification. Images are published as
   `ghcr.io/<owner>/<name>` (api, dashboard, mock-llm, traffic, gpu-sim, grafana-bootstrap;
   linux/amd64), signed keyless with cosign, with SLSA build provenance and SBOM attestations
   (SPDX 2.3, CycloneDX); verify with `.github/scripts/verify_image.sh`.

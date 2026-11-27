@@ -39,7 +39,7 @@ def _prepare(api, *, known_customer=True):
 
 def _local_api(tmp_path, gateway):
     return protected(tmp_path, httpx.MockTransport(gateway), workbench_chat_mode="local",
-                     litellm_url="http://litellm:4000", litellm_master_key="provider-key")
+                     litellm_url="http://litellm:4000", litellm_admin_key_sha256="0" * 64, litellm_inference_key="provider-key")
 
 
 def _chat(case):

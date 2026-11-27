@@ -1,4 +1,4 @@
-"""LiteLLM gateway connector (MIT, outside enterprise/). Master key stays server side.
+"""LiteLLM gateway connector using a dedicated read-only virtual key.
 
 Only selected, non-secret fields are kept from the gateway answers: never ``api_key``,
 ``api_base`` or any ``litellm_params`` credential.
@@ -7,8 +7,11 @@ Only selected, non-secret fields are kept from the gateway answers: never ``api_
 from __future__ import annotations
 
 import datetime as dt
+import math
 from collections import defaultdict
 from typing import Any
+
+import httpx
 
 from ..util import UNATTRIBUTED, to_datetime
 from .base import HttpSource, SourceError
@@ -17,12 +20,14 @@ from .base import HttpSource, SourceError
 class LiteLLMClient(HttpSource):
     name = "litellm"
 
-    def __init__(self, base_url: str | None, master_key: str | None, **kwargs: Any) -> None:
+    def __init__(self, base_url: str | None, telemetry_key: str | None, **kwargs: Any) -> None:
         super().__init__(base_url, **kwargs)
-        self._key = master_key
+        self._key = telemetry_key
 
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._key}"} if self._key else {}
+        if not self._key:
+            raise SourceError("litellm: read-only telemetry credential is not configured")
+        return {"Authorization": f"Bearer {self._key}"}
 
     def health(self) -> bool:
         return self._request_ok("/health/liveliness")
@@ -54,24 +59,52 @@ class LiteLLMClient(HttpSource):
         LiteLLM reports ``spend`` in its own price unit (USD by default). The live collector
         converts these amounts to EUR with the same configured rate as the gateway callback.
         """
-        payload = self._request_json("/spend/logs", params={"start_date": start.isoformat(),
-                                                             "end_date": end.isoformat()},
-                                     headers=self._headers())
-        if not isinstance(payload, list):
+        # The pinned endpoint defaults to daily summaries and caps raw results at 10,000.
+        # An incomplete window must not be reported as complete attributed spend.
+        try:
+            end_exclusive = end + dt.timedelta(days=1)
+            with self._client() as client:
+                response = client.get("/spend/logs", headers=self._headers(), params={
+                    "start_date": start.isoformat(), "end_date": end_exclusive.isoformat(), "summarize": "false",
+                })
+            if response.status_code >= 400:
+                raise SourceError(f"litellm: HTTP {response.status_code}")
+            if response.headers.get("x-litellm-spend-logs-truncated", "false").lower() != "false":
+                raise SourceError("litellm: spend window is truncated")
+            payload = response.json()
+        except httpx.HTTPError as exc:
+            raise SourceError(f"litellm: {exc.__class__.__name__}") from None
+        except (ValueError, OverflowError):
+            raise SourceError("litellm: invalid spend response or date window") from None
+        if not isinstance(payload, list) or len(payload) >= 10000:
             raise SourceError("litellm: unexpected answer")
         agg: dict[tuple[str, str], dict[str, Any]] = defaultdict(lambda: {"spend": 0.0, "requests": 0,
                                                                            "tokens_in": 0, "tokens_out": 0})
         for row in payload:
             if not isinstance(row, dict):
-                continue
+                raise SourceError("litellm: invalid spend log")
             when = to_datetime(row.get("startTime"))
-            meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
-            usecase = str(meta.get("usecase") or (meta.get("requester_metadata") or {}).get("usecase") or UNATTRIBUTED)
-            if when is None:
+            meta = row.get("metadata") or {}
+            if (when is None or not isinstance(meta, dict)
+                    or any(type(row.get(name)) is not int or row[name] < 0
+                           for name in ("prompt_tokens", "completion_tokens"))):
+                raise SourceError("litellm: spend response requires individual request logs")
+            requester = meta.get("requester_metadata") or {}
+            if not isinstance(requester, dict):
+                raise SourceError("litellm: invalid spend attribution")
+            try:
+                spend = float(row["spend"])
+            except (KeyError, TypeError, ValueError):
+                raise SourceError("litellm: invalid spend amount") from None
+            if not math.isfinite(spend) or spend < 0:
+                raise SourceError("litellm: invalid spend amount")
+            day = when.astimezone(dt.timezone.utc).date()
+            if day < start or day > end:
                 continue
-            a = agg[(when.date().isoformat(), usecase)]
-            a["spend"] += float(row.get("spend") or 0)
+            usecase = str(meta.get("usecase") or requester.get("usecase") or UNATTRIBUTED)
+            a = agg[(day.isoformat(), usecase)]
+            a["spend"] += spend
             a["requests"] += 1
-            a["tokens_in"] += int(row.get("prompt_tokens") or 0)
-            a["tokens_out"] += int(row.get("completion_tokens") or 0)
+            a["tokens_in"] += row["prompt_tokens"]
+            a["tokens_out"] += row["completion_tokens"]
         return [{"date": d, "usecase": u, **v} for (d, u), v in sorted(agg.items())]

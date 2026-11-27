@@ -98,7 +98,7 @@ capabilities:
   {{- if or $v.businessUnits.existingSecret $v.sso.existingSecret $v.sso.providerCA.existingSecret $v.api.assistEnabled $v.api.portfolioRunner.existingSecret $v.api.shadowAI.enabled -}}
     {{- fail "demo cannot use private runtime settings" -}}
   {{- end -}}
-  {{- if or $v.telemetry.prometheusURL $v.telemetry.grafanaURL $v.telemetry.grafanaPublicURL $v.telemetry.langfuseURL $v.telemetry.litellmURL $v.telemetry.qdrantURL $v.telemetry.caBundle.existingSecret $v.telemetry.grafanaToken.existingSecret $v.telemetry.langfuseCredentials.existingSecret $v.telemetry.litellmCredentials.existingSecret -}}
+  {{- if or $v.telemetry.prometheusURL $v.telemetry.grafanaURL $v.telemetry.grafanaPublicURL $v.telemetry.langfuseURL $v.telemetry.litellmURL $v.telemetry.qdrantURL $v.telemetry.caBundle.existingSecret $v.telemetry.grafanaToken.existingSecret $v.telemetry.langfuseCredentials.existingSecret $v.telemetry.litellmCredentials.existingSecret $v.telemetry.litellmAdminKeySHA256 -}}
     {{- fail "demo cannot connect to external telemetry or model services" -}}
   {{- end -}}
   {{- if not (has $workbench (list "off" "demo")) -}}
@@ -195,6 +195,15 @@ capabilities:
     {{- if and (hasPrefix "http://" $url) (not (and $v.telemetry.allowInsecureClusterHTTP (regexMatch "^http://[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9-]*\\.svc(\\.cluster\\.local)?(:[0-9]+)?(/|$)" $url))) -}}
       {{- fail "telemetry endpoints must use HTTPS; HTTP requires telemetry.allowInsecureClusterHTTP and an in-cluster Service FQDN" -}}
     {{- end -}}
+  {{- end -}}
+  {{- if and (or $v.telemetry.litellmCredentials.existingSecret $v.api.portfolioRunner.existingSecret) (not (regexMatch "^[0-9a-f]{64}$" $v.telemetry.litellmAdminKeySHA256)) -}}
+    {{- fail "scoped LiteLLM keys require telemetry.litellmAdminKeySHA256" -}}
+  {{- end -}}
+  {{- if and $v.telemetry.litellmCredentials.existingSecret (empty $v.telemetry.litellmURL) -}}
+    {{- fail "telemetry.litellmCredentials requires telemetry.litellmURL" -}}
+  {{- end -}}
+  {{- if and $v.telemetry.litellmURL (empty $v.telemetry.litellmCredentials.existingSecret) -}}
+    {{- fail "telemetry.litellmURL requires a scoped telemetry.litellmCredentials secret" -}}
   {{- end -}}
 {{- end -}}
 {{- end }}

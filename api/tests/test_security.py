@@ -798,7 +798,7 @@ def test_no_secret_in_any_response_with_auth_on(tmp_path):
     token = tmp_path / "token"
     token.write_text("glsa_SENTINEL_token")
     client = proxy(tmp_path, demo_mode="auto", langfuse_host="http://127.0.0.1:9", langfuse_public_key=SENTINELS[1],
-                   langfuse_secret_key=SENTINELS[0], litellm_url="http://127.0.0.1:9", litellm_master_key=SENTINELS[2],
+                   langfuse_secret_key=SENTINELS[0], litellm_url="http://127.0.0.1:9", litellm_admin_key_sha256="0" * 64, litellm_telemetry_key=SENTINELS[2],
                    grafana_url="http://127.0.0.1:9", grafana_token_file=str(token), connector_timeout_s=0.2)
     admin = who("root", "grp-admin")
     client.post("/api/v1/registry/uc-02/model-version", json={"version": "2026-11"}, headers=admin)

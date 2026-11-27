@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.0 (2026-11-27)
+
+- Adds Helm deployment for the dashboard, API and edge, with private OIDC and business-unit
+  policies, plus generation of a version-matched Compose deployment bundle and image inventory.
+  Install from the signed assets once published. [Deployment guide](docs/DEPLOYMENT.en.md)
+- Adds API readiness and recovery guidance, business-unit provenance and audit evidence, and
+  local assistance under the requester's permissions. Flow Lab runs routing scenarios in the
+  browser. External integrations still require target-specific configuration and qualification.
+- Consolidates eight dependency updates, refreshes hash-pinned Python locks and the licence
+  inventory, and updates container libraries including zstd, shadow, glibc and OpenSSL.
+- Replaces the API's LiteLLM master credential with separate telemetry and optional local
+  inference keys. Startup rejects the administrative key and reused credentials, including
+  Portfolio runner bindings. Existing installations must configure the new keys and
+  `LITELLM_ADMIN_KEY_SHA256` before upgrading. [Credential migration](docs/GATEWAY_SECURITY.md)
+- Builds each release image once, scans its local image ID, pushes a quarantine tag, verifies
+  and scans the registry digest, then signs and verifies that digest before promoting version
+  tags. CI checks the image identity and promotion sequence.
+- Adds an opt-in PostgreSQL 18 overlay and an isolated logical backup and restore rehearsal.
+  The default stack remains on PostgreSQL 17. Rehearse and validate the data before migration.
+  [Migration procedure](docs/DEPLOYMENT.en.md#rehearse-postgresql-18-migration)
+
 ## 1.1.1 (2026-11)
 
 - Updates Debian `zlib1g` in the five Python images to address CVE-2026-76844 and CVE-2026-85091.

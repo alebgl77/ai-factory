@@ -26,9 +26,14 @@ Pour la pile simulée, suivez le [démarrage rapide Compose](https://github.com/
 
 ## Vérifier et installer une release
 
+La prochaine version visée est **v1.2.0**, après la réussite de la CI de son commit sur `main`.
+Avant la publication de cette release et de ses artefacts signés, utilisez la qualification
+depuis les sources ci-dessous. Pour une API existante, migrez ses clés LiteLLM avant de démarrer
+la nouvelle image. [Migration des clés](fr/SECURITY.md#14-guide-de-durcissement-pour-la-production)
+
 Lorsqu'une release fournit le fichier **ai-factory-deploy-${TAG}.tar.gz**, récupérez tous ses fichiers d'actifs dans un même répertoire. Le bundle contient les fichiers Compose et les configurations du commit de la release, ainsi que **release-stack.json** et **docker-compose.release-lock.yml**. L'inventaire indique le commit source, le tag, la plateforme et l'image exacte de chaque service, y compris dans les profils optionnels. L'overlay verrouillé utilise les six images AI Factory signées et les digests de manifeste résolus pour les images des éditeurs tiers. La signature du bundle engage cet inventaire. Les signatures et attestations propres aux images AI Factory se vérifient séparément.
 
-Définissez **TAG** à la version téléchargée. Utilisez Bash, Cosign v3, GNU Coreutils et la CLI GitHub avec `gh attestation`. Connectez-vous avec `gh auth login` ou fournissez `GH_TOKEN` au script de vérification d’images via votre gestionnaire de secrets.
+Définissez **TAG** à la version téléchargée, par exemple `TAG=v1.2.0` une fois cette release publiée. Utilisez Bash, Cosign v3, GNU Coreutils et la CLI GitHub avec `gh attestation`. Connectez-vous avec `gh auth login` ou fournissez `GH_TOKEN` au script de vérification d’images via votre gestionnaire de secrets.
 
 ```sh
 set -euo pipefail
@@ -69,7 +74,8 @@ Avant la publication du bundle signé correspondant, qualifiez le commit source 
 
 ```sh
 set -euo pipefail
-git switch --detach 27800aa798d7bf21e7bec4ab57ffa4461e0465c3
+: "${FACTORY_SOURCE_COMMIT:?Définissez le commit exact du candidat à qualifier}"
+git switch --detach "$FACTORY_SOURCE_COMMIT"
 : "${FACTORY_COMPOSE_PROJECT:?Définissez le nom stable du projet Compose}"
 factory=(docker compose --project-name "$FACTORY_COMPOSE_PROJECT"
   --env-file /secure/ai-factory/production.env --profile sso
@@ -107,6 +113,18 @@ Figez les écritures avant une sauvegarde cohérente de référence. Capturez le
 Le stockage de production ne sert jamais de cible d'essai. Les commandes de remise en service réutilisent le nom du projet et ses volumes existants. Les commandes de suppression de volumes et de nettoyage du moteur sont exclues du retour au socle.
 
 ## Répéter la migration PostgreSQL 18
+
+La pile par défaut conserve PostgreSQL 17 et son volume existant. La cible facultative
+`docker-compose.postgres18.yml` utilise le répertoire de données PostgreSQL 18 et un volume
+distinct `postgres18-data`. Ajoutez cet overlay avant le verrou de release pour qualifier
+PostgreSQL 18. Ne démarrez pas la cible sur le répertoire de données PostgreSQL 17 existant.
+
+Sur un moteur de qualification jetable, exécutez
+`bash scripts/rehearse_postgres_upgrade.sh factory-ci-postgres18-qualification`.
+Le script refuse les ressources existantes, restaure des rôles et données synthétiques de 17
+dans 18, recrée le conteneur cible et vérifie la persistance. Il retire uniquement les
+conteneurs et volumes qu’il a créés. La bascule réelle exige les contrôles applicatifs et
+de sauvegarde ci-dessous.
 
 1. Depuis la pile 17 et après le gel des écritures, produisez un export logique des bases et des rôles. **factory** reprend les arguments Compose exacts de la pile source. **BACKUP_RECIPIENT** contient la clé publique de sauvegarde Age.
 
