@@ -33,7 +33,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install hash-pinned runtime and fuzzing dependencies
-        run: python -m pip install --disable-pip-version-check --require-hashes --only-binary :all: -r api/requirements.txt -r .github/tools/fuzzing/requirements.txt
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary :all: \
+            -r api/requirements.txt -r .github/tools/fuzzing/requirements.txt
       - name: Regression corpus and nonvacuous oracle checks
         run: python -m unittest discover -s tests/fuzz -p 'test_*.py' -v
       - name: Fuzz spend metadata and peer security boundaries
@@ -45,7 +47,7 @@ jobs:
           python tests/fuzz/fuzz_peers.py "$RUNNER_TEMP/fuzz/peers" tests/fuzz/corpus/peers \
             -runs=25000 -max_total_time=90 -timeout=5 -max_len=1024 -rss_limit_mb=1024 \
             -artifact_prefix="$RUNNER_TEMP/fuzz/crashes/"
-      - name: Keep minimized crash reproducers
+      - name: Keep crash reproducers
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

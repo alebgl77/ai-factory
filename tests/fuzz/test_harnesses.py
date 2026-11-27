@@ -17,6 +17,10 @@ class HarnessTests(unittest.TestCase):
         for mode in range(8):
             fuzz_metadata.TestOneInput(bytes([mode, 255, 254, 128]))
 
+    def test_metadata_recursion_boundary(self):
+        for depth in (0, 1, 100, 900, 990, 1000, 1100):
+            fuzz_metadata._check('{"nested":' * depth + "{}" + "}" * depth)
+
     def test_peer_edges(self):
         for value in (None, "", "192.0.2.1\n", "::ffff:192.0.2.1", " [2001:db8::1] ",
                       "fe80::1%eth0", "127.000.0.1", "peer\r\nforged", "\udcff", "a" * 64, "a" * 65):

@@ -61,7 +61,7 @@ jobs:
         # and installed with --require-hashes (Dockerfiles and CI).
         run: |
           locks=(api/requirements*.txt scripts/requirements*.txt sim/*/requirements.txt
-                 compose/litellm/tests/requirements.txt)
+                 compose/litellm/tests/requirements.txt .github/tools/fuzzing/requirements.txt)
           unpinned=$(grep -HnvE '^[[:space:]]*(#|-r[[:space:]]|--hash|$)' "${locks[@]}" \
             | grep -vE '^[^:]+:[0-9]+:[A-Za-z0-9._-]+(\[[A-Za-z0-9,._-]+\])?==[^[:space:]]+' || true)
           if [ -n "$unpinned" ]; then

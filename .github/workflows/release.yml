@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 # Release, on a semantic version tag pushed from the default branch (v1.2.3 or v1.2.3-rc.1):
 #   1. preflight: the tag is a semantic version, its commit is on the default branch,
-#      CHANGELOG.md has a section for it, and the latest CI, security and CodeQL push runs
+#      CHANGELOG.md has a section for it, and the latest CI, security, CodeQL and fuzzing push runs
 #      for that exact commit succeeded;
 #   2. for each image built from this repository (api, dashboard, mock-llm, traffic, gpu-sim,
 #      grafana-bootstrap): build once, gate the immutable local image, push a quarantine tag,
@@ -68,7 +68,7 @@ jobs:
             exit 1
           fi
           .github/scripts/changelog_section.sh "$TAG" > /dev/null
-          for workflow in ci.yml security.yml codeql.yml; do
+          for workflow in ci.yml security.yml codeql.yml fuzzing.yml; do
             if ! evidence=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
               -f branch="$DEFAULT_BRANCH" -f event=push -f head_sha="$release_sha" -F per_page=1); then
               echo "::error::Unable to read $workflow runs for $release_sha"
