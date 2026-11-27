@@ -286,6 +286,14 @@ vendored:
 
 # Verification tools (CI, scripts): never shipped in the stack images.
 tools:
+  - name: atheris
+    version: 3.1.0
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: ".github/workflows/fuzzing.yml, Linux CPython 3.12 hash-pinned wheel in .github/tools/fuzzing/"
+    source: https://github.com/google/atheris
+    check: {file: .github/tools/fuzzing/requirements.in, pattern: "atheris==([0-9.]+)"}
   - name: distribution-registry
     image: registry
     tag: 3.0.0

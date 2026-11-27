@@ -85,7 +85,8 @@ jobs:
           for f in api/requirements.txt api/requirements-dev.txt api/requirements-mcp.txt scripts/requirements-assets.txt \
                    sim/mock-llm/requirements.txt sim/traffic/requirements.txt \
                    compose/litellm/tests/requirements.txt \
-                   .github/tools/pip-audit/requirements.txt .github/tools/zizmor/requirements.txt; do
+                   .github/tools/pip-audit/requirements.txt .github/tools/zizmor/requirements.txt \
+                   .github/tools/fuzzing/requirements.txt; do
             echo "::group::$f"
             if "$RUNNER_TEMP/pip-audit/bin/pip-audit" --strict --no-deps --disable-pip \
                  --progress-spinner off --desc on -r "$f" -f markdown -o "$RUNNER_TEMP/audit.md"; then

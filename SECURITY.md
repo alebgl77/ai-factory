@@ -13,7 +13,7 @@ architecture, the threat model and the controls matrix are in
 | Version | Security fixes |
 |---|---|
 | `main` (unreleased) | Yes: every fix lands here first |
-| 1.0.x (latest release line) | Yes |
+| 1.2.x (latest release line) | Yes |
 | Older releases | No: upgrade to the latest release |
 
 A fix is released as a new patch version of the latest release line. The release notes and a
@@ -51,11 +51,17 @@ targets, counted from the receipt of a complete report:
 | Acknowledgement | within **72 hours** |
 | Triage: confirmed or not, severity (CVSS v4.0), affected versions | within **7 days** |
 | Fix or documented mitigation, critical and high severity | target 30 days |
-| Fix or documented mitigation, medium and low severity | next planned release, target 90 days |
+| Fix or documented mitigation, medium severity | target 60 days |
+| Fix or documented mitigation, low severity | next planned release, target 90 days |
 | Coordinated disclosure | when the fix is released, or after 90 days by default, whichever comes first; we agree the date with you |
 
 We keep you informed at each step, publish a GitHub security advisory (with a CVE when it
 applies), and credit you unless you ask us not to.
+
+For publicly known medium-or-higher vulnerabilities, count the 60-day fix target from public
+disclosure. The image release gate blocks fixable HIGH/CRITICAL findings; maintainers must also
+review medium findings and findings without an upstream fix. A passing gate or a documented
+mitigation alone does not prove the OpenSSF patch requirement has been met.
 
 ## Scope
 
@@ -168,7 +174,7 @@ L'architecture de sécurité, le modèle de menaces et la matrice des contrôles
 | Version | Correctifs de sécurité |
 |---|---|
 | `main` (non publiée) | Oui : tout correctif y arrive d'abord |
-| 1.0.x (dernière ligne de release) | Oui |
+| 1.2.x (dernière ligne de release) | Oui |
 | Releases plus anciennes | Non : passez à la dernière release |
 
 Un correctif est publié comme nouvelle version de correction de la dernière ligne de release. Les
@@ -206,11 +212,18 @@ objectifs, comptés à partir de la réception d'un signalement complet :
 | Accusé de réception | sous **72 heures** |
 | Tri : confirmé ou non, sévérité (CVSS v4.0), versions touchées | sous **7 jours** |
 | Correctif ou contournement documenté, sévérité critique et haute | objectif 30 jours |
-| Correctif ou contournement documenté, sévérité moyenne et basse | prochaine release prévue, objectif 90 jours |
+| Correctif ou contournement documenté, sévérité moyenne | objectif 60 jours |
+| Correctif ou contournement documenté, sévérité basse | prochaine release prévue, objectif 90 jours |
 | Divulgation coordonnée | à la publication du correctif, ou après 90 jours par défaut, au premier des deux termes ; la date est convenue avec vous |
 
 Nous vous tenons informé à chaque étape, publions un avis de sécurité GitHub (avec un CVE quand
 c'est pertinent) et vous créditons, sauf si vous préférez l'anonymat.
+
+Pour les vulnérabilités publiques de sévérité moyenne ou supérieure, l'objectif de correction
+de 60 jours court depuis la divulgation publique. La barrière de publication des images bloque
+les résultats HIGH/CRITICAL corrigeables ; les mainteneurs doivent aussi examiner les résultats
+moyens et ceux sans correctif amont. Une barrière verte ou un contournement documenté ne prouve
+pas, à lui seul, que l'exigence de correctif OpenSSF est satisfaite.
 
 ## Périmètre
 

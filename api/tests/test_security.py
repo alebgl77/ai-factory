@@ -22,7 +22,7 @@ from app.audit import GENESIS, AuditContext, AuditLog, record_hash, scan
 from app.main import SWAGGER_UI_VERSION, create_app
 from app.seclog import reference
 from app.security import (ASSESSMENT, AUDIT_READ, AUTHENTICATED, MODEL_VERSION, PLACEMENT_DECIDE, READ, ROLES,
-                          SPACES_WRITE, RateLimiter, SecurityConfig, roles_granting)
+                          SPACES_WRITE, RateLimiter, SecurityConfig, _safe_peer, roles_granting)
 from app.settings import Settings
 from app.state import SeparationOfDuties, StateError, StateStore, apply_registry_overrides
 from tests.conftest import FIXTURE_DIR, NOW, TODAY, review_body
@@ -752,6 +752,17 @@ def test_audit_appends_are_witnessed_in_the_logs(tmp_path, capsys):
     witness = next(x for x in lines if x.get("event") == "audit.appended")
     assert witness["hash"] == audit_lines(tmp_path)[0]["hash"] and witness["seq"] == 1
     assert "actor" not in witness and "client_ip" not in witness  # minimal personal data in logs
+
+
+@pytest.mark.parametrize("peer", [None, "", "127.0.0.1\n", "127.0.0.1\r", "peer\r\nforged", "peer\x00",
+                                  "peer\x1f", "peer\x7f", "peer name", "é", "a" * 65])
+def test_safe_peer_rejects_controls_and_values_outside_the_log_allowlist(peer):
+    assert _safe_peer(peer) == "unknown"
+
+
+@pytest.mark.parametrize("peer", ["127.0.0.1", "::ffff:192.0.2.1", "peer-01.example_test", "a" * 64])
+def test_safe_peer_preserves_complete_allowed_values(peer):
+    assert _safe_peer(peer) == peer
 
 
 def test_client_ip_comes_from_x_forwarded_for_only_behind_a_trusted_proxy(tmp_path):

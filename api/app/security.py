@@ -249,7 +249,7 @@ def _peer(scope: Scope) -> str | None:
 
 
 def _safe_peer(value: str | None) -> str:
-    return value if value and _SAFE_PEER.match(value) else "unknown"
+    return value if value and _SAFE_PEER.fullmatch(value) else "unknown"
 
 
 # ============================================================================== rate limiting
