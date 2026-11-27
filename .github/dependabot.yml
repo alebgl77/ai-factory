@@ -35,6 +35,7 @@ updates:
       - /compose/litellm/tests
       - /.github/tools/pip-audit
       - /.github/tools/zizmor
+      - /.github/tools/fuzzing
     schedule:
       interval: weekly
       day: monday

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.1 (2026-11-27)
+
+- Rejects trailing newlines in peer addresses recorded by the API security log, using a full
+  match of the accepted address characters.
+- Adds bounded, coverage-guided Atheris fuzzing of gateway JSON metadata and API peer
+  addresses, with seed corpora, regression tests and a scheduled CI workflow.
+- Updates the supported security release line to 1.2.x and the medium-severity fix target to
+  60 days. Clarifies that scanner gates do not prove compliance with the public-patch deadline.
+- Enables GitHub private vulnerability reporting, matching the documented reporting process.
+- Documents the [OpenSSF Best Practices evidence](docs/OPENSSF_BEST_PRACTICES.md) in English
+  and French, including the owner attestations and validation still required before applying.
+
 ## 1.2.0 (2026-11-27)
 
 - Adds Helm deployment for the dashboard, API and edge, with private OIDC and business-unit

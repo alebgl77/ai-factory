@@ -3,7 +3,9 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -169,3 +171,68 @@ def test_release_has_one_build_and_failure_gates_before_push_and_promotion():
     assert steps[gates[1]]["with"]["image-ref"] == "${{ env.IMAGE }}@${{ steps.push.outputs.digest }}"
     assert steps[gates[1]]["env"]["TRIVY_IMAGE_SRC"] == "remote"
     assert steps[builds[0]]["with"]["labels"] == "${{ steps.meta.outputs.labels }}"
+
+
+@pytest.fixture
+def release_preflight(tmp_path):
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"))
+    script = next(step["run"] for step in workflow["jobs"]["preflight"]["steps"] if step.get("id") == "check")
+    gate = script[script.index("for workflow in "):script.index('version="${TAG#v}"')]
+    successful = {"head_sha": "1" * 40, "head_branch": "main", "event": "push",
+                  "status": "completed", "conclusion": "success"}
+    calls = tmp_path / "calls"
+
+    def run(changed=None):
+        fuzz_runs = [] if changed is None else [{**successful, **changed}]
+        mock = r'''
+gh() {
+  printf '%s\n' "$*" >> "$GH_CALLS"
+  if [[ "$*" == *"/fuzzing.yml/runs"* ]]; then
+    printf '%s\n' "$FUZZ_EVIDENCE"
+  else
+    printf '%s\n' "$RUN_EVIDENCE"
+  fi
+}
+'''
+        result = subprocess.run(["bash", "-e", "-c", mock + gate], cwd=ROOT,
+                                env={**os.environ, "DEFAULT_BRANCH": "main", "release_sha": successful["head_sha"],
+                                     "GITHUB_REPOSITORY": "example/repository", "GH_CALLS": str(calls),
+                                     "RUN_EVIDENCE": json.dumps({"workflow_runs": [successful]}),
+                                     "FUZZ_EVIDENCE": json.dumps({"workflow_runs": fuzz_runs})},
+                                capture_output=True, text=True, timeout=30)
+        return result, calls.read_text(encoding="utf-8").splitlines()
+
+    return run
+
+
+@pytest.mark.skipif(os.name == "nt" or any(shutil.which(tool) is None for tool in ("bash", "jq")),
+                    reason="Linux Bash and jq are required for the release preflight")
+def test_release_preflight_requires_successful_exact_commit_fuzzing(release_preflight):
+    result, calls = release_preflight({})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls == [f"api --method GET repos/example/repository/actions/workflows/{workflow}/runs "
+                     f"-f branch=main -f event=push -f head_sha={'1' * 40} -F per_page=1"
+                     for workflow in ("ci.yml", "security.yml", "codeql.yml", "fuzzing.yml")]
+
+
+@pytest.mark.skipif(os.name == "nt" or any(shutil.which(tool) is None for tool in ("bash", "jq")),
+                    reason="Linux Bash and jq are required for the release preflight")
+@pytest.mark.parametrize("changed", [
+    None,
+    {"status": "queued"},
+    {"status": "in_progress"},
+    {"conclusion": "failure"},
+    {"conclusion": "cancelled"},
+    {"conclusion": "skipped"},
+    {"conclusion": None},
+    {"head_sha": "2" * 40},
+    {"head_branch": "feature"},
+    {"event": "pull_request"},
+    {"event": "schedule"},
+    {"event": "workflow_dispatch"},
+])
+def test_release_preflight_rejects_missing_or_unsuccessful_fuzzing(release_preflight, changed):
+    result, _ = release_preflight(changed)
+    assert result.returncode != 0
+    assert "Latest fuzzing.yml push run" in result.stdout
+    assert "is missing or unsuccessful" in result.stdout

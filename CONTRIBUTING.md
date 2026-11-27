@@ -36,8 +36,12 @@ python scripts/check_licenses.py && scripts/scan_secrets.sh .
 - **No secret in the browser**: the dashboard only talks to the aggregation API.
 - **Bilingual**: English first, French second (see `docs/CONTRACT.md`, section 9).
 - Keep the interface contract (`docs/CONTRACT.md`) and the tests in sync with your change.
+- Add automated tests for major new functionality and regression tests for bug fixes.
 
 ## Pull requests
 
 Small, focused PRs with a clear description and passing CI. For larger changes, open an issue
 first to discuss the design.
+
+[OpenSSF Best Practices evidence](docs/OPENSSF_BEST_PRACTICES.md) ·
+[Dossier en français](docs/fr/OPENSSF_BEST_PRACTICES.md)

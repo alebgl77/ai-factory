@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MIT
+name: fuzzing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "43 4 * * 1" # weekly, Monday at 04:43 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: fuzzing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-boundaries:
+    name: Fuzzing (security boundaries)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      PYTHONPATH: api
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install hash-pinned runtime and fuzzing dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary :all: \
+            -r api/requirements.txt -r .github/tools/fuzzing/requirements.txt
+      - name: Regression corpus and nonvacuous oracle checks
+        run: python -m unittest discover -s tests/fuzz -p 'test_*.py' -v
+      - name: Fuzz spend metadata and peer security boundaries
+        run: |
+          mkdir -p "$RUNNER_TEMP/fuzz/metadata" "$RUNNER_TEMP/fuzz/peers" "$RUNNER_TEMP/fuzz/crashes"
+          python tests/fuzz/fuzz_metadata.py "$RUNNER_TEMP/fuzz/metadata" tests/fuzz/corpus/metadata \
+            -runs=25000 -max_total_time=90 -timeout=5 -max_len=65537 -rss_limit_mb=1024 \
+            -artifact_prefix="$RUNNER_TEMP/fuzz/crashes/"
+          python tests/fuzz/fuzz_peers.py "$RUNNER_TEMP/fuzz/peers" tests/fuzz/corpus/peers \
+            -runs=25000 -max_total_time=90 -timeout=5 -max_len=1024 -rss_limit_mb=1024 \
+            -artifact_prefix="$RUNNER_TEMP/fuzz/crashes/"
+      - name: Keep crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-crash-reproducers
+          path: ${{ runner.temp }}/fuzz/crashes/
+          if-no-files-found: ignore
+          retention-days: 7

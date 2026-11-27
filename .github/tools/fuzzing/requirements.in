@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MIT
+# Linux x86_64 / CPython 3.12 CI-only tool; never shipped in a stack image.
+# Atheris has no Python dependencies. Hashes come from the official PyPI release.
+atheris==3.1.0
