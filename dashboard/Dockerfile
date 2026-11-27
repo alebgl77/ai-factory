@@ -72,7 +72,7 @@ RUN set -eu; \
 
 # This unprivileged nginx image uses UID 101 and includes Alpine fixes for CVE-2026-107891
 # (musl and musl-utils) and CVE-2026-85091 (zlib).
-FROM nginx/nginx-unprivileged:1.31.8-alpine-slim@sha256:b19233c62309c8e620732244f9d0d0008678854cb9c6c47898817e8dec93a9e3
+FROM nginx/nginx-unprivileged:1.31.9-alpine-slim@sha256:75e85a09b0f25bd46d49a9fd85589ffa70b0459c8ed5ee0dc6596fd642e1f829
 # Apply the fixed zlib and OpenSSL packages while retaining the unprivileged runtime.
 USER root
 RUN apk add --no-cache --upgrade 'zlib=1.4-r0' 'libssl3>=3.5.9-r1' 'libcrypto3>=3.5.9-r1'
