@@ -930,7 +930,7 @@ services:
   # (the image writes /root/.ollama).
   ollama-vps:
     profiles: [vps]
-    image: ollama/ollama:0.40.14
+    image: ollama/ollama:0.40.16
     <<: *hardening
     restart: unless-stopped
     environment:
@@ -954,7 +954,7 @@ services:
 
   ollama-vps-pull:
     profiles: [vps]
-    image: ollama/ollama:0.40.14
+    image: ollama/ollama:0.40.16
     <<: *hardening
     restart: "no"
     entrypoint: ["ollama", "pull", "${OLLAMA_VPS_MODEL:-qwen3:4b}"]
