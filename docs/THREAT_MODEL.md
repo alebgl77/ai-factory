@@ -13,8 +13,9 @@ Residual risk is rated for the production posture of [SECURITY.md](SECURITY.md#1
 the identity, RBAC and four-eyes controls are off by design, and the API says so
 (`security.status: demo`).
 
-Reviewed: 2026-11-04. Review again for every new service, data flow, external provider or
-release with security changes, and after any incident.
+Initial review 2026-11-04, updated 2026-11-27 for scoped gateway credentials and release image
+identity. Final v1.2.0 publication evidence is pending. Review again for every new service,
+data flow, external provider or release with security changes, and after any incident.
 
 Contents: [1. Scope and assumptions](#1-scope-and-assumptions) ·
 [2. Data-flow diagram](#2-data-flow-diagram) · [3. Assets and actors](#3-assets-and-actors) ·
@@ -176,7 +177,7 @@ otherwise.
 
 | | Threat | Mitigation implemented | Residual risk |
 |---|---|---|---|
-| S | Unauthorised caller uses the gateway | master key required; gateway on the internal network only, not routed by the edge | **Medium**: one shared key for all internal applications; per-application keys with budgets are **Roadmap** |
+| S | Unauthorised caller uses the gateway | scoped virtual keys bind strict BU requests to a team and use case; exact routes and model aliases enforced; API telemetry and local inference use separate keys and reject the administrative fingerprint (`compose/litellm/factory_callbacks.py`, `api/app/settings.py`) | **Medium**: operator provisioning, budgets, rotation and target gateway denial tests remain required |
 | T | Request shaped to bypass sensitive routing (other model, Responses or Messages API) | the callback reroutes every generative call type with C3/C4 to `chat-sensitive`. `test_responses_and_messages_api_are_rerouted_too`; smoke "C4 request on chat-default rerouted to the local GPU" | Low |
 | T | Mislabelled data class (C3 sent as C1) | PII redaction still applies before cloud aliases | **Medium**: depends on A4; classify at the source |
 | R | Who sent which request | per use case and agent metrics, Langfuse traces, spend logs without prompts | **Medium**: attribution is per use case, not per end user |
@@ -234,7 +235,7 @@ Prometheus, Loki, Grafana, Langfuse (with Postgres, ClickHouse, SeaweedFS, Valke
 | | Threat | Mitigation implemented | Residual risk |
 |---|---|---|---|
 | T | Compromised GitHub Action (re-pointed tag) | every action pinned by full SHA; Dependabot with a 7-day cooldown; zizmor checks for unpinned and impostor commits | Low |
-| T | Malicious or vulnerable Python package | exact `==` pins checked in CI; pip-audit on every requirements file; CI tools hash-pinned | **Medium**: runtime requirements and base images are not yet hash- or digest-pinned (OpenSSF Scorecard *Pinned-Dependencies*) |
+| T | Malicious or vulnerable Python package | runtime and CI requirements use exact hash-locked versions installed with `--require-hashes`; pip-audit checks the locks; Dockerfile bases use digest pins | **Medium**: a valid upstream release may still contain malicious code or an undisclosed vulnerability |
 | T | Tampered released image | Trivy gate before push; cosign keyless signature; SLSA provenance and SBOM attestations; `.github/scripts/verify_image.sh` | Low for operators who verify by digest |
 | T | Third-party image re-tagged upstream | images pinned by version and listed in `licenses/third_party.yaml` | **Medium**: tags, not digests; digest pinning is **Roadmap** |
 | I | Secret committed to the repository | gitleaks on the full history, Trivy secret scanner | Low |
@@ -296,9 +297,9 @@ Mapped to the [OWASP Top 10 for LLM Applications 2025](https://github.com/OWASP/
   cost centre with the waste rules `budget_breach` and `retry_storm`, Prometheus alerts
   `FactoryWasteAlertCritical` and `FactoryGatewayErrorRateHigh`; gateway timeouts (120 s), a
   single retry and cooldowns; edge body limit (1 MB); API write rate limiting.
-- **Residual: Medium to High**. Spending is **detected**, not **capped**: there is no
-  per-application budget or rate limit enforced at the gateway yet (LiteLLM virtual keys with
-  `max_budget` and rate limits are **Roadmap**). Set spending limits at your providers.
+- **Residual: Medium to High**. Scoped virtual keys are supported. Operators must provision
+  and verify budgets and rate limits for each use case and set spending limits at providers.
+  FinOps alerts alone do not enforce a spending ceiling. [Provisioning](GATEWAY_SECURITY.md)
 
 ### 5.5 Insecure output handling (LLM05:2025 Improper Output Handling)
 
@@ -326,12 +327,12 @@ The main residual risks, in priority order, with the action that reduces them:
 | # | Residual risk | Rating | Action |
 |---|---|---|---|
 | R1 | Prompt injection not caught by rules | Medium-High | `block` mode for exposed apps; least-privilege agents; output handling in apps |
-| R2 | Spend detected but not capped | Medium-High | provider spending limits now; per-application keys with budgets (**Roadmap**) |
+| R2 | Operator budgets may be absent or ineffective | Medium-High | verify budgets and rate limits on scoped virtual keys and provider spending limits |
 | R3 | Data class mislabelled by a caller | Medium | classify at the source; restrict the gateway key; review labels in the register |
 | R4 | Secrets readable through container environments | Medium | protect the Docker socket; secret files (**Roadmap**) |
 | R5 | Unauthenticated stores inside the internal network (Prometheus, Loki, Qdrant) | Medium | keep the network single-tenant; add store authentication or network policies for multi-tenant hosts |
 | R6 | Unkeyed audit chain | Medium | ship Loki copies to a SIEM; WORM backups; HMAC or anchoring (**Roadmap**) |
 | R7 | Dashboard CSP allows inline scripts | Medium | CodeQL on every change; nonce- or hash-based CSP (**Roadmap**) |
-| R8 | Runtime dependencies and third-party images not pinned by hash or digest | Medium | hashed locks and digest pins (**Roadmap**) |
+| R8 | Third-party Compose tags can change before resolution | Medium | runtime hash locks and Dockerfile digest pins are enforced; verify the release lock's resolved third-party digests |
 | R9 | GPU profiles not runtime-tested; GPU containers run as root | Medium | test on the target GPU host before production |
 | R10 | Edge has no per-IP rate limiting | Medium | upstream WAF or CDN for public exposure |

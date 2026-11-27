@@ -14,20 +14,25 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("push_scanned_image", ROOT / ".github/scripts/push_scanned_image.py")
 publisher = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(publisher)
-IMAGE_ID = "sha256:" + "1" * 64
-DIGEST = "sha256:" + "2" * 64
-OTHER_DIGEST = "sha256:" + "3" * 64
+INDEX_ID = "sha256:" + "1" * 64
+MANIFEST_ID = "sha256:" + "2" * 64
+CONFIG_ID = "sha256:" + "3" * 64
+IMAGE_ID = CONFIG_ID
+DIGEST = MANIFEST_ID
+OTHER_DIGEST = "sha256:" + "4" * 64
 REPOSITORY = "ghcr.io/example/api"
 
 
 @pytest.fixture
 def registry(monkeypatch):
     state = {"calls": [], "config": IMAGE_ID, "digest": DIGEST, "local": IMAGE_ID,
-             "manifest_type": "application/vnd.oci.image.manifest.v1+json"}
+             "manifest_type": "application/vnd.oci.image.manifest.v1+json", "platform": {"Id": IMAGE_ID}}
 
     def docker(*args):
         state["calls"].append(args)
         if args[:2] == ("image", "inspect"):
+            if "--platform" in args:
+                return json.dumps(state["platform"])
             return state["local"]
         if args[:2] == ("image", "push") and state.get("push_failure"):
             raise subprocess.CalledProcessError(1, ["docker", *args])
@@ -64,6 +69,37 @@ def test_local_identity_mismatch_stops_before_any_push(registry):
     with pytest.raises(ValueError, match="local image differs"):
         publisher.push_image(IMAGE_ID, REPOSITORY, [REPOSITORY + ":candidate-1"])
     assert registry["calls"] == [("image", "inspect", IMAGE_ID, "--format", "{{.Id}}")]
+
+
+def test_containerd_index_handle_can_publish_its_distinct_platform_manifest_and_config(registry):
+    registry.update(local=INDEX_ID, config=CONFIG_ID, digest=MANIFEST_ID,
+                    platform={"Id": MANIFEST_ID, "Descriptor": {
+                        "mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": MANIFEST_ID}})
+    assert publisher.push_image(INDEX_ID, REPOSITORY, [REPOSITORY + ":candidate-1"]) == MANIFEST_ID
+    assert publisher.push_image(INDEX_ID, REPOSITORY, [REPOSITORY + ":1.2.3"], MANIFEST_ID) == MANIFEST_ID
+    assert ("image", "tag", INDEX_ID, REPOSITORY + ":candidate-1") in registry["calls"]
+
+
+@pytest.mark.parametrize("platform,config", [
+    ({"Id": OTHER_DIGEST, "Descriptor": {"mediaType": "application/vnd.oci.image.manifest.v1+json",
+                                        "digest": OTHER_DIGEST}}, CONFIG_ID),
+    ({"Id": MANIFEST_ID, "Descriptor": None}, CONFIG_ID),
+    ({"Id": MANIFEST_ID, "Descriptor": {"mediaType": "application/vnd.oci.image.index.v1+json",
+                                        "digest": MANIFEST_ID}}, CONFIG_ID),
+    ({"Id": MANIFEST_ID, "Descriptor": {"mediaType": "application/vnd.oci.image.manifest.v1+json",
+                                        "digest": "sha256:invalid"}}, CONFIG_ID),
+    ({"Id": OTHER_DIGEST, "Descriptor": {"mediaType": "application/vnd.oci.image.manifest.v1+json",
+                                        "digest": MANIFEST_ID}}, CONFIG_ID),
+    ({"Id": MANIFEST_ID, "Descriptor": {"mediaType": "application/vnd.oci.image.manifest.v1+json",
+                                        "digest": MANIFEST_ID}}, "sha256:invalid"),
+    ([], CONFIG_ID),
+])
+def test_containerd_wrong_or_malformed_platform_never_mutates_version_tags(registry, platform, config):
+    registry.update(local=INDEX_ID, config=config, platform=platform)
+    with pytest.raises(ValueError):
+        publisher.push_image(INDEX_ID, REPOSITORY, [REPOSITORY + ":1.2.3"], MANIFEST_ID)
+    assert not any(call[:2] in (("image", "tag"), ("image", "push")) or
+                   call[:3] == ("buildx", "imagetools", "create") for call in registry["calls"])
 
 
 @pytest.mark.parametrize("changed", [

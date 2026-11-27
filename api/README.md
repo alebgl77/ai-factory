@@ -36,7 +36,10 @@ OpenAPI documentation: `http://localhost:8000/api/v1/docs`.
 | `FACTORY_STATE_DIR` | writable state (model versions, reviews, 3D bookings) | `/data` |
 | `PROMETHEUS_URL`, `GRAFANA_URL`, `GRAFANA_TOKEN_FILE`, `GRAFANA_PROM_DS_UID` | observability sources | — |
 | `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | Langfuse public API | — |
-| `LITELLM_URL`, `LITELLM_MASTER_KEY` | LLM gateway (server side only) | — |
+| `LITELLM_URL` | LLM gateway URL (server side only) | — |
+| `LITELLM_TELEMETRY_KEY`, `LITELLM_TELEMETRY_KEY_FILE` | read-only telemetry key, supplied directly or through a read-only secret file | empty in the demo |
+| `LITELLM_INFERENCE_KEY`, `LITELLM_INFERENCE_KEY_FILE` | distinct optional local advisory inference key | empty |
+| `LITELLM_ADMIN_KEY_SHA256` | non-secret lowercase administrative-key SHA-256, required with API keys or Portfolio bindings | empty |
 | `QDRANT_URL` | vector database | — |
 | `FACTORY_DEMO_DATE` (optional) | anchor date of the demo, `YYYY-MM-DD` | today |
 | `GRAFANA_PUBLIC_URL` (optional) | prefix of the Grafana links returned to the browser | `/grafana` |
@@ -77,6 +80,11 @@ OpenAPI documentation: `http://localhost:8000/api/v1/docs`.
   are rendered with a decimal comma by `msg`.
 
 ## Security
+
+Credential configuration updated 2026-11-27. The API rejects `LITELLM_MASTER_KEY` and its
+`_FILE` variant, administrative-key reuse, duplicate keys, and a direct key combined with its
+file variant. Portfolio binding keys must also remain distinct. Follow the
+[migration procedure](../docs/GATEWAY_SECURITY.md) before upgrading an existing deployment.
 
 Every control below is enforced in code and covered by tests (`tests/test_security.py`: identity,
 the full role × endpoint matrix, four-eyes, audit chain and tamper detection, rate limiting,

@@ -15,6 +15,10 @@ propres travaux de conformité.
 Architecture et contexte : [SECURITY.md](SECURITY.md). Menaces et risques résiduels :
 [THREAT_MODEL.md](THREAT_MODEL.md).
 
+Actualisé le 27 novembre 2026 pour les clés limitées de passerelle et l'identité des images.
+La preuve finale de publication de v1.2.0 reste attendue. L'identité, le réseau et la reprise
+exigent une validation sur la cible.
+
 ## Référentiels et identifiants
 
 | Colonne | Référentiel | Identifiants utilisés |
@@ -30,9 +34,10 @@ Les repères NIS2 et DORA sont en [section 4](#4-repères-nis2-et-dora).
 Lecture de la colonne « Vérifier » : les noms de tests sont dans
 [`api/tests/test_security.py`](../../api/tests/test_security.py) sauf autre fichier cité, et
 tournent dans le job de CI `api-tests` ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) ;
-« smoke » désigne un contrôle de `scripts/smoke_stack.sh --no-up` sur la stack en marche (lancé en
-CI seulement sur un `workflow_dispatch` manuel avec `smoke: true`) ; « tests des garde-fous »
-désigne `python -m pytest -q compose/litellm/tests` (en local, pas encore en CI).
+« smoke » désigne un contrôle de `scripts/smoke_stack.sh --no-up` sur la stack en marche. La CI
+lance la pile complète et les tests OIDC pour les changements de déploiement, avec lancement
+manuel possible. Le smoke exige le succès de `compose/litellm/test_scoped_keys.sh`. Les tests
+unitaires des garde-fous tournent dans le job CI `guardrails`.
 
 ## 1. Contrôles
 
@@ -99,10 +104,10 @@ désigne `python -m pytest -q compose/litellm/tests` (en local, pas encore en CI
 | C32 | **SAST** : CodeQL `security-extended` pour Python, JavaScript/TypeScript et GitHub Actions, à chaque push, pull request et chaque semaine | - | - | PW.7.2, PO.4.1 | - | 8.28, 8.29 | [`codeql.yml`](../../.github/workflows/codeql.yml) ; résultats dans l'onglet Security |
 | C33 | **Analyse des dépendances et des images** : pip-audit sur chaque fichier de dépendances épinglé (épinglage vérifié) ; Trivy sur le dépôt et sur chaque image construite ici, chaque jour ; barrière sur HIGH/CRITICAL corrigeables ; risques acceptés avec justification et expiration | LLM03 | 15.1.1, 15.2.1 | PW.4.4, RV.1.1, RV.1.2, RV.2.2 | 4.4 | 8.8, 5.21 | jobs `pip-audit`, `trivy-repo`, `images` de [`security.yml`](../../.github/workflows/security.yml) ; [`.github/trivy/trivyignore.yaml`](../../.github/trivy/trivyignore.yaml) |
 | C34 | **SBOM** : CycloneDX et SPDX du code source et de chaque image (syft épinglé par digest) | LLM03 | 15.1.2 | PS.3.2 | - | 5.9, 5.21 | `scripts/sbom.sh --images` ; jobs `sbom-source`, `images` de `security.yml` (artefacts) |
-| C35 | **Releases signées et attestées** : barrière Trivy avant publication, signature cosign sans clé, provenance de build SLSA, attestations SPDX et CycloneDX, `SHA256SUMS` signé, auto-vérification | LLM03 | 15.2.4 | PS.2.1, PS.3.1, PS.3.2 | 4.5, 4.12 (pour les exploitants qui vérifient) | 5.21, 8.32 | [`release.yml`](../../.github/workflows/release.yml) ; `.github/scripts/verify_image.sh IMAGE@DIGEST` ; commandes dans [`../../SECURITY.md`](../../SECURITY.md#verify-a-release) |
+| C35 | **Releases signées et attestées** : construction unique, barrières Trivy sur identifiant local et digest de quarantaine, signature cosign, provenance SLSA, attestations SPDX et CycloneDX vérifiées avant promotion des tags de version, `SHA256SUMS` signé | LLM03 | 15.2.4 | PS.2.1, PS.3.1, PS.3.2 | 4.5, 4.12 (pour les exploitants qui vérifient) | 5.21, 8.32 | [`release.yml`](../../.github/workflows/release.yml) ; `.github/scripts/push_scanned_image.py` ; `.github/scripts/verify_image.sh IMAGE@DIGEST` |
 | C36 | **Mises à jour des dépendances** : Dependabot chaque semaine avec un délai de 7 jours (30 jours pour les versions majeures Python), mises à jour de sécurité groupées ; épinglage exact `==` | LLM03 | 15.2.1 | PW.4.1, RV.2.2 | 4.4 | 8.8 | [`dependabot.yml`](../../.github/dependabot.yml) ; étape « Every requirement is pinned with == » de `security.yml` |
 | C37 | **Politique de licences** : uniquement des licences permissives dans le code livré ; services AGPL séparés et non modifiés ; inventaire avec contrôle de dérive des versions | LLM03 | 15.1.4 | PW.4.4 | - | 5.32 | job de CI `licenses` (`python scripts/check_licenses.py`, `licenses/third_party.yaml`) |
-| C38 | **Tests de sécurité en CI** : 482 tests d'API dont 238 tests de sécurité ; validation de la configuration de chaque service ; contrôle des workflows | - | - | PW.8.2, PO.4.1 | - | 8.29 | jobs de CI `api-tests`, `compose`, `workflows` ; `scripts/smoke_stack.sh` (déclenchement manuel) |
+| C38 | **Tests de sécurité en CI** : API et garde-fous, configurations de services, workflows, pile et OIDC sur changements de déploiement, refus des clés limitées | - | - | PW.8.2, PO.4.1 | - | 8.29 | [`ci.yml`](../../.github/workflows/ci.yml) ; `scripts/smoke_stack.sh` ; `compose/litellm/test_scoped_keys.sh` ; `api/tests/test_gateway_credentials.py` |
 | C39 | **Modèle de menaces et décisions de sécurité documentées** | - | 15.1.3, 15.1.5 | PW.1.1, PO.1.1 | - | 5.8, 8.27 | [THREAT_MODEL.md](THREAT_MODEL.md), [SECURITY.md](SECURITY.md) |
 
 ## 2. Titres du CIS Docker Benchmark
@@ -125,7 +130,7 @@ l'édition que vous utilisez.
 | 5.11 | Ensure that the memory usage for containers is limited | oui |
 | 5.12 | Ensure that CPU priority is set appropriately on containers | limites de CPU posées |
 | 5.13 | Ensure that the container's root filesystem is mounted as read only | profils par défaut et `sim` : oui ; `vps` et `local-gpu` : non |
-| 5.14 | Ensure that incoming container traffic is bound to a specific host interface | ports alternatifs 3001/3002 sur `127.0.0.1` ; 80/443 publics par conception |
+| 5.14 | Ensure that incoming container traffic is bound to a specific host interface | ports du bord sur la boucle locale par défaut ; accès public par `EDGE_BIND` explicite ; ports alternatifs sur la boucle locale |
 | 5.26 | Ensure that the container is restricted from acquiring additional privileges | `no-new-privileges` partout |
 | 5.27 | Ensure that container health is checked at runtime | oui (smoke « services healthy ») |
 | 5.29 | Ensure that the PIDs cgroup limit is used | oui |
@@ -140,16 +145,16 @@ Ce qu'un évaluateur ne trouvera pas aujourd'hui, dit clairement pour pouvoir le
 | Domaine | Écart | Référence | État |
 |---|---|---|---|
 | Posture par défaut | la configuration par défaut est la démo sans clé (aucune authentification, toute requête agit comme `admin`), signalée par `security.status: demo` | SSDF PW.9.2 | voulu pour la démo ; réglages de production dans le [guide de durcissement](SECURITY.md#14-guide-de-durcissement-pour-la-production) |
-| Maîtrise des coûts | la dépense est mesurée et alertée, pas plafonnée par application à la passerelle | LLM10 | **Feuille de route** : clés de passerelle par application avec budgets et limites de débit |
-| Secrets | secrets passés en variables d'environnement (lisibles via `docker inspect`) ; pas de gestionnaire de secrets intégré | ASVS 13.3.1, 13.3.4 | **Feuille de route** : fichiers secrets Docker ; exploitant : gestionnaire de secrets et rotation ([guide](SECURITY.md#14-guide-de-durcissement-pour-la-production)) |
+| Maîtrise des coûts | clés de passerelle limitées prises en charge ; budgets et débits dépendent du provisionnement | LLM10 | vérifier les plafonds par dossier et fournisseur ([guide](../GATEWAY_SECURITY.md)) |
+| Secrets | certains services utilisent des variables d'environnement ; l'API accepte les fichiers de secrets LiteLLM limités et refuse la clé administrative | ASVS 13.3.1, 13.3.4 | `api/app/settings.py`, `api/app/portfolio_runner.py` ; coffre, vérification des droits et rotation à la charge de l'exploitant |
 | Transport interne | HTTP en clair entre conteneurs sur les réseaux internes | ASVS 12.3.1, 12.3.3, 12.3.5 | **Feuille de route** pour les déploiements multi-hôtes (TLS mutuel) |
 | Authentification des bases | Prometheus, Loki et Qdrant acceptent des requêtes non authentifiées à l'intérieur du réseau interne | ASVS 13.2.1 ; ISO 8.3 | ouvert : hôte mono-locataire supposé |
 | Chaîne d'audit | non clé-dépendante ; pas de rotation | ASVS 16.4.2 | **Feuille de route** : HMAC ou ancrage, rotation ; exploitant : sauvegardes WORM |
 | CSP du dashboard | scripts `'unsafe-inline'` (page monofichier) | ASVS 3.4.3 | **Feuille de route** : CSP à nonce ou empreinte |
-| Épinglage | dépendances Python d'exécution sans verrou à empreintes ; images de base et tierces épinglées par tag, pas par digest | SSDF PW.4.4 ; ASVS 15.2.4 | **Feuille de route** |
+| Épinglage | dépendances Python verrouillées par empreintes et bases Docker par digest ; les sources Compose contiennent encore des tags tiers | SSDF PW.4.4 ; ASVS 15.2.4 | vérifier les digests tiers résolus dans le verrou signé du déploiement |
 | Artefacts de modèles | poids des modèles non épinglés par révision ni empreinte | LLM03 | **Feuille de route** |
 | MFA | délégué au fournisseur d'identité | ASVS 6.3.3 ; NIS2 art. 21(2)(j) | exploitant : imposer le MFA dans le fournisseur d'identité |
-| Couverture de la CI | tests unitaires des garde-fous, test e2e SSO et smoke test complet non lancés à chaque changement | SSDF PW.8.2 | **Feuille de route** : les ajouter à la CI |
+| Couverture de la CI | garde-fous sur changements ; pile et OIDC sur changements de déploiement avec tests obligatoires des clés limitées | SSDF PW.8.2 | compléter la preuve CI jetable par la qualification du tenant et la preuve finale de release ([déploiement](../DEPLOYMENT.md)) |
 | Profils GPU | les services `vps` et `local-gpu` tournent en root sans système de fichiers racine en lecture seule ; non testés en exécution ici | CIS 4.1, 5.13 | exploitant : tester sur l'hôte cible |
 
 ## 4. Repères NIS2 et DORA

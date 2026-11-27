@@ -1195,6 +1195,14 @@ class FactoryMetrics(CustomLogger):
         model = str(data.get("model") or "")
         sensitivity = str(md.get("sensitivity") or "").strip().upper()
         usecase = _label(rt, "usecase", md.get("usecase"))
+        # LiteLLM persists custom attribution only through this supported spend-log field.
+        # Stamp it after the strict identity check, replacing client-supplied copies.
+        case_id = md.get("usecase")
+        attribution = {"usecase": case_id} if isinstance(case_id, str) and _LABEL_RE.fullmatch(case_id) else {}
+        for channel in ("metadata", "litellm_metadata"):
+            current = data.get(channel)
+            if isinstance(current, dict):
+                current["spend_logs_metadata"] = attribution.copy()
         generative = _is_generative(call_type)
 
         # 1. Placement rule: C3/C4 generation always runs on the local-only alias

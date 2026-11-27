@@ -119,6 +119,13 @@ def test_request_fingerprint_cannot_replace_authenticated_value(fc, strict):
     deny(fc, strict, auth(api_key="b" * 64), spoofed)
 
 
+def test_persisted_spend_attribution_overwrites_client_copies_with_verified_case(strict):
+    supplied = {"spend_logs_metadata": {"usecase": "uc-01", "sensitive_text": "discarded"}}
+    result = invoke(strict, auth(), body(metadata=supplied.copy(), litellm_metadata=supplied.copy()))
+    for channel in ("metadata", "litellm_metadata"):
+        assert result[channel]["spend_logs_metadata"] == {"usecase": "uc-04"}
+
+
 @pytest.mark.parametrize("override", [
     {"model": "chat-default", "metadata": {"usecase": "uc-04", "sensitivity": "C1"}},
     {"metadata": {"usecase": "uc-01"}}, {"litellm_metadata": {"usecase": "uc-01"}},

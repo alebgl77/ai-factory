@@ -29,7 +29,21 @@ def verify_remote_image(image_id, repository, digest):
     if (not isinstance(manifest, dict) or manifest.get("schemaVersion") != 2
             or manifest.get("mediaType") not in MANIFEST_TYPES
             or not isinstance(manifest.get("config"), dict)
-            or manifest["config"].get("digest") != image_id):
+            or not isinstance(manifest["config"].get("digest"), str)
+            or not DIGEST.fullmatch(manifest["config"]["digest"])):
+        raise ValueError("The registry image differs from the scanned image.")
+    platform = json.loads(docker("image", "inspect", "--platform", "linux/amd64", image_id,
+                                 "--format", "{{json .}}"))
+    if not isinstance(platform, dict):
+        raise ValueError("The local platform inspection is invalid.")
+    if "Descriptor" in platform:
+        descriptor = platform["Descriptor"]
+        if (not isinstance(descriptor, dict) or descriptor.get("mediaType") not in MANIFEST_TYPES
+                or not isinstance(descriptor.get("digest"), str)
+                or not DIGEST.fullmatch(descriptor["digest"])
+                or platform.get("Id") != descriptor["digest"] or digest != descriptor["digest"]):
+            raise ValueError("The registry manifest differs from the scanned platform manifest.")
+    elif platform.get("Id") != image_id or manifest["config"]["digest"] != image_id:
         raise ValueError("The registry image differs from the scanned image.")
 
 

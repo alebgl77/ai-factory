@@ -66,7 +66,9 @@ def test_registry_staging_and_version_tags_reference_the_same_scanned_object(reg
     digest = publisher.push_image(image_id, registry, [registry + ":candidate"])
     assert publisher.push_image(image_id, registry, [registry + ":1.2.3", registry + ":1.2"], digest) == digest
     docker("pull", "--platform", "linux/amd64", registry + "@" + digest)
-    assert docker("image", "inspect", registry + "@" + digest, "--format", "{{.Id}}") == image_id
+    assert docker("image", "inspect", "--platform", "linux/amd64", registry + "@" + digest,
+                  "--format", "{{.Id}}") == docker("image", "inspect", "--platform", "linux/amd64",
+                                                   image_id, "--format", "{{.Id}}")
 
 
 def test_missing_registry_digest_never_creates_a_version_tag(registry, image):

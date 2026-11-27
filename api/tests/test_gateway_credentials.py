@@ -2,6 +2,7 @@
 
 import hashlib
 import datetime as dt
+import json
 
 import httpx
 import pytest
@@ -104,6 +105,15 @@ def test_raw_spend_preserves_attribution_tokens_and_the_full_last_day():
     }]
 
 
+@pytest.mark.parametrize("encoded", [False, True])
+def test_pinned_gateway_persisted_attribution_supports_json_string_or_object(encoded):
+    metadata = {"spend_logs_metadata": {"usecase": "uc-02"}, "user_api_key_alias": "synthetic-key"}
+    client = _spend_client([_spend_row(metadata=json.dumps(metadata) if encoded else metadata)])
+    result = client.spend_daily(dt.date(2026, 11, 1), dt.date(2026, 11, 3))
+    assert result == [{"date": "2026-11-03", "usecase": "uc-02", "spend": 0.25,
+                      "requests": 1, "tokens_in": 13, "tokens_out": 4}]
+
+
 @pytest.mark.parametrize(("payload", "headers"), [
     ([_spend_row()], {"x-litellm-spend-logs-truncated": "true"}),
     ([_spend_row()] * 10000, {}),
@@ -111,6 +121,11 @@ def test_raw_spend_preserves_attribution_tokens_and_the_full_last_day():
     ([_spend_row(prompt_tokens=True)], {}),
     ([_spend_row(metadata={"requester_metadata": "invalid"})], {}),
     ([_spend_row(spend="NaN")], {}),
+    ([_spend_row(metadata='{invalid')], {}),
+    ([_spend_row(metadata='["uc-02"]')], {}),
+    ([_spend_row(metadata='{"spend_logs_metadata":{"usecase":"uc-01","usecase":"uc-02"}}')], {}),
+    ([_spend_row(metadata={"usecase": "uc-01", "spend_logs_metadata": {"usecase": "uc-02"}})], {}),
+    ([_spend_row(metadata={"spend_logs_metadata": {"usecase": {"nested": "uc-02"}}})], {}),
 ])
 def test_incomplete_or_unattributable_spend_never_returns_partial_totals(payload, headers):
     with pytest.raises(SourceError):

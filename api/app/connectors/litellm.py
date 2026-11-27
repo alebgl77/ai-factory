@@ -7,7 +7,9 @@ Only selected, non-secret fields are kept from the gateway answers: never ``api_
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
+import re
 from collections import defaultdict
 from typing import Any
 
@@ -15,6 +17,28 @@ import httpx
 
 from ..util import UNATTRIBUTED, to_datetime
 from .base import HttpSource, SourceError
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise ValueError
+    return result
+
+
+def _metadata_object(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            if len(value) > 65536:
+                raise ValueError
+            value = json.loads(value, object_pairs_hook=_unique_object)
+        except (ValueError, RecursionError):
+            raise SourceError("litellm: invalid spend metadata") from None
+    if not isinstance(value, dict):
+        raise SourceError("litellm: invalid spend metadata")
+    return value
 
 
 class LiteLLMClient(HttpSource):
@@ -84,13 +108,17 @@ class LiteLLMClient(HttpSource):
             if not isinstance(row, dict):
                 raise SourceError("litellm: invalid spend log")
             when = to_datetime(row.get("startTime"))
-            meta = row.get("metadata") or {}
-            if (when is None or not isinstance(meta, dict)
+            meta = _metadata_object(row.get("metadata"))
+            if (when is None
                     or any(type(row.get(name)) is not int or row[name] < 0
                            for name in ("prompt_tokens", "completion_tokens"))):
                 raise SourceError("litellm: spend response requires individual request logs")
-            requester = meta.get("requester_metadata") or {}
-            if not isinstance(requester, dict):
+            requester = _metadata_object(meta.get("requester_metadata"))
+            persisted = _metadata_object(meta.get("spend_logs_metadata"))
+            identities = [value for value in (persisted.get("usecase"), meta.get("usecase"), requester.get("usecase"))
+                          if value is not None and value != ""]
+            if (any(not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}", value)
+                    for value in identities) or len(set(identities)) > 1):
                 raise SourceError("litellm: invalid spend attribution")
             try:
                 spend = float(row["spend"])
@@ -101,7 +129,7 @@ class LiteLLMClient(HttpSource):
             day = when.astimezone(dt.timezone.utc).date()
             if day < start or day > end:
                 continue
-            usecase = str(meta.get("usecase") or requester.get("usecase") or UNATTRIBUTED)
+            usecase = identities[0] if identities else UNATTRIBUTED
             a = agg[(day.isoformat(), usecase)]
             a["spend"] += spend
             a["requests"] += 1

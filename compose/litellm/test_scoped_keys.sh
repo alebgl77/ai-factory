@@ -7,6 +7,7 @@ if [ "$#" -eq 0 ]; then set -- docker compose --profile sim; fi
 import json
 import datetime as dt
 import hashlib
+import math
 import os
 import sys
 import time
@@ -22,6 +23,39 @@ prefix = "scope-test-" + uuid.uuid4().hex
 users = []
 keys = []
 failures = []
+
+
+def unique_object(pairs):
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise ValueError
+    return result
+
+
+def metadata_object(value):
+    if isinstance(value, str):
+        if len(value) > 65536:
+            raise ValueError
+        value = json.loads(value, object_pairs_hook=unique_object)
+    if not isinstance(value, dict):
+        raise ValueError
+    return value
+
+
+def attributed_spend(row):
+    if not isinstance(row, dict) or not isinstance(row.get("startTime"), str):
+        return False
+    if any(type(row.get(field)) is not int or row[field] < 0 for field in ("prompt_tokens", "completion_tokens")):
+        return False
+    spend = row.get("spend")
+    if type(spend) not in (int, float) or not math.isfinite(spend) or spend < 0:
+        return False
+    try:
+        metadata = metadata_object(row.get("metadata"))
+        persisted = metadata_object(metadata.get("spend_logs_metadata"))
+    except (ValueError, RecursionError):
+        return False
+    return persisted.get("usecase") == "smoke-test"
 
 
 def request(path, key, body=None):
@@ -81,14 +115,12 @@ try:
     for _ in range(20):
         status, rows = request(query, telemetry)
         if status == 200 and isinstance(rows, list) and rows:
-            raw_spend_verified = all(
-                isinstance(row, dict) and isinstance(row.get("startTime"), str)
-                and type(row.get("prompt_tokens")) is int and type(row.get("completion_tokens")) is int
-                and isinstance(row.get("metadata"), dict)
-                and (row["metadata"].get("usecase")
-                     or (row["metadata"].get("requester_metadata") or {}).get("usecase")) == "smoke-test"
-                for row in rows
-            )
+            raw_spend_verified = all(attributed_spend(row) for row in rows)
+            if not raw_spend_verified and isinstance(rows[0], dict):
+                print("Spend row field types: " + json.dumps({
+                    field: type(rows[0].get(field)).__name__
+                    for field in ("startTime", "spend", "prompt_tokens", "completion_tokens", "metadata")
+                }, sort_keys=True), file=sys.stderr)
             break
         time.sleep(3)
     if not raw_spend_verified:
