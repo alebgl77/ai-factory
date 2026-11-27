@@ -139,7 +139,10 @@ spec:
             - {name: LITELLM_URL, value: {{ . | quote }}}
             {{- end }}
             {{- if $telemetry.litellmCredentials.existingSecret }}
-            {{- include "ai-factory.secretEnv" (dict "env" "LITELLM_MASTER_KEY" "secret" $telemetry.litellmCredentials.existingSecret "key" $telemetry.litellmCredentials.key) | nindent 12 }}
+            {{- include "ai-factory.secretEnv" (dict "env" "LITELLM_TELEMETRY_KEY" "secret" $telemetry.litellmCredentials.existingSecret "key" $telemetry.litellmCredentials.key) | nindent 12 }}
+            {{- end }}
+            {{- with $telemetry.litellmAdminKeySHA256 }}
+            - {name: LITELLM_ADMIN_KEY_SHA256, value: {{ . | quote }}}
             {{- end }}
             {{- with $telemetry.qdrantURL }}
             - {name: QDRANT_URL, value: {{ . | quote }}}

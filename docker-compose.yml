@@ -78,7 +78,7 @@ services:
   # Root with CHOWN and DAC_READ_SEARCH only, no network, read-only root filesystem; a no-op
   # when ownership is already right (fresh volumes).
   volume-init:
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.9-alpine
     <<: *hardening
     restart: "no"
     user: "0:0"
@@ -97,7 +97,7 @@ services:
     logging: *logging
 
   edge:
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.9-alpine
     <<: *hardening
     restart: unless-stopped
     user: "10001:10001"
@@ -235,7 +235,9 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:?set LANGFUSE_INIT_PROJECT_PUBLIC_KEY in .env}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:?set LANGFUSE_INIT_PROJECT_SECRET_KEY in .env}
       LITELLM_URL: http://litellm:4000
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      LITELLM_TELEMETRY_KEY: ${LITELLM_TELEMETRY_KEY:-}
+      LITELLM_INFERENCE_KEY: ${LITELLM_INFERENCE_KEY:-}
+      LITELLM_ADMIN_KEY_SHA256: ${LITELLM_ADMIN_KEY_SHA256:-}
       FACTORY_COST_FX: ${FACTORY_COST_FX:-1.0}
       QDRANT_URL: http://qdrant:6333
     volumes:
@@ -319,7 +321,7 @@ services:
 
   # ===================================================================== observability
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     <<: *hardening
     restart: unless-stopped
     read_only: true
@@ -490,7 +492,7 @@ services:
     logging: *logging
 
   alloy:
-    image: grafana/alloy:v1.21.3
+    image: grafana/alloy:v1.22.0
     <<: *hardening
     restart: unless-stopped
     user: "473:473"
@@ -530,7 +532,7 @@ services:
 
   # ============================================================== gateway & vector DB
   litellm:
-    image: ${LITELLM_IMAGE:-litellm/litellm-non_root:v1.106.7}
+    image: ${LITELLM_IMAGE:-litellm/litellm-non_root:v1.108.3}
     <<: *hardening
     restart: unless-stopped
     read_only: true
@@ -812,7 +814,7 @@ services:
     logging: *logging
 
   seaweedfs:
-    image: chrislusf/seaweedfs:4.52
+    image: chrislusf/seaweedfs:4.53
     <<: *hardening
     restart: unless-stopped
     # uid/gid 1000 = seaweed user of the image: the image entrypoint skips its root step.
@@ -1050,7 +1052,7 @@ services:
   # profiling metrics, and the hardening could not be tested without a GPU here.
   dcgm-exporter:
     profiles: [local-gpu]
-    image: nvidia/dcgm-exporter:4.6.1-4.8.4
+    image: nvidia/dcgm-exporter:4.9.0
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

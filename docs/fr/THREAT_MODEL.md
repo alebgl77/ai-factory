@@ -14,8 +14,10 @@ Le risque résiduel est évalué pour la posture de production du
 clé, les contrôles d'identité, de RBAC et des quatre yeux sont désactivés à dessein, et l'API le
 dit (`security.status: demo`).
 
-Revu le : 2026-11-04. À revoir pour chaque nouveau service, flux de données, fournisseur externe
-ou release qui touche à la sécurité, et après tout incident.
+Revue initiale du 4 novembre 2026, actualisée le 27 novembre pour les clés limitées de la
+passerelle et l'identité des images publiées. La preuve finale de publication de v1.2.0 reste
+attendue. À revoir pour chaque nouveau service, flux, fournisseur externe ou release qui touche
+à la sécurité, et après tout incident.
 
 Sommaire : [1. Périmètre et hypothèses](#1-périmètre-et-hypothèses) ·
 [2. Diagramme de flux de données](#2-diagramme-de-flux-de-données) ·
@@ -179,7 +181,7 @@ sauf mention contraire.
 
 | | Menace | Atténuation en place | Risque résiduel |
 |---|---|---|---|
-| S | Un appelant non autorisé utilise la passerelle | clé maître exigée ; passerelle sur le réseau interne uniquement, non routée par le bord | **Moyen** : une seule clé partagée par toutes les applications internes ; des clés par application avec budgets relèvent de la **Feuille de route** |
+| S | Un appelant non autorisé utilise la passerelle | les clés virtuelles lient les requêtes BU strictes à une équipe et un dossier ; routes et alias exacts imposés ; clés distinctes de télémétrie et d'inférence, refus de l'empreinte administrative (`compose/litellm/factory_callbacks.py`, `api/app/settings.py`) | **Moyen** : provisionnement, budgets, rotation et tests des refus sur la passerelle cible restent requis |
 | T | Requête façonnée pour contourner le routage sensible (autre modèle, API Responses ou Messages) | le callback redirige vers `chat-sensitive` tout type d'appel génératif en C3/C4. `test_responses_and_messages_api_are_rerouted_too` ; smoke « C4 request on chat-default rerouted to the local GPU » | Faible |
 | T | Classe de données mal étiquetée (C3 envoyé en C1) | le masquage PII s'applique quand même avant les alias cloud | **Moyen** : dépend de A4 ; classez à la source |
 | R | Qui a envoyé quelle requête | métriques par use case et agent, traces Langfuse, journaux de dépense sans prompt | **Moyen** : attribution par use case, pas par utilisateur final |
@@ -237,7 +239,7 @@ Prometheus, Loki, Grafana, Langfuse (avec Postgres, ClickHouse, SeaweedFS, Valke
 | | Menace | Atténuation en place | Risque résiduel |
 |---|---|---|---|
 | T | GitHub Action compromise (tag redirigé) | chaque action épinglée par SHA complet ; Dependabot avec un délai de 7 jours ; zizmor détecte les épinglages manquants et les commits usurpés | Faible |
-| T | Paquet Python malveillant ou vulnérable | épinglage exact `==` vérifié en CI ; pip-audit sur chaque fichier de dépendances ; outils de CI épinglés par empreinte | **Moyen** : les dépendances d'exécution et les images de base ne sont pas encore épinglées par empreinte ou digest (OpenSSF Scorecard *Pinned-Dependencies*) |
+| T | Paquet Python malveillant ou vulnérable | dépendances d'exécution et de CI verrouillées par version et empreinte, installées avec `--require-hashes` ; pip-audit sur les verrous ; bases Docker épinglées par digest | **Moyen** : une version amont valide peut contenir du code malveillant ou une vulnérabilité encore inconnue |
 | T | Image publiée altérée | barrière Trivy avant publication ; signature cosign sans clé ; attestations de provenance SLSA et de SBOM ; `.github/scripts/verify_image.sh` | Faible pour les exploitants qui vérifient par digest |
 | T | Image tierce re-taguée en amont | images épinglées par version et listées dans `licenses/third_party.yaml` | **Moyen** : tags et non digests ; épinglage par digest en **Feuille de route** |
 | I | Secret versionné dans le dépôt | gitleaks sur tout l'historique, analyseur de secrets Trivy | Faible |
@@ -305,10 +307,9 @@ Rapprochées de l'[OWASP Top 10 for LLM Applications 2025](https://github.com/OW
   Prometheus `FactoryWasteAlertCritical` et `FactoryGatewayErrorRateHigh` ; délais de la
   passerelle (120 s), une seule nouvelle tentative et mises en pause ; limite de corps au bord
   (1 Mo) ; limitation du débit des écritures de l'API.
-- **Résiduel : Moyen à Élevé**. La dépense est **détectée**, pas **plafonnée** : aucun budget ni
-  débit par application n'est encore appliqué à la passerelle (clés virtuelles LiteLLM avec
-  `max_budget` et limites de débit en **Feuille de route**). Fixez des plafonds de dépense chez vos
-  fournisseurs.
+- **Résiduel : Moyen à Élevé**. Les clés virtuelles limitées sont prises en charge. L'exploitant
+  doit provisionner et vérifier les budgets et débits par dossier, ainsi que les plafonds des
+  fournisseurs. Les alertes FinOps seules ne plafonnent pas la dépense. [Provisionnement](../GATEWAY_SECURITY.md)
 
 ### 5.5 Traitement non sûr des réponses (LLM05:2025 Improper Output Handling)
 
@@ -338,12 +339,12 @@ Les principaux risques résiduels, par priorité, avec l'action qui les réduit 
 | # | Risque résiduel | Niveau | Action |
 |---|---|---|---|
 | R1 | Injection de prompt non détectée par les règles | Moyen-Élevé | mode `block` pour les applications exposées ; agents à moindre privilège ; traitement des réponses dans les applications |
-| R2 | Dépense détectée mais non plafonnée | Moyen-Élevé | plafonds chez les fournisseurs dès maintenant ; clés par application avec budgets (**Feuille de route**) |
+| R2 | Budgets d'exploitation absents ou inefficaces | Moyen-Élevé | vérifier budgets et débits des clés virtuelles limitées et plafonds des fournisseurs |
 | R3 | Classe de données mal étiquetée par un appelant | Moyen | classer à la source ; restreindre la clé de la passerelle ; revoir les étiquettes dans le registre |
 | R4 | Secrets lisibles dans l'environnement des conteneurs | Moyen | protéger le socket Docker ; fichiers secrets (**Feuille de route**) |
 | R5 | Bases non authentifiées dans le réseau interne (Prometheus, Loki, Qdrant) | Moyen | garder le réseau mono-locataire ; ajouter l'authentification des bases ou des politiques réseau sur les hôtes partagés |
 | R6 | Chaîne d'audit non clé-dépendante | Moyen | envoyer les copies Loki vers un SIEM ; sauvegardes WORM ; HMAC ou ancrage (**Feuille de route**) |
 | R7 | La CSP du dashboard autorise les scripts en ligne | Moyen | CodeQL à chaque changement ; CSP à nonce ou empreinte (**Feuille de route**) |
-| R8 | Dépendances d'exécution et images tierces non épinglées par empreinte ou digest | Moyen | verrous à empreintes et épinglage par digest (**Feuille de route**) |
+| R8 | Tags tiers de Compose modifiables avant résolution | Moyen | verrous Python à empreintes et bases Docker par digest imposés ; vérifier les digests tiers résolus du verrou de release |
 | R9 | Profils GPU non testés en exécution ; conteneurs GPU en root | Moyen | tester sur l'hôte GPU cible avant la production |
 | R10 | Pas de limitation de débit par IP au bord | Moyen | WAF ou CDN en amont pour une exposition publique |

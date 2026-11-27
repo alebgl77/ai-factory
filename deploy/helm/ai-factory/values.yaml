@@ -14,7 +14,7 @@ images:
     pullPolicy: IfNotPresent
   caddy:
     repository: caddy
-    tag: 2.11.7-alpine
+    tag: 2.11.9-alpine
     digest: ""
     pullPolicy: IfNotPresent
   oauth2Proxy:
@@ -87,7 +87,8 @@ telemetry:
   litellmURL: ""
   litellmCredentials:
     existingSecret: ""
-    key: master-key
+    key: telemetry-key
+  litellmAdminKeySHA256: ""
   qdrantURL: ""
 resources:
   edge:
@@ -107,7 +108,7 @@ logging:
   alloy:
     image:
       repository: grafana/alloy
-      tag: v1.21.3
+      tag: v1.22.0
   loki:
     url: ""
     existingSecret: ""

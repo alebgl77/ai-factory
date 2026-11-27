@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: MIT
 # OpenAI-compatible mock LLM (cloud / vps / local profiles) for the key-less demo.
 # Base image pinned by digest (multi-arch index); the tag stays for Dependabot, which updates both.
-FROM python:3.12.16-slim@sha256:e695ab189fa2d082b1c61c69a6b888a5adeca61ceeccad107b1ed2a125721a9e
+FROM python:3.12.16-slim@sha256:191083cdf6c7bda8c76158983163ead5d5cf7b77cf3033e805bb0f5296f51b4b
 
-# Apply Debian DSA-6613-1 to the pinned Trixie base.
+# Apply fixed Debian security packages to the pinned Trixie base.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends --only-upgrade 'zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1' \
+ && apt-get install -y --no-install-recommends --only-upgrade \
+      'zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1' libzstd1 login.defs passwd \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libzstd1)" ge '1.5.7+dfsg-1+deb13u1' \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' passwd)" ge '1:4.17.4-2+deb13u1' \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' login.defs)" ge '1:4.17.4-2+deb13u1' \
  && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

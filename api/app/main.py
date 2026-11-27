@@ -236,8 +236,8 @@ def create_app(settings: Settings | None = None, transport: httpx.BaseTransport 
     if settings.workbench_mode != "off":
         advisor = None
         if settings.workbench_chat_mode == "local":
-            assert settings.litellm_url and settings.litellm_master_key  # validated by Settings
-            advisor = local_advisor(settings.litellm_url, settings.litellm_master_key, transport=transport)
+            assert settings.litellm_url and settings.litellm_inference_key  # validated by Settings
+            advisor = local_advisor(settings.litellm_url, settings.litellm_inference_key, transport=transport)
         app.state.workbench = Workbench(
             Path(settings.state_dir) / f"workbench-{settings.workbench_mode}.sqlite3",
             settings.workbench_mode, clock=clock, advisor=advisor,

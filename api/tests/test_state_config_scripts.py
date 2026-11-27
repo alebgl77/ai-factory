@@ -232,7 +232,7 @@ def test_build_snapshot_out_matches_api_demo(tmp_path, build_mod, make_client):
         args = ["--config", str(FIXTURE_DIR), "--out", str(out), "--date", "2026-11-03"]
         assert build_mod.main(args + (["--lang", lang] if lang else [])) == 0
         assert html.read_text() == HTML  # --out alone leaves the HTML untouched
-        data = json.loads(out.read_text())
+        data = json.loads(out.read_text(encoding="utf-8"))
         assert data["meta"]["lang"] == (lang or "en")
         api = client.get("/api/v1/snapshot", params={"lang": lang} if lang else None).json()
         for key in ("registry", "costs", "pipeline", "dataloop", "placement", "agentops", "catalog", "skills",

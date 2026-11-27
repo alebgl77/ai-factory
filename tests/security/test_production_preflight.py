@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -40,6 +41,8 @@ def valid_config():
         FACTORY_AUTH_MODE="proxy", FACTORY_DEFAULT_ROLE="", FACTORY_ROLE_MAP="staff:viewer,governance:approver",
         FACTORY_TRUSTED_PROXIES="10.89.255.2/32", FACTORY_DEMO_MODE="never", FACTORY_WORKBENCH_MODE="off",
         FACTORY_BU_POLICY="/config/business-units.yaml",
+        LITELLM_ADMIN_KEY_SHA256=hashlib.sha256(FIXTURE_VALUE.encode()).hexdigest(),
+        LITELLM_TELEMETRY_KEY="sk-synthetic-read-only-key",
     )
     services["oauth2-proxy"]["environment"].update(
         OAUTH2_PROXY_OIDC_ISSUER_URL="https://idp.company.internal:8443/realm",
@@ -76,6 +79,31 @@ def valid_config():
 
 
 def test_valid_private_hostname_and_explicit_public_edge_bind(valid_config):
+    assert production_errors(valid_config) == []
+
+
+@pytest.mark.parametrize("changes", [
+    {"LITELLM_MASTER_KEY": FIXTURE_VALUE},
+    {"LITELLM_MASTER_KEY_FILE": "/run/secrets/admin"},
+    {"LITELLM_TELEMETRY_KEY": FIXTURE_VALUE},
+    {"LITELLM_ADMIN_KEY_SHA256": "0" * 64},
+    {"LITELLM_INFERENCE_KEY": "sk-synthetic-read-only-key"},
+    {"LITELLM_URL": "http://litellm:4000", "LITELLM_TELEMETRY_KEY": ""},
+])
+def test_production_refuses_administrative_shared_or_missing_gateway_credentials(valid_config, changes):
+    valid_config["services"]["api"]["environment"].update(changes)
+    errors = production_errors(valid_config)
+    assert errors
+    assert all(FIXTURE_VALUE not in error and "sk-synthetic-read-only-key" not in error for error in errors)
+
+
+def test_production_accepts_a_private_read_only_telemetry_key_file(valid_config):
+    api = valid_config["services"]["api"]
+    target = "/run/secrets/gateway-telemetry"
+    api["environment"].update(LITELLM_URL="http://litellm:4000", LITELLM_TELEMETRY_KEY="",
+                              LITELLM_TELEMETRY_KEY_FILE=target)
+    assert production_errors(valid_config)
+    api["volumes"].append({"type": "bind", "source": "/operator/read-key", "target": target, "read_only": True})
     assert production_errors(valid_config) == []
 
 
@@ -436,6 +464,8 @@ def test_rendered_production_fixture_passes(profiles, vps_base, chat_base, embed
         "FACTORY_BU_POLICY": "/config/business-units.yaml", "FACTORY_GATEWAY_POLICY": "./private-gateway-policy.json",
         "FACTORY_DEMO_MODE": "never", "FACTORY_GUARDRAIL_MODE": "block", "EDGE_BIND": "0.0.0.0",
         "LANGFUSE_ENCRYPTION_KEY": bytes(range(32)).hex(),
+        "LITELLM_TELEMETRY_KEY": "sk-synthetic-read-only-key",
+        "LITELLM_ADMIN_KEY_SHA256": hashlib.sha256(FIXTURE_VALUE.encode()).hexdigest(),
         "GRAFANA_PUBLIC_URL": f"https://grafana.{PRODUCTION_HOST}",
         "LANGFUSE_PUBLIC_URL": f"https://langfuse.{PRODUCTION_HOST}",
         "CLOUD_API_BASE": "https://cloud.provider.example/v1", "VPS_API_BASE": vps_base,

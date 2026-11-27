@@ -29,7 +29,7 @@ images:
   # ---------------------------------------------------------------- services (docker-compose.yml)
   - service: "edge, volume-init (one-shot chown of the edge volumes, same image)"
     image: caddy
-    tag: 2.11.7-alpine
+    tag: 2.11.9-alpine
     spdx: Apache-2.0
     license: Apache-2.0
     usage: separate-service
@@ -37,7 +37,7 @@ images:
     source: https://github.com/caddyserver/caddy
   - service: prometheus
     image: prom/prometheus
-    tag: v3.15.1
+    tag: v3.16.0
     spdx: Apache-2.0
     license: Apache-2.0
     usage: separate-service
@@ -62,7 +62,7 @@ images:
     source: https://github.com/grafana/loki
   - service: alloy
     image: grafana/alloy
-    tag: v1.21.3
+    tag: v1.22.0
     spdx: Apache-2.0
     license: Apache-2.0
     usage: separate-service
@@ -78,7 +78,7 @@ images:
     source: https://github.com/qdrant/qdrant
   - service: litellm
     image: litellm/litellm-non_root
-    tag: v1.106.7
+    tag: v1.108.3
     spdx: MIT
     license: "MIT (enterprise/ excluded, no license key)"
     usage: separate-service
@@ -164,7 +164,7 @@ images:
     source: https://github.com/valkey-io/valkey
   - service: seaweedfs
     image: chrislusf/seaweedfs
-    tag: "4.52"
+    tag: "4.53"
     spdx: Apache-2.0
     license: "Apache-2.0 (S3 API, replaces MinIO, licensed under AGPLv3)"
     usage: separate-service
@@ -190,7 +190,7 @@ images:
     source: https://github.com/vllm-project/vllm
   - service: dcgm-exporter
     image: nvidia/dcgm-exporter
-    tag: 4.6.1-4.8.4
+    tag: 4.9.0
     spdx: Apache-2.0
     license: "Apache-2.0 (CUDA libraries of the image under the NVIDIA license, not redistributed by this repository)"
     usage: separate-service
@@ -209,7 +209,7 @@ images:
     source: https://github.com/docker-library/python
   - service: "dashboard (vendor stage: fetches Three.js, absent from the final image)"
     image: node
-    tag: 26.13.0-alpine
+    tag: 26.13.1-alpine
     spdx: MIT
     license: "MIT (Node.js); Alpine packages of the image under their own licenses (aggregate)"
     usage: build-time
@@ -286,6 +286,15 @@ vendored:
 
 # Verification tools (CI, scripts): never shipped in the stack images.
 tools:
+  - name: distribution-registry
+    image: registry
+    tag: 3.0.0
+    spdx: Apache-2.0
+    license: Apache-2.0
+    usage: build-time
+    where: "Disposable loopback registry for the release image identity CI test; never shipped in the stack"
+    source: https://github.com/distribution/distribution
+    check: {file: tests/deployment/test_release_registry.py, pattern: "registry:([0-9.]+)@sha256:"}
   - name: trivy
     image: aquasec/trivy
     tag: 0.76.1
@@ -321,7 +330,7 @@ tools:
     source: https://github.com/rhysd/actionlint
     check: {file: .github/workflows/ci.yml, pattern: "rhysd/actionlint:([0-9.]+)@"}
   - name: zizmor
-    version: 1.31.1
+    version: 1.32.0
     spdx: MIT
     license: MIT
     usage: build-time

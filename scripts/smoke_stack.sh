@@ -450,6 +450,11 @@ if [ "$chain" = "1" ]; then ok "audit hash chain verifies (factory_audit_chain_o
 
 # -------------------------------------------------------------- LiteLLM gateway
 step "LiteLLM gateway (through mock-llm)"
+if bash compose/litellm/test_scoped_keys.sh "${DC[@]}"; then
+  ok "gateway credentials separate telemetry, local inference and administration"
+else
+  ko "gateway scoped credential boundaries"
+fi
 llm() { # llm MODEL METADATA_JSON [TEXT] -> prints "<http status> <x-litellm-model-id>"
   "${DC[@]}" exec -T litellm python3 - "$1" "$2" "${3:-Smoke test (fictional data).}" <<'PY'
 import json, os, sys, urllib.request, urllib.error

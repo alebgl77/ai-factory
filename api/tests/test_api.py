@@ -183,7 +183,7 @@ def test_no_secret_in_any_get_response(make_client, tmp_path):
     token = tmp_path / "token"
     token.write_text("glsa_SENTINEL_token")
     c = make_client(demo_mode="auto", langfuse_host="http://127.0.0.1:9", langfuse_public_key=SENTINELS[1],
-                    langfuse_secret_key=SENTINELS[0], litellm_url="http://127.0.0.1:9", litellm_master_key=SENTINELS[2],
+                    langfuse_secret_key=SENTINELS[0], litellm_url="http://127.0.0.1:9", litellm_admin_key_sha256="0" * 64, litellm_telemetry_key=SENTINELS[2],
                     grafana_url="http://127.0.0.1:9", grafana_token_file=str(token), connector_timeout_s=0.2)
     schema = c.get("/api/v1/openapi.json").json()
     paths = [p for p, ops in schema["paths"].items() if "get" in ops and "{" not in p]

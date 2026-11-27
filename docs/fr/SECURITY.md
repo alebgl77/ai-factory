@@ -232,8 +232,9 @@ corrompues, troncature), `test_offline_verifier_cli`,
 - Le dashboard ne parle qu'à l'API d'agrégation, en même origine, via le bord. Il n'appelle jamais
   Grafana, LiteLLM ou Langfuse et ne détient ni jeton ni clé.
 - Le jeton Grafana (compte de service *Viewer* créé par `grafana-bootstrap`) est écrit dans un
-  volume monté en lecture seule dans l'API et lu côté serveur depuis `GRAFANA_TOKEN_FILE`. La clé
-  maître de LiteLLM et les clés Langfuse restent dans la configuration côté serveur de l'API.
+  volume monté en lecture seule dans l'API et lu côté serveur depuis `GRAFANA_TOKEN_FILE`. Les
+  clés LiteLLM limitées à la télémétrie et à l'inférence facultative, ainsi que les clés Langfuse,
+  restent dans les paramètres serveur de l'API. L'API refuse la clé administrative LiteLLM.
 - **Proxy Grafana restreint** : uniquement des `GET` vers une liste blanche de chemins Grafana, et
   uniquement des requêtes PromQL *nommées* définies côté serveur. Le navigateur ne peut pas envoyer
   de PromQL arbitraire.
@@ -420,7 +421,10 @@ n'ont pas été testés en exécution ici (pas de GPU).
   cosign et portent des attestations de provenance SLSA et de SBOM ; les sommes de contrôle de la
   release sont signées aussi. Avant de construire les images, la release exige la réussite de la
   dernière exécution `push` de CI, sécurité et CodeQL sur la branche par défaut, pour le commit
-  exact pointé par le tag. [Vérifier une release](../../SECURITY.md#vérifier-une-release)
+  exact pointé par le tag. Chaque image est construite une fois et analysée par son identifiant
+  local, puis poussée sous un tag de quarantaine et analysée par son digest distant vérifié.
+  La vérification des signatures et attestations précède la promotion de ce digest vers les
+  tags de version. [Vérifier une release](../../SECURITY.md#vérifier-une-release)
 - **Politique de licences.** Uniquement des licences permissives dans le code livré ; les services
   AGPL (Grafana, Loki) tournent comme conteneurs séparés et non modifiés.
   `scripts/check_licenses.py` (job de CI `licenses`) vérifie chaque dépendance, image et
@@ -506,12 +510,30 @@ segment de niveau 2. Testez ces ports depuis un second hôte sur ce segment avan
    LiteLLM commencent par `sk-`). Conservez-les dans un gestionnaire de secrets (HashiCorp Vault,
    coffre de clés d'un cloud...) et générez `.env` au déploiement, propriété de root, mode `0600`.
    Ne le versionnez jamais. Vérifier : `grep -c change-me .env` renvoie 0.
+   Avant une mise à niveau, retirez `LITELLM_MASTER_KEY` et `LITELLM_MASTER_KEY_FILE` de
+   l'environnement de l'API. Provisionnez `LITELLM_TELEMETRY_KEY` pour les lectures de télémétrie
+   et une clé distincte `LITELLM_INFERENCE_KEY` si le conseiller local est activé. Chaque clé peut
+   utiliser sa variable `_FILE` avec un montage de secret en lecture seule. Renseignez
+   `LITELLM_ADMIN_KEY_SHA256` lorsque ces clés ou les liaisons du runner Portfolio sont définies.
+   Calculez l'empreinte sans retour à la ligne final ni préfixe `Bearer`, puis conservez-la dans
+   la configuration du déploiement.
+
+   ```sh
+   python3 -c 'import getpass,hashlib; print(hashlib.sha256(getpass.getpass("Clé administrative de la passerelle : ").encode("utf-8")).hexdigest())'
+   ```
+
+   Le démarrage refuse la clé administrative, les clés réutilisées et une valeur directe
+   combinée à sa variable `_FILE`. Les clés des liaisons Portfolio doivent aussi être distinctes
+   de celles de télémétrie et d'inférence. Vérifiez les refus de routes et les restrictions de
+   modèles sur la passerelle avant d'activer l'API. [Provisionnement et tests de refus](../GATEWAY_SECURITY.md)
 4. **Rotation des clés.** Au moins tous les 90 jours, à chaque départ d'une personne qui y avait
    accès, et immédiatement en cas de soupçon :
 
    | Secret | Comment le faire tourner | Effet |
    |---|---|---|
-   | `LITELLM_MASTER_KEY`, clés des fournisseurs (`CLOUD_API_KEY`...) | nouvelle valeur dans `.env` (et chez le fournisseur), `docker compose up -d litellm api` | aucun pour les utilisateurs |
+   | `LITELLM_MASTER_KEY` | rotation dans l'administration de la passerelle, remplacement de `LITELLM_ADMIN_KEY_SHA256`, redémarrage de `litellm` et `api` | le démarrage de l'API compare les clés limitées à la nouvelle empreinte |
+   | `LITELLM_TELEMETRY_KEY`, `LITELLM_INFERENCE_KEY`, clés des liaisons Portfolio | provisionnement d'une clé limitée, mise à jour du secret ou fichier privé, redémarrage de `api`, puis révocation de l'ancienne clé | vérifier les routes refusées et l'accès au modèle local avant réouverture |
+   | clés des fournisseurs (`CLOUD_API_KEY`...) | rotation dans le coffre et chez le fournisseur, redémarrage de `litellm` | selon la fenêtre de rotation du fournisseur |
    | `SSO_CLIENT_SECRET` | nouveau secret dans le fournisseur d'identité, puis `.env`, redémarrer `oauth2-proxy` | aucun |
    | `SSO_COOKIE_SECRET` | nouvelle valeur, redémarrer `oauth2-proxy` | chaque utilisateur se reconnecte (c'est aussi la façon de révoquer toutes les sessions) |
    | mots de passe base de données, Valkey, ClickHouse, S3 | changer dans le service, puis `.env`, redémarrer les dépendants | court redémarrage |

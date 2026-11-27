@@ -1,6 +1,6 @@
 """Runtime settings, read from environment variables (CONTRACT section 3).
 
-Secrets (Langfuse secret key, LiteLLM master key, Grafana token file content) are kept on
+Secrets (Langfuse secret key, scoped LiteLLM keys, Grafana token file content) are kept on
 this object only. The object is never serialised into a response.
 
 Security settings (see ``app/security.py`` and the API README): ``FACTORY_AUTH_MODE``,
@@ -11,9 +11,12 @@ by :class:`app.security.SecurityConfig`; invalid values fail closed and are repo
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from .i18n import DEFAULT_LANG, normalize_lang
@@ -38,6 +41,26 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def _secret(name: str) -> str | None:
+    value = _env(name)
+    source = _env(name + "_FILE")
+    if value and source:
+        raise ValueError(f"Set only {name} or {name}_FILE")
+    if not source:
+        return value
+    try:
+        with Path(source).open("rb") as stream:
+            raw = stream.read(4097)
+        if len(raw) > 4096:
+            raise ValueError
+        decoded = raw.decode("utf-8").strip()
+        if not decoded or any(char.isspace() for char in decoded):
+            raise ValueError
+        return decoded
+    except (OSError, UnicodeError, ValueError):
+        raise ValueError(f"Invalid or unavailable {name}_FILE") from None
 
 
 def _env_list(name: str) -> tuple[str, ...]:
@@ -77,7 +100,9 @@ class Settings:
     langfuse_public_key: str | None = field(default=None, repr=False)
     langfuse_secret_key: str | None = field(default=None, repr=False)
     litellm_url: str | None = None
-    litellm_master_key: str | None = field(default=None, repr=False)
+    litellm_telemetry_key: str | None = field(default=None, repr=False)
+    litellm_inference_key: str | None = field(default=None, repr=False)
+    litellm_admin_key_sha256: str | None = None
     qdrant_url: str | None = None
     cors_origins: tuple[str, ...] = ()
     max_body_bytes: int = 64 * 1024
@@ -98,6 +123,15 @@ class Settings:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "default_lang", normalize_lang(self.default_lang, DEFAULT_LANG))
+        scoped_keys = (self.litellm_telemetry_key, self.litellm_inference_key)
+        if any(scoped_keys) or self.portfolio_runner_file:
+            if not re.fullmatch(r"[0-9a-f]{64}", self.litellm_admin_key_sha256 or ""):
+                raise ValueError("Scoped LiteLLM credentials require LITELLM_ADMIN_KEY_SHA256")
+        if any(key and hashlib.sha256(key.encode()).hexdigest() == self.litellm_admin_key_sha256
+               for key in scoped_keys):
+            raise ValueError("The API cannot use the LiteLLM administrative credential")
+        if self.litellm_telemetry_key and self.litellm_telemetry_key == self.litellm_inference_key:
+            raise ValueError("LiteLLM telemetry and inference require distinct credentials")
         if not math.isfinite(self.cost_fx) or self.cost_fx <= 0:
             raise ValueError("FACTORY_COST_FX must be a finite positive rate")
         if self.shadow_ai_enabled and (self.auth_mode != "proxy" or not self.shadow_ai_groups):
@@ -126,7 +160,7 @@ class Settings:
             raise ValueError("AI assistance requires live proxy auth, BU policy, local runner bindings and rate limiting")
         if self.workbench_chat_mode == "local" and (
             self.workbench_mode != "protected_demo" or self.auth_mode != "proxy"
-            or not self.litellm_url or not self.litellm_master_key
+            or not self.litellm_url or not self.litellm_inference_key
         ):
             raise ValueError("local workbench chat requires protected_demo, proxy auth and LiteLLM")
         if self.workbench_chat_mode == "local":
@@ -146,6 +180,8 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        if _env("LITELLM_MASTER_KEY") or _env("LITELLM_MASTER_KEY_FILE"):
+            raise ValueError("Remove LITELLM_MASTER_KEY from the API environment; configure scoped credentials")
         mode = (_env("FACTORY_DEMO_MODE", "auto") or "auto").lower()
         if mode not in DEMO_MODES:
             mode = "auto"
@@ -185,7 +221,9 @@ class Settings:
             langfuse_public_key=_env("LANGFUSE_PUBLIC_KEY"),
             langfuse_secret_key=_env("LANGFUSE_SECRET_KEY"),
             litellm_url=_env("LITELLM_URL"),
-            litellm_master_key=_env("LITELLM_MASTER_KEY"),
+            litellm_telemetry_key=_secret("LITELLM_TELEMETRY_KEY"),
+            litellm_inference_key=_secret("LITELLM_INFERENCE_KEY"),
+            litellm_admin_key_sha256=_env("LITELLM_ADMIN_KEY_SHA256"),
             qdrant_url=_env("QDRANT_URL"),
             cors_origins=cors,
             max_body_bytes=max(1024, _env_int("FACTORY_MAX_BODY_BYTES", 64 * 1024)),

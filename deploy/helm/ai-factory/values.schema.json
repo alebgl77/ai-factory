@@ -180,6 +180,7 @@
         },
         "litellmURL": {"type": "string"},
         "litellmCredentials": {"$ref": "#/$defs/secretFile"},
+        "litellmAdminKeySHA256": {"type": "string", "pattern": "^([0-9a-f]{64})?$"},
         "qdrantURL": {"type": "string"}
       }
     },

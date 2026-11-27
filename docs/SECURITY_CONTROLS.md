@@ -14,6 +14,9 @@ help a security team assess the stack and reuse the evidence in its own complian
 Architecture and context: [SECURITY.md](SECURITY.md). Threats and residual risks:
 [THREAT_MODEL.md](THREAT_MODEL.md).
 
+Updated 2026-11-27 for scoped gateway credentials and release image identity. The final v1.2.0
+publication proof is pending. Tenant identity, network restrictions and recovery need target evidence.
+
 ## Frameworks and identifiers
 
 | Column | Framework | Identifiers used |
@@ -29,9 +32,9 @@ Pointers for NIS2 and DORA are in [section 4](#4-pointers-for-nis2-and-dora).
 How to read "How to verify": test names are in [`api/tests/test_security.py`](../api/tests/test_security.py)
 unless another file is named, and run in the CI job `api-tests`
 ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)); "smoke" is a check of
-`scripts/smoke_stack.sh --no-up` on the running stack (run in CI only on a manual
-`workflow_dispatch` with `smoke: true`); "guardrail tests" is
-`python -m pytest -q compose/litellm/tests` (local, not yet in CI).
+`scripts/smoke_stack.sh --no-up` on the running stack. CI runs the full stack and OIDC tests
+automatically for deployment changes, with manual dispatch available. The smoke test requires
+`compose/litellm/test_scoped_keys.sh` to pass. Guardrail unit tests run in CI job `guardrails`.
 
 ## 1. Controls
 
@@ -98,10 +101,10 @@ unless another file is named, and run in the CI job `api-tests`
 | C32 | **SAST**: CodeQL `security-extended` for Python, JavaScript/TypeScript and GitHub Actions, on push, pull request and weekly | - | - | PW.7.2, PO.4.1 | - | 8.28, 8.29 | [`codeql.yml`](../.github/workflows/codeql.yml); results in the Security tab |
 | C33 | **Dependency and image scanning**: pip-audit on every pinned requirements file (pins checked); Trivy on the repository and on every image built here, daily; gate on fixable HIGH/CRITICAL; accepted risks with reason and expiry | LLM03 | 15.1.1, 15.2.1 | PW.4.4, RV.1.1, RV.1.2, RV.2.2 | 4.4 | 8.8, 5.21 | [`security.yml`](../.github/workflows/security.yml) jobs `pip-audit`, `trivy-repo`, `images`; [`.github/trivy/trivyignore.yaml`](../.github/trivy/trivyignore.yaml) |
 | C34 | **SBOM**: CycloneDX and SPDX for the source tree and every image (syft pinned by digest) | LLM03 | 15.1.2 | PS.3.2 | - | 5.9, 5.21 | `scripts/sbom.sh --images`; `security.yml` jobs `sbom-source`, `images` (artifacts) |
-| C35 | **Signed, attested releases**: Trivy gate before push, cosign keyless signature, SLSA build provenance, SPDX and CycloneDX attestations, signed `SHA256SUMS`, self-verification | LLM03 | 15.2.4 | PS.2.1, PS.3.1, PS.3.2 | 4.5, 4.12 (for operators who verify) | 5.21, 8.32 | [`release.yml`](../.github/workflows/release.yml); `.github/scripts/verify_image.sh IMAGE@DIGEST`; commands in [`../SECURITY.md`](../SECURITY.md#verify-a-release) |
+| C35 | **Signed, attested releases**: one build, local-ID and quarantine-digest Trivy gates, cosign signature, SLSA provenance, SPDX and CycloneDX attestations verified before version-tag promotion, signed `SHA256SUMS` | LLM03 | 15.2.4 | PS.2.1, PS.3.1, PS.3.2 | 4.5, 4.12 (for operators who verify) | 5.21, 8.32 | [`release.yml`](../.github/workflows/release.yml); `.github/scripts/push_scanned_image.py`; `.github/scripts/verify_image.sh IMAGE@DIGEST` |
 | C36 | **Dependency updates**: Dependabot weekly with a 7-day cooldown (30 days for Python majors), security updates grouped; exact `==` pins | LLM03 | 15.2.1 | PW.4.1, RV.2.2 | 4.4 | 8.8 | [`dependabot.yml`](../.github/dependabot.yml); `security.yml` step "Every requirement is pinned with ==" |
 | C37 | **Licence policy**: only permissive licences in shipped code; AGPL services separate and unmodified; inventory with version drift checks | LLM03 | 15.1.4 | PW.4.4 | - | 5.32 | CI job `licenses` (`python scripts/check_licenses.py`, `licenses/third_party.yaml`) |
-| C38 | **Security testing in CI**: 482 API tests including 238 security tests; configuration validation of every service; workflow linting | - | - | PW.8.2, PO.4.1 | - | 8.29 | CI jobs `api-tests`, `compose`, `workflows`; `scripts/smoke_stack.sh` (manual dispatch) |
+| C38 | **Security testing in CI**: API and guardrail tests, service configuration validation, workflow linting, deployment-change smoke and OIDC tests, scoped gateway denial checks | - | - | PW.8.2, PO.4.1 | - | 8.29 | [`ci.yml`](../.github/workflows/ci.yml); `scripts/smoke_stack.sh`; `compose/litellm/test_scoped_keys.sh`; `api/tests/test_gateway_credentials.py` |
 | C39 | **Threat model and documented security decisions** | - | 15.1.3, 15.1.5 | PW.1.1, PO.1.1 | - | 5.8, 8.27 | [THREAT_MODEL.md](THREAT_MODEL.md), [SECURITY.md](SECURITY.md) |
 
 ## 2. CIS Docker Benchmark titles
@@ -123,7 +126,7 @@ Numbers as in v1.6.0; match by title in the edition you use.
 | 5.11 | Ensure that the memory usage for containers is limited | yes |
 | 5.12 | Ensure that CPU priority is set appropriately on containers | CPU limits set |
 | 5.13 | Ensure that the container's root filesystem is mounted as read only | default and `sim` profiles: yes; `vps` and `local-gpu`: no |
-| 5.14 | Ensure that incoming container traffic is bound to a specific host interface | alternate ports 3001/3002 on `127.0.0.1`; 80/443 public by design |
+| 5.14 | Ensure that incoming container traffic is bound to a specific host interface | edge ports bind to loopback by default; public access requires explicit `EDGE_BIND`; keep alternate ports on loopback |
 | 5.26 | Ensure that the container is restricted from acquiring additional privileges | `no-new-privileges` everywhere |
 | 5.27 | Ensure that container health is checked at runtime | yes (smoke "services healthy") |
 | 5.29 | Ensure that the PIDs cgroup limit is used | yes |
@@ -138,16 +141,16 @@ What a reviewer will not find today, stated so it can be planned:
 | Area | Gap | Framework reference | Status |
 |---|---|---|---|
 | Default posture | the default configuration is the key-less demo (no authentication, every request acts as `admin`), flagged as `security.status: demo` | SSDF PW.9.2 | by design for the demo; production settings in [SECURITY.md](SECURITY.md#14-production-hardening-guide) |
-| Cost control | spend is measured and alerted, not capped per application at the gateway | LLM10 | **Roadmap**: per-application gateway keys with budgets and rate limits |
-| Secrets | secrets passed as environment variables (readable through `docker inspect`); no built-in secrets manager | ASVS 13.3.1, 13.3.4 | **Roadmap**: Docker secret files; operator: secrets manager and rotation ([SECURITY.md](SECURITY.md#14-production-hardening-guide)) |
+| Cost control | scoped gateway keys are supported; budgets and rate limits depend on provisioning | LLM10 | verify per-use-case and provider limits ([gateway guide](GATEWAY_SECURITY.md)) |
+| Secrets | some service secrets use environment variables; the API supports scoped LiteLLM secret files and refuses the administrative key | ASVS 13.3.1, 13.3.4 | `api/app/settings.py`, `api/app/portfolio_runner.py`; operator secrets manager, scope verification and rotation remain required |
 | Internal transport | plain HTTP between containers on internal networks | ASVS 12.3.1, 12.3.3, 12.3.5 | **Roadmap** for multi-host deployments (mutual TLS) |
 | Store authentication | Prometheus, Loki and Qdrant accept unauthenticated requests inside the internal network | ASVS 13.2.1; ISO 8.3 | open: single-tenant host assumed |
 | Audit chain | not keyed; no rotation | ASVS 16.4.2 | **Roadmap**: HMAC or anchoring, rotation; operator: WORM backups |
 | Dashboard CSP | `'unsafe-inline'` scripts (single-file page) | ASVS 3.4.3 | **Roadmap**: nonce- or hash-based CSP |
-| Pinning | runtime Python requirements not hash-locked; base and third-party images pinned by tag, not digest | SSDF PW.4.4; ASVS 15.2.4 | **Roadmap** |
+| Pinning | runtime Python requirements are hash-locked and Dockerfile bases digest-pinned; source Compose still contains third-party tags | SSDF PW.4.4; ASVS 15.2.4 | verify resolved third-party digests in the signed deployment lock |
 | Model artefacts | model weights not pinned by revision or hash | LLM03 | **Roadmap** |
 | MFA | delegated to the identity provider | ASVS 6.3.3; NIS2 Art. 21(2)(j) | operator: enforce MFA in the IdP |
-| CI coverage | guardrail unit tests, SSO end-to-end test and the full smoke test are not run on every change | SSDF PW.8.2 | **Roadmap**: add them to CI |
+| CI coverage | guardrails run on changes; deployment changes trigger smoke and OIDC with mandatory scoped-key checks | SSDF PW.8.2 | disposable CI proof requires tenant qualification and final release evidence ([deployment guide](DEPLOYMENT.en.md)) |
 | GPU profiles | `vps` and `local-gpu` services run as root without read-only root filesystems; not runtime-tested here | CIS 4.1, 5.13 | operator: test on the target host |
 
 ## 4. Pointers for NIS2 and DORA

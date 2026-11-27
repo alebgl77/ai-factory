@@ -324,7 +324,7 @@ def test_local_chat_fixed_model_and_no_cloud_fallback(tmp_path):
         return httpx.Response(200, json={"choices": [{"message": {"content": "Advisory answer"}}]})
 
     client = protected(tmp_path, httpx.MockTransport(gateway), workbench_chat_mode="local",
-                       litellm_url="http://litellm:4000", litellm_master_key="test-key")
+                       litellm_url="http://litellm:4000", litellm_admin_key_sha256="0" * 64, litellm_inference_key="test-key")
     submitter = identity("submitter", "submit")
     viewer = identity("viewer", "view")
     case = client.post(ROOT + "/events", json=opportunity(), headers=submitter).json()
@@ -351,4 +351,4 @@ def test_invalid_mode_and_anonymous_local_chat_fail_closed():
         Settings(workbench_mode="demo", workbench_chat_mode="local")
     with pytest.raises(ValueError, match="internal litellm"):
         Settings(workbench_mode="protected_demo", auth_mode="proxy", workbench_chat_mode="local",
-                 litellm_url="https://example.com", litellm_master_key="test-key")
+                 litellm_url="https://example.com", litellm_admin_key_sha256="0" * 64, litellm_inference_key="test-key")

@@ -3,6 +3,7 @@
 """Validate a rendered production Compose configuration read from standard input."""
 
 import argparse
+import hashlib
 import ipaddress
 import json
 import re
@@ -235,6 +236,28 @@ def production_errors(config, *, private_gpu_hosts=()):
     environments = {name: _object(service.get("environment")) for name, service in services.items()}
     edge, api, oauth, gateway = (environments[name] for name in ("edge", "api", "oauth2-proxy", "litellm"))
     errors = []
+    if _value(api, "LITELLM_MASTER_KEY") or _value(api, "LITELLM_MASTER_KEY_FILE"):
+        errors.append("Remove the administrative LiteLLM credential from the API container.")
+    telemetry_key = _value(api, "LITELLM_TELEMETRY_KEY")
+    inference_key = _value(api, "LITELLM_INFERENCE_KEY")
+    key_files = []
+    for name, value in (("LITELLM_TELEMETRY_KEY", telemetry_key), ("LITELLM_INFERENCE_KEY", inference_key)):
+        source = _value(api, name + "_FILE")
+        if source:
+            if value or not source.startswith("/run/secrets/") or not _readonly_bind(services["api"], source):
+                errors.append(f"Mount {name}_FILE read-only under /run/secrets and leave {name} empty.")
+            key_files.append(name)
+    admin_key = _value(gateway, "LITELLM_MASTER_KEY")
+    fingerprint = _value(api, "LITELLM_ADMIN_KEY_SHA256")
+    uses_gateway_keys = bool(telemetry_key or inference_key or key_files or _value(api, "FACTORY_PORTFOLIO_RUNNER_FILE"))
+    if uses_gateway_keys and (not admin_key or fingerprint != hashlib.sha256(admin_key.encode()).hexdigest()):
+        errors.append("Set LITELLM_ADMIN_KEY_SHA256 to the administrative key fingerprint before using scoped keys.")
+    if any(key and key == admin_key for key in (telemetry_key, inference_key)):
+        errors.append("Use scoped LiteLLM credentials distinct from the gateway administrative key.")
+    if telemetry_key and inference_key and telemetry_key == inference_key:
+        errors.append("Use distinct LiteLLM telemetry and inference credentials.")
+    if _value(api, "LITELLM_URL") and not (_configured(telemetry_key) or "LITELLM_TELEMETRY_KEY" in key_files):
+        errors.append("Configure the dedicated LITELLM_TELEMETRY_KEY for gateway observation.")
 
     host = _value(edge, "FACTORY_HOST")
     if _value(edge, "FACTORY_SCHEME") != "https" or not _hostname(host):

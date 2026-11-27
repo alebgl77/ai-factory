@@ -36,7 +36,10 @@ Documentation OpenAPI : `http://localhost:8000/api/v1/docs`.
 | `FACTORY_STATE_DIR` | état modifiable (versions de modèle, revues, réservations 3D) | `/data` |
 | `PROMETHEUS_URL`, `GRAFANA_URL`, `GRAFANA_TOKEN_FILE`, `GRAFANA_PROM_DS_UID` | sources d'observabilité | — |
 | `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | API publique Langfuse | — |
-| `LITELLM_URL`, `LITELLM_MASTER_KEY` | passerelle LLM (côté serveur uniquement) | — |
+| `LITELLM_URL` | URL de la passerelle LLM (côté serveur uniquement) | — |
+| `LITELLM_TELEMETRY_KEY`, `LITELLM_TELEMETRY_KEY_FILE` | clé de télémétrie en lecture, fournie directement ou par fichier secret en lecture seule | vide en démo |
+| `LITELLM_INFERENCE_KEY`, `LITELLM_INFERENCE_KEY_FILE` | clé distincte facultative du conseiller local | vide |
+| `LITELLM_ADMIN_KEY_SHA256` | SHA-256 administratif non secret en minuscules, requis avec les clés de l'API ou les liaisons Portfolio | vide |
 | `QDRANT_URL` | base vectorielle | — |
 | `FACTORY_DEMO_DATE` (optionnel) | date d'ancrage de la démo `AAAA-MM-JJ` | aujourd'hui |
 | `GRAFANA_PUBLIC_URL` (optionnel) | préfixe des liens Grafana renvoyés au navigateur | `/grafana` |
@@ -81,6 +84,11 @@ Documentation OpenAPI : `http://localhost:8000/api/v1/docs`.
   `msg` écrit les nombres français avec une virgule décimale.
 
 ## Sécurité
+
+Configuration des clés actualisée le 27 novembre 2026. L'API refuse `LITELLM_MASTER_KEY` et sa
+variante `_FILE`, la clé administrative, les clés réutilisées et une valeur directe combinée à
+sa variante fichier. Les clés des liaisons Portfolio doivent aussi rester distinctes. Suivez la
+[migration](../docs/GATEWAY_SECURITY.md) avant de mettre à niveau une installation existante.
 
 Chaque contrôle ci-dessous est appliqué dans le code et couvert par des tests
 (`tests/test_security.py` : identité, matrice complète rôles × points d'accès, quatre yeux, chaîne
